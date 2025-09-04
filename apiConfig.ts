@@ -1,4 +1,4 @@
-const API_DOMAIN = "https://fastlogistic.hmstech.xyz/api";
+const API_DOMAIN = "http://localhost:8000/api";
 
 const API_ENDPOINTS = {
   ADMIN: {

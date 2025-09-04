@@ -27,6 +27,14 @@ const images = {
   plus: "/assets/images/plus.svg",
   minus: "/assets/images/minus.svg",
   Lightning: "/assets/images/Lightning.svg",
+  loginImage: "/assets/images/loginImage.jpg",
+  insta: "/assets/images/insta.png",
+  whatsApp: "/assets/images/whatsApp.png",
+  twitter: "/assets/images/twitter.png",
+  yt: "/assets/images/yt.png",
+  logo1: "/assets/images/logo.png",
+  loginImageForSm: "/assets/images/loginImageForSm.jpg",
+  smLogo: "/assets/images/smLogo.png",
 };
 
 export default images;

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import './App.css'
 import Layout from './layout/Layout';
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -16,14 +16,31 @@ import Shop_mgt from "./pages/shop_mgt/Shop_mgt";
 import Referral_mgt from "./pages/referral_mgt/Referral_mgt";
 import Analytics from "./pages/analytics/Analytics.tsx";
 import Settings from "./pages/settings/Settings";
+import Login from "./pages/auth/Login.tsx";
+import Cookies from "js-cookie";
 
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const token = Cookies.get("token");
+  const location = useLocation();
+  if (!token) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+  return <>{children}</>;
+}
 
 function App() {
   return (
     <Router basename={import.meta.env.BASE_URL || "/"}>
       <Routes>
-        {/* Layout Wraps All Routes */}
-        <Route path="/" element={<Layout />}>
+        <Route path="login" element={<Login />} />
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              <Layout />
+            </PrivateRoute>
+          }
+        >
           {/* Index route for Dashboard */}
           <Route index element={<Dashboard />} />
           {/* All other routes */}
