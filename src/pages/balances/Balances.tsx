@@ -4,6 +4,11 @@ import { balanceData } from "./balance";
 import type { BalanceData } from "./balance";
 import images from "../../constants/images";
 
+//Code Related to the Integration
+import { useQuery } from "@tanstack/react-query";
+import { balances as getBalances } from "../../utils/queries/balance";
+import Cookies from "js-cookie";
+
 interface DropdownProps {
   options: string[];
   selected: string;
@@ -53,6 +58,7 @@ const Balances = () => {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("More Actions");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const handleNotificationClick = () => {
     console.log("Notification clicked");
@@ -75,17 +81,55 @@ const Balances = () => {
     }
   };
 
+  const token = Cookies.get("token");
+  const { data: apiData, isLoading, isError } = useQuery({
+    queryKey: ["balances"],
+    queryFn: () => getBalances(token || ""),
+    enabled: !!token,
+  });
+
+  // Parse API response for summary and balances
+  const summary = apiData?.data?.summary || {
+    total_loan_balance: 0,
+    total_shopping_balance: 0,
+  };
+
+  const apiBalances = apiData?.data?.balances
+    ? apiData.data.balances.map((b: any, idx: number) => ({
+        id: String(idx),
+        name: b.first_name,
+        loanBalance: b.loan_balance,
+        mainBalance: b.main_balance,
+        totalTopup: b.total_topup,
+        totalWithdrawal: b.total_withdrawal,
+      }))
+    : [];
+
+  // Filter balances based on search term
+  const filteredBalances = apiBalances.filter((balance: BalanceData) => {
+    if (!searchTerm) return true;
+    return (
+      balance.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(balance.loanBalance).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(balance.mainBalance).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(balance.totalTopup).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(balance.totalWithdrawal).toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
+
+  // Format numbers with comma separator
+  const formatAmount = (num: number | string) => {
+    const n = typeof num === "string" ? Number(num) : num;
+    return n.toLocaleString();
+  };
+
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
       {/* Header Component */}
       <Header
         adminName="Hi, Admin"
-        // adminRole="Administrator"
         adminImage="/assets/layout/admin.png"
-        // showNotification={true}
-        // notificationCount={0}
         onNotificationClick={handleNotificationClick}
-        // showAdminRole={false}
       />
 
       {/* Main Content */}
@@ -104,7 +148,9 @@ const Balances = () => {
           >
             <div className="relative z-10">
               <h3 className="text-lg font-medium mb-6">Total Loan Balance</h3>
-              <p className="text-4xl font-bold mb-8">N50,000,000</p>
+              <p className="text-4xl font-bold mb-8">
+                N{formatAmount(summary.total_loan_balance)}
+              </p>
               <div className="flex justify-end">
                 <button className="bg-white bg-opacity-20 hover:bg-opacity-30 text-[#273E8E] px-5 py-3 rounded-full text-sm font-medium transition-colors">
                   Fund Wallet
@@ -112,7 +158,6 @@ const Balances = () => {
               </div>
             </div>
           </div>
-
           {/* Total Shopping Balance Card */}
           <div
             className="bg-[#E8A91D] rounded-2xl p-8 text-white relative overflow-hidden"
@@ -122,7 +167,9 @@ const Balances = () => {
               <h3 className="text-lg font-medium mb-6">
                 Total Shopping Balance
               </h3>
-              <p className="text-4xl font-bold">N50,000,000</p>
+              <p className="text-4xl font-bold">
+                N{formatAmount(summary.total_shopping_balance)}
+              </p>
             </div>
           </div>
         </div>
@@ -147,6 +194,8 @@ const Balances = () => {
               <input
                 type="text"
                 placeholder="Search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-12 pr-6 py-3.5 border border-[#00000080] rounded-lg text-[15px] w-[320px] focus:outline-none bg-white shadow-[0_2px_6px_rgba(0,0,0,0.05)] placeholder-gray-400"
               />
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -171,69 +220,83 @@ const Balances = () => {
         {/* Balance Table */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div>
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 bg-[#EBEBEB]">
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    <input
-                      type="checkbox"
-                      className="rounded"
-                      checked={selectAll}
-                      onChange={handleSelectAll}
-                    />
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Name
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Loan Balance
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Main Balance
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Total Topup
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Total Withdrawal
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white">
-                {balanceData.map((balance: BalanceData, index: number) => (
-                  <tr
-                    key={balance.id}
-                    className={`${
-                      index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                    } transition-colors border-b border-gray-100 last:border-b-0`}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+            {isLoading ? (
+              <div className="py-16 text-center text-gray-500 text-lg">
+                Loading balances...
+              </div>
+            ) : isError ? (
+              <div className="py-16 text-center text-red-500 text-lg">
+                Failed to load balances.
+              </div>
+            ) : filteredBalances.length === 0 ? (
+              <div className="py-16 text-center text-gray-500 text-lg">
+                No balances found.
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-[#EBEBEB]">
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
                       <input
                         type="checkbox"
                         className="rounded"
-                        checked={selectedUsers.includes(balance.id)}
-                        onChange={() => handleSelectUser(balance.id)}
+                        checked={selectAll}
+                        onChange={handleSelectAll}
                       />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
-                      {balance.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                      {balance.loanBalance}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                      {balance.mainBalance}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                      {balance.totalTopup}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                      {balance.totalWithdrawal}
-                    </td>
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Name
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Loan Balance
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Main Balance
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Total Topup
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Total Withdrawal
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white">
+                  {filteredBalances.map((balance: BalanceData, index: number) => (
+                    <tr
+                      key={balance.id}
+                      className={`${
+                        index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                      } transition-colors border-b border-gray-100 last:border-b-0`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <input
+                          type="checkbox"
+                          className="rounded"
+                          checked={selectedUsers.includes(balance.id)}
+                          onChange={() => handleSelectUser(balance.id)}
+                        />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
+                        {balance.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                        {formatAmount(balance.loanBalance)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                        {formatAmount(balance.mainBalance)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                        {formatAmount(balance.totalTopup)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                        {formatAmount(balance.totalWithdrawal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>

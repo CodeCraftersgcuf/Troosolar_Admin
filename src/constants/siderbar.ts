@@ -56,6 +56,12 @@ export const Sidebar_links = [
     sublinks: [],
   },
   {
+    name: "Tickets",
+    link: "/tickets",
+    icon: images.tickets,
+    sublinks: [],
+  },
+  {
     name: "Analytics",
     link: "/analytics",
     icon: images.analytics,

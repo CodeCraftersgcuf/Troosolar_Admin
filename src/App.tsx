@@ -18,6 +18,7 @@ import Analytics from "./pages/analytics/Analytics.tsx";
 import Settings from "./pages/settings/Settings";
 import Login from "./pages/auth/Login.tsx";
 import Cookies from "js-cookie";
+import Tickets from "./pages/tickets/Tickets.tsx";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = Cookies.get("token");
@@ -53,6 +54,7 @@ function App() {
           <Route path="balances" element={<Balances />} />
           <Route path="shop-mgt" element={<Shop_mgt />} />
           <Route path="referral-mgt" element={<Referral_mgt />} />
+          <Route path="tickets" element={<Tickets />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="settings" element={<Settings />} />
           <Route path="user-activity/:id" element={<UserActivity />} />

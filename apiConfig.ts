@@ -54,6 +54,11 @@ const API_ENDPOINTS = {
     // --- Balances (admin) ---
     AllBalances: API_DOMAIN + "/all-balances", // GET
 
+    // --- Tickets ---
+    AllTickets: API_DOMAIN + "/admin/tickets", // GET
+    TicketShow: (id: number | string) => `${API_DOMAIN}/admin/tickets/${id}`, // GET
+    ReplyTicket: (id: number | string) => `${API_DOMAIN}/admin/tickets/${id}/reply`, // POST
+
     // --- Admin notifications ---
     AdminNotificationsCreate: API_DOMAIN + "/admin/notifications", // POST
   },
