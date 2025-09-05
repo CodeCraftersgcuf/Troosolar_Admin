@@ -17,7 +17,7 @@ const DashboardOrders: React.FC<DashboardOrdersProps> = ({ orders }) => (
       </button>
     </div>
     <div className="space-y-3 p-4" style={{ height: "350px", overflow: "hidden" }}>
-      {orders.slice(0, 3).map((_, index) => (
+      {orders.slice(0, 3).map((order, index) => (
         <div
           key={index}
           className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center justify-between shadow-sm"
@@ -26,7 +26,7 @@ const DashboardOrders: React.FC<DashboardOrdersProps> = ({ orders }) => (
             <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <img
                 src={"/assets/images/newman1.png"}
-                alt="Newman AGM Solar Inverter"
+                alt={order.name}
                 className="w-10 h-10 object-contain"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = "/vite.svg";
@@ -35,14 +35,14 @@ const DashboardOrders: React.FC<DashboardOrdersProps> = ({ orders }) => (
             </div>
             <div>
               <p className="font-medium text-gray-900 text-sm">
-                Newman AGM Solar Inverter
+                {order.name}
               </p>
               <p className="text-blue-900 font-semibold text-base">
-                ₦4,500,000
+                {order.price}
               </p>
               <p className="text-xs text-gray-500">
                 Placed by{" "}
-                <span className="text-blue-600 underline">Adewale</span>
+                <span className="text-blue-600 underline">{order.user}</span>
               </p>
             </div>
           </div>

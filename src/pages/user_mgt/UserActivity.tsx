@@ -14,14 +14,37 @@ const UserActivity: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const user = users.find((u) => u.id === id);
+
+  // Use user data from navigation state if available, otherwise fallback to users array or dummy values
+  const stateUser = location.state as
+    | {
+        id: string;
+        name: string;
+        email: string;
+        phone: string;
+        bvn: string;
+        date: string;
+      }
+    | undefined;
+
+  const user =
+    stateUser ||
+    users.find((u) => u.id === id) || {
+      id: id || "N/A",
+      name: "Unknown User",
+      email: "unknown@email.com",
+      phone: "0000000000",
+      bvn: "00000000000",
+      date: "01/01/1970",
+    };
+
   const [showEdit, setShowEdit] = useState(false);
   const [form, setForm] = useState({
-    firstName: user?.name.split(" ")[1] || "",
-    surname: user?.name.split(" ")[0] || "",
-    email: user?.email || "",
-    phone: user?.phone || "",
-    bvn: user?.bvn || "",
+    firstName: user.name.split(" ")[1] || user.name,
+    surname: user.name.split(" ")[0] || "",
+    email: user.email || "",
+    phone: user.phone || "",
+    bvn: user.bvn || "",
     password: "",
     referral: "",
   });

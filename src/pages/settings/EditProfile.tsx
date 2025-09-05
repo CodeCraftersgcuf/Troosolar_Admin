@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import images from "../../constants/images";
 
+//Code Relatead to the Integration
+import { updateUser } from '../../utils/mutations/users';
+import { useMutation } from '@tanstack/react-query';
+
+
 interface EditProfileProps {
   isOpen: boolean;
   onClose: () => void;
