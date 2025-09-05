@@ -4,6 +4,12 @@ import { loanData, getStatusBgColor } from "./loanmgt";
 import KycProfile from "./kycprofile";
 import images from "../../constants/images";
 
+//Code Related to the Integration
+import { getAllLoanStatus } from "../../utils/queries/loans";
+import { useQuery } from "@tanstack/react-query";
+import Cookies from "js-cookie";
+
+
 interface DropdownProps {
   options: string[];
   selected: string;
@@ -64,6 +70,7 @@ const Loans_mgt = () => {
   } | null>(null);
   const [showSendToPartnerModal, setShowSendToPartnerModal] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
 
   const handleNotificationClick = () => {
     console.log("Notification clicked");
@@ -147,15 +154,84 @@ const Loans_mgt = () => {
     setSelectedPartner("");
   };
 
-  // Filter loan data based on selected filters
-  const filteredLoanData = loanData.filter((loan) => {
+  // API integration for loans
+  const token = Cookies.get("token");
+  const { data: loanApiData, isLoading: isLoansLoading, isError: isLoansError } = useQuery({
+    queryKey: ["all-loan-status"],
+    queryFn: () => getAllLoanStatus(token || ""),
+    enabled: !!token,
+  });
+
+  // Parse API response to get stats and loan list
+  const stats = loanApiData?.data
+    ? [
+        {
+          label: "Total Loans",
+          value: loanApiData.data["total loans"] ?? 0,
+          icon: "/assets/images/Users.png",
+        },
+        {
+          label: "Loans Sent",
+          value: loanApiData.data["loan send"] ?? 0,
+          icon: "/assets/images/Users.png",
+        },
+        {
+          label: "Loan Approved",
+          value: loanApiData.data["loan approved"] ?? 0,
+          icon: "/assets/images/Users.png",
+        },
+      ]
+    : [
+        {
+          label: "Total Loans",
+          value: 0,
+          icon: "/assets/images/Users.png",
+        },
+        {
+          label: "Loans Sent",
+          value: 0,
+          icon: "/assets/images/Users.png",
+        },
+        {
+          label: "Loan Approved",
+          value: 0,
+          icon: "/assets/images/Users.png",
+        },
+      ];
+
+  // Convert API loan objects to array
+  const apiLoanList = loanApiData?.data
+    ? Object.keys(loanApiData.data)
+        .filter((key) => !isNaN(Number(key)))
+        .map((key, idx) => {
+          const loan = loanApiData.data[key];
+          return {
+            id: idx,
+            name: loan.name,
+            amount: loan.Amount,
+            date: loan.date,
+            sendStatus: loan["send status"],
+            approval: loan["approval status"],
+          };
+        })
+    : [];
+
+  // Filter loan data based on selected filters and search term
+  const filteredLoanData = apiLoanList.filter((loan) => {
     const sendStatusMatch =
       sendStatusFilter === "Send Status" ||
       loan.sendStatus === sendStatusFilter;
     const approvalStatusMatch =
       approvalStatusFilter === "Approval Status" ||
       loan.approval === approvalStatusFilter;
-    return sendStatusMatch && approvalStatusMatch;
+    const searchMatch =
+      !searchTerm ||
+      loan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(loan.amount).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      loan.date.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      loan.sendStatus.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      loan.approval.toLowerCase().includes(searchTerm.toLowerCase());
+    return sendStatusMatch && approvalStatusMatch && searchMatch;
   });
 
   return (
@@ -249,12 +325,8 @@ const Loans_mgt = () => {
       {/* Header Component */}
       <Header
         adminName="Hi, Admin"
-        // adminRole="Administrator"
         adminImage="/assets/layout/admin.png"
-        // showNotification={true}
-        // notificationCount={0}
         onNotificationClick={handleNotificationClick}
-        // showAdminRole={false}
       />
 
       {/* Main Content */}
@@ -266,66 +338,29 @@ const Loans_mgt = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div
-            className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="flex items-center gap-5">
-              <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src="/assets/images/Users.png"
-                  alt="Total Loans"
-                  className="w-7 h-7 object-contain"
-                />
-              </div>
-              <div>
-                <p className="text-md font-medium text-[#0000FF]">
-                  Total Loans
-                </p>
-                <p className="text-2xl font-bold text-[#0000FF]">30</p>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="flex items-center gap-5">
-              <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src="/assets/images/Users.png"
-                  alt="Loans Sent"
-                  className="w-7 h-7 object-contain"
-                />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-[#0000FF]">Loans Sent</p>
-                <p className="text-2xl font-bold text-[#0000FF]">20</p>
+          {stats.map((stat, idx) => (
+            <div
+              key={idx}
+              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
+              style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+            >
+              <div className="flex items-center gap-5">
+                <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                  <img
+                    src={stat.icon}
+                    alt={stat.label}
+                    className="w-7 h-7 object-contain"
+                  />
+                </div>
+                <div>
+                  <p className="text-md font-medium text-[#0000FF]">
+                    {stat.label}
+                  </p>
+                  <p className="text-2xl font-bold text-[#0000FF]">{stat.value}</p>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div
-            className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="flex items-center gap-5">
-              <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src="/assets/images/Users.png"
-                  alt="Loan Approved"
-                  className="w-7 h-7 object-contain"
-                />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-[#0000FF]">
-                  Loan Approved
-                </p>
-                <p className="text-2xl font-bold text-[#0000FF]">15</p>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* Loans Summary Section */}
@@ -369,6 +404,8 @@ const Loans_mgt = () => {
               <input
                 type="text"
                 placeholder="Search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-12 pr-6 py-3.5 border border-[#00000080] rounded-lg text-[15px] w-[320px] focus:outline-none bg-white shadow-[0_2px_6px_rgba(0,0,0,0.05)] placeholder-gray-400"
               />
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -393,111 +430,125 @@ const Loans_mgt = () => {
         {/* Loans Table */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 bg-[#EBEBEB]">
-                  <th className="px-6 py-4 text-center text-sm text-black">
-                    <input type="checkbox" className="rounded" />
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Name
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Amount
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Date
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Send Status
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Approval
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white">
-                {filteredLoanData.map((loan, index) => (
-                  <tr
-                    key={loan.id}
-                    className={`${
-                      index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                    } transition-colors border-b border-gray-100 last:border-b-0`}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <input type="checkbox" className="rounded " />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {loan.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {loan.amount}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {loan.date}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span
-                        className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full"
-                        style={getStatusBgColor(loan.sendStatus)}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full mr-1.5"
-                          style={{
-                            backgroundColor:
-                              loan.sendStatus.toLowerCase() === "completed"
-                                ? "#008000"
-                                : loan.sendStatus.toLowerCase() === "pending"
-                                ? "#FF8C00"
-                                : loan.sendStatus.toLowerCase() === "delivered"
-                                ? "#008000"
-                                : loan.sendStatus.toLowerCase() === "rejected"
-                                ? "#FF0000"
-                                : "#6B7280",
-                          }}
-                        ></span>
-                        {loan.sendStatus}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span
-                        className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full"
-                        style={getStatusBgColor(loan.approval)}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full mr-1.5"
-                          style={{
-                            backgroundColor:
-                              loan.approval.toLowerCase() === "completed"
-                                ? "#008000"
-                                : loan.approval.toLowerCase() === "pending"
-                                ? "#FF8C00"
-                                : loan.approval.toLowerCase() === "delivered"
-                                ? "#008000"
-                                : loan.approval.toLowerCase() === "rejected"
-                                ? "#FF0000"
-                                : "#6B7280",
-                          }}
-                        ></span>
-                        {loan.approval}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                      <button
-                        className="text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity text-sm font-medium cursor-pointer"
-                        style={{ backgroundColor: "#273E8E" }}
-                        onClick={() => viewUserDetails(loan.id, loan.name)}
-                      >
-                        View Details
-                      </button>
-                    </td>
+            {isLoansLoading ? (
+              <div className="py-16 text-center text-gray-500 text-lg">
+                Loading loans...
+              </div>
+            ) : isLoansError ? (
+              <div className="py-16 text-center text-red-500 text-lg">
+                Failed to load loans.
+              </div>
+            ) : filteredLoanData.length === 0 ? (
+              <div className="py-16 text-center text-gray-500 text-lg">
+                No loans found.
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-[#EBEBEB]">
+                    <th className="px-6 py-4 text-center text-sm text-black">
+                      <input type="checkbox" className="rounded" />
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Name
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Amount
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Date
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Send Status
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Approval
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Action
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white">
+                  {filteredLoanData.map((loan, index) => (
+                    <tr
+                      key={loan.id}
+                      className={`${
+                        index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                      } transition-colors border-b border-gray-100 last:border-b-0`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <input type="checkbox" className="rounded " />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {loan.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {loan.amount}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {loan.date}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span
+                          className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full"
+                          style={getStatusBgColor(loan.sendStatus)}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full mr-1.5"
+                            style={{
+                              backgroundColor:
+                                loan.sendStatus.toLowerCase() === "completed"
+                                  ? "#008000"
+                                  : loan.sendStatus.toLowerCase() === "pending"
+                                  ? "#FF8C00"
+                                  : loan.sendStatus.toLowerCase() === "delivered"
+                                  ? "#008000"
+                                  : loan.sendStatus.toLowerCase() === "rejected"
+                                  ? "#FF0000"
+                                  : "#6B7280",
+                            }}
+                          ></span>
+                          {loan.sendStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span
+                          className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full"
+                          style={getStatusBgColor(loan.approval)}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full mr-1.5"
+                            style={{
+                              backgroundColor:
+                                loan.approval.toLowerCase() === "completed"
+                                  ? "#008000"
+                                  : loan.approval.toLowerCase() === "pending"
+                                  ? "#FF8C00"
+                                  : loan.approval.toLowerCase() === "delivered"
+                                  ? "#008000"
+                                  : loan.approval.toLowerCase() === "rejected"
+                                  ? "#FF0000"
+                                  : "#6B7280",
+                            }}
+                          ></span>
+                          {loan.approval}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                        <button
+                          className="text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity text-sm font-medium cursor-pointer"
+                          style={{ backgroundColor: "#273E8E" }}
+                          onClick={() => viewUserDetails(loan.id, loan.name)}
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>

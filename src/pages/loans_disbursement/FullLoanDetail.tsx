@@ -4,6 +4,11 @@ import images from "../../constants/images";
 import type { LoanDetail } from "../../component/users/UserLoanData";
 import jsPDF from 'jspdf';
 
+//code related to the integration
+import { getFullLoanDetail } from "../../utils/queries/loans";
+import { useQuery } from "@tanstack/react-query";
+import Cookies from "js-cookie";
+
 interface FullLoanDetailProps {
   isOpen: boolean;
   onClose: () => void;
@@ -19,165 +24,73 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<"loan" | "financial">("loan");
   const [showDisburseModal, setShowDisburseModal] = useState(false);
-  const [loanData, setLoanData] = useState<LoanDetail | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // Sample loan data - in real app, this would come from props or API call based on loanId
-  const getLoanById = (id: string): LoanDetail | null => {
-    const sampleLoans: LoanDetail[] = [
-      {
-        id: "1",
-        userId: "1",
-        name: "Adewale Faizah",
-        loanLimit: "₦500,000",
-        loanAmount: "₦200,000",
-        loanPeriod: "3 months",
-        repaymentDuration: "Monthly",
-        financingPartner: "Sterling Bank",
-        interestRate: "15%",
-        sendStatus: "Pending",
-        sendDate: "Not yet sent",
-        approvalStatus: "Pending",
-        approvalDate: "Not yet approved",
-        disbursementStatus: "Pending",
-        disbursementDate: "Not yet disbursed",
-      },
-      {
-        id: "2",
-        userId: "2",
-        name: "John Adam",
-        loanLimit: "₦300,000",
-        loanAmount: "₦200,000",
-        loanPeriod: "3 months",
-        repaymentDuration: "Monthly",
-        financingPartner: "Access Bank",
-        interestRate: "12%",
-        sendStatus: "Completed",
-        sendDate: "04-07-25/10:30AM",
-        approvalStatus: "Completed",
-        approvalDate: "05-07-25/14:45PM",
-        disbursementStatus: "Completed",
-        disbursementDate: "06-07-25/11:20AM",
-      },
-      {
-        id: "3",
-        userId: "3",
-        name: "Chris Banner",
-        loanLimit: "₦400,000",
-        loanAmount: "₦200,000",
-        loanPeriod: "3 months",
-        repaymentDuration: "Monthly",
-        financingPartner: "First Bank",
-        interestRate: "13%",
-        sendStatus: "Completed",
-        sendDate: "03-07-25/16:00PM",
-        approvalStatus: "Completed",
-        approvalDate: "04-07-25/12:30PM",
-        disbursementStatus: "Completed",
-        disbursementDate: "05-07-25/08:45AM",
-      },
-      {
-        id: "4",
-        userId: "4",
-        name: "Adam Waa",
-        loanLimit: "₦600,000",
-        loanAmount: "₦200,000",
-        loanPeriod: "3 months",
-        repaymentDuration: "Monthly",
-        financingPartner: "GTBank",
-        interestRate: "14%",
-        sendStatus: "Completed",
-        sendDate: "02-07-25/13:15PM",
-        approvalStatus: "Completed",
-        approvalDate: "03-07-25/10:00AM",
-        disbursementStatus: "Completed",
-        disbursementDate: "04-07-25/15:30PM",
-      },
-      {
-        id: "5",
-        userId: "5",
-        name: "Anita Shawn",
-        loanLimit: "₦450,000",
-        loanAmount: "₦200,000",
-        loanPeriod: "3 months",
-        repaymentDuration: "Monthly",
-        financingPartner: "UBA",
-        interestRate: "13.5%",
-        sendStatus: "Pending",
-        sendDate: "Not yet sent",
-        approvalStatus: "Pending",
-        approvalDate: "Not yet approved",
-        disbursementStatus: "Pending",
-        disbursementDate: "Not yet disbursed",
-      },
-      {
-        id: "6",
-        userId: "6",
-        name: "Chris Banner",
-        loanLimit: "₦550,000",
-        loanAmount: "₦200,000",
-        loanPeriod: "3 months",
-        repaymentDuration: "Monthly",
-        financingPartner: "Zenith Bank",
-        interestRate: "16%",
-        sendStatus: "Completed",
-        sendDate: "30-06-25/11:30AM",
-        approvalStatus: "Completed",
-        approvalDate: "01-07-25/16:45PM",
-        disbursementStatus: "Completed",
-        disbursementDate: "02-07-25/13:00PM",
-      },
-    ];
+  // API integration for full loan detail
+  const token = Cookies.get("token");
+  const { data: apiLoan, isLoading: isLoanLoading, isError: isLoanError } = useQuery({
+    queryKey: ["full-loan-detail", loanId],
+    queryFn: () => getFullLoanDetail(loanId, token || ""),
+    enabled: isOpen && !!loanId && !!token,
+  });
 
-    const foundLoan = sampleLoans.find((loan) => loan.id === id);
-    
-    // If loan not found, create a default loan for the user
-    if (!foundLoan) {
-      return {
-        id: id,
-        userId: id,
-        name: "Unknown User",
-        loanLimit: "₦0",
-        loanAmount: "₦0",
-        loanPeriod: "N/A",
-        repaymentDuration: "N/A",
-        financingPartner: "N/A",
-        interestRate: "0%",
-        sendStatus: "Pending",
-        sendDate: "Not yet sent",
-        approvalStatus: "Pending",
-        approvalDate: "Not yet approved",
-        disbursementStatus: "Pending",
-        disbursementDate: "Not yet disbursed",
-      };
-    }
-    
-    return foundLoan;
-  };
-
-  const selectedLoan = loanData || getLoanById(loanId);
-
-  // Initialize loan data when component mounts or loanId changes
-  React.useEffect(() => {
-    if (loanId && (!loanData || loanData.id !== loanId)) {
-      const foundLoan = getLoanById(loanId);
-      if (foundLoan) {
-        setLoanData(foundLoan);
+  // Map API response to loan detail object
+  const currentLoan = apiLoan?.data
+    ? {
+        id: String(apiLoan.data.id ?? loanId),
+        userId: String(apiLoan.data.id ?? loanId),
+        name: apiLoan.data.name || "Unknown User",
+        loanLimit: apiLoan.data["loan limit"] !== null ? `₦${apiLoan.data["loan limit"]}` : "N/A",
+        loanAmount: apiLoan.data.amount !== null ? `₦${apiLoan.data.amount}` : "N/A",
+        loanPeriod: apiLoan.data["repayment duration"] !== null ? `${apiLoan.data["repayment duration"]} months` : "N/A",
+        repaymentDuration: apiLoan.data["repayment duration"] !== null ? `${apiLoan.data["repayment duration"]} months` : "N/A",
+        financingPartner: apiLoan.data["financing partner"] || "N/A",
+        interestRate: apiLoan.data["interest rate"] !== null ? `${apiLoan.data["interest rate"]}%` : "N/A",
+        sendStatus: apiLoan.data["send_status"] || "Pending",
+        sendDate: apiLoan.data["send_date"] || "Not yet sent",
+        approvalStatus: apiLoan.data["approval_status"] || "Pending",
+        approvalDate: apiLoan.data["approval_date"] || "Not yet approved",
+        disbursementStatus: apiLoan.data["disbursement_status"] || "Pending",
+        disbursementDate: apiLoan.data["disbursement_date"] || "Not yet disbursed",
       }
-    }
-  }, [loanId, loanData]);
+    : null;
 
-  // Reset state when modal closes
-  React.useEffect(() => {
-    if (!isOpen) {
-      setActiveTab("loan");
-      setIsDownloading(false);
-    }
-  }, [isOpen]);
+  // Show loading indicator while fetching
+  if (isOpen && isLoanLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+        <div className="bg-white rounded-xl shadow-lg p-8 text-center text-gray-500 text-lg">
+          Loading loan details...
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if failed to fetch
+  if (isOpen && isLoanError) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+        <div className="bg-white rounded-xl shadow-lg p-8 text-center text-red-500 text-lg">
+          Failed to load loan details.
+        </div>
+      </div>
+    );
+  }
+
+  // Show not found if no loan data
+  if (isOpen && !currentLoan) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+        <div className="bg-white rounded-xl shadow-lg p-8 text-center text-gray-500 text-lg">
+          Loan details not found.
+        </div>
+      </div>
+    );
+  }
 
   // Handle disbursement status change
   const handleDisburse = (loanId: string, status: string) => {
-    const loan = selectedLoan || getLoanById(loanId);
+    const loan = currentLoan;
     if (loan) {
       const updatedLoan: LoanDetail = {
         ...loan,
@@ -187,7 +100,6 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
             ? new Date().toLocaleDateString()
             : "Not yet disbursed",
       };
-      setLoanData(updatedLoan);
 
       // Notify parent component about the change
       if (onDisbursementUpdate) {
@@ -198,7 +110,7 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
 
   // Handle account statement download
   const handleDownloadStatement = () => {
-    const loan = selectedLoan || getLoanById(loanId);
+    const loan = currentLoan;
     if (!loan) {
       alert('Unable to find loan data. Please try again.');
       return;
@@ -366,9 +278,6 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
 
   if (!isOpen) return null;
 
-  // Get the current loan data - guaranteed to exist since getLoanById creates a fallback
-  const currentLoan = selectedLoan || getLoanById(loanId)!;
-
   return (
     <div className="fixed inset-0 z-50 flex justify-end items-end sm:items-center">
       <div
@@ -379,9 +288,6 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
         <div className="flex justify-between items-center px-5 pt-4 pb-2">
           <h2 className="text-xl font-semibold">Full Loan Details</h2>
           <button className=" cursor-pointer " onClick={onClose}>
-            {/* <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg> */}
             <img src={images.cross} className="w-7 h-7" alt="" />
           </button>
         </div>
@@ -637,9 +543,11 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
       <DisburseModal
         isOpen={showDisburseModal}
         onClose={() => setShowDisburseModal(false)}
-        loanId={loanId}
+        loanId={currentLoan.id}
         amount={currentLoan.loanAmount}
-        onDisburse={handleDisburse}
+        onDisburse={(id, status) => {
+          if (onDisbursementUpdate) onDisbursementUpdate(id, status);
+        }}
       />
     </div>
   );

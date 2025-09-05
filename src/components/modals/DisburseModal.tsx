@@ -9,6 +9,11 @@ interface DisburseModalProps {
   onDisburse: (loanId: string, status: string) => void;
 }
 
+//Code Related to the Integration
+import { useMutation } from "@tanstack/react-query";
+import { distributeLoan } from "../../utils/mutations/loans";
+import Cookies from "js-cookie";
+
 const DisburseModal: React.FC<DisburseModalProps> = ({
   isOpen,
   onClose,
@@ -18,19 +23,52 @@ const DisburseModal: React.FC<DisburseModalProps> = ({
 }) => {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [editableAmount, setEditableAmount] = useState(
+    amount.replace(/[^\d]/g, "")
+  );
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const token = Cookies.get("token");
 
   const statusOptions = [
     { value: "Pending", label: "Pending" },
     { value: "Completed", label: "Completed" },
     { value: "Rejected", label: "Rejected" },
+    { value: "active", label: "Active" },
   ];
 
-  const handleDisburse = () => {
-    if (selectedStatus) {
-      onDisburse(loanId, selectedStatus);
+  const mutation = useMutation({
+    mutationFn: async () => {
+      return await distributeLoan(
+        loanId,
+        {
+          distribute_amount: Number(editableAmount),
+          status: selectedStatus,
+        },
+        token || ""
+      );
+    },
+    onSuccess: (data) => {
+      if (onDisburse) {
+        onDisburse(loanId, selectedStatus);
+      }
       onClose();
       setSelectedStatus("");
       setShowDropdown(false);
+      setEditableAmount("");
+      setIsSubmitting(false);
+      alert(data?.message || "Loan disbursed successfully!");
+    },
+    onError: (error: any) => {
+      setIsSubmitting(false);
+      alert(error?.message || "Failed to disburse loan.");
+    },
+  });
+
+  const handleDisburse = () => {
+    if (selectedStatus && editableAmount) {
+      setIsSubmitting(true);
+      mutation.mutate();
     }
   };
 
@@ -38,6 +76,8 @@ const DisburseModal: React.FC<DisburseModalProps> = ({
     onClose();
     setSelectedStatus("");
     setShowDropdown(false);
+    setEditableAmount(amount.replace(/[^\d]/g, ""));
+    setIsSubmitting(false);
   };
 
   if (!isOpen) return null;
@@ -71,10 +111,15 @@ const DisburseModal: React.FC<DisburseModalProps> = ({
               Amount to disburse
             </label>
             <input
-              type="text"
-              value={amount}
-              readOnly
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-900 font-medium"
+              type="number"
+              value={editableAmount}
+              onChange={(e) =>
+                setEditableAmount(e.target.value.replace(/[^\d]/g, ""))
+              }
+              min={0}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 font-medium"
+              placeholder="Enter amount"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -87,6 +132,7 @@ const DisburseModal: React.FC<DisburseModalProps> = ({
               <button
                 onClick={() => setShowDropdown(!showDropdown)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between hover:border-gray-400 transition-colors cursor-pointer"
+                disabled={isSubmitting}
               >
                 <span
                   className={selectedStatus ? "text-gray-900" : "text-gray-500"}
@@ -120,6 +166,7 @@ const DisburseModal: React.FC<DisburseModalProps> = ({
                         setShowDropdown(false);
                       }}
                       className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors first:rounded-t-lg last:rounded-b-lg cursor-pointer"
+                      disabled={isSubmitting}
                     >
                       {option.label}
                     </button>
@@ -135,19 +182,20 @@ const DisburseModal: React.FC<DisburseModalProps> = ({
           <button
             onClick={handleClose}
             className="px-6 py-2 text-gray-700 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors cursor-pointer"
+            disabled={isSubmitting}
           >
             Cancel
           </button>
           <button
             onClick={handleDisburse}
-            disabled={!selectedStatus}
+            disabled={!selectedStatus || !editableAmount || isSubmitting}
             className={`px-6 py-2 rounded-full font-medium transition-colors cursor-pointer ${
-              selectedStatus
+              selectedStatus && editableAmount && !isSubmitting
                 ? "bg-[#273E8E] text-white hover:bg-[#1e2f6b]"
                 : "bg-gray-300 text-gray-500 cursor-not-allowed"
             }`}
           >
-            Disburse
+            {isSubmitting ? "Processing..." : "Disburse"}
           </button>
         </div>
       </div>

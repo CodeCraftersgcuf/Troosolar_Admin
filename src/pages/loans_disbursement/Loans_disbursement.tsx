@@ -9,6 +9,14 @@ import FullLoanDetail from "./FullLoanDetail";
 import RepaymentHistory from "../../components/modals/RepaymentHistory";
 import images from "../../constants/images";
 
+
+
+//Code Related to the Integration
+import { useQuery } from "@tanstack/react-query";
+import { getAllLoanDistributed } from "../../utils/queries/loans";
+import Cookies from "js-cookie";
+
+
 interface StatusToggleProps {
   activeStatus: string;
   setActiveStatus: (status: string) => void;
@@ -102,6 +110,7 @@ const Loans_disbursement = () => {
     status: "Pending" | "Active" | "Repaid" | "Overdue";
   } | null>(null);
   const [activeStatus, setActiveStatus] = useState("approved"); // default to approved
+  const [searchTerm, setSearchTerm] = useState("");
 
   const handleNotificationClick = () => {
     console.log("Notification clicked");
@@ -141,28 +150,94 @@ const Loans_disbursement = () => {
     );
   };
 
-  // Filter disbursement data based on selected filters
-  const filteredDisbursementData = disbursementList.filter((loan) => {
+  // API integration for loan disbursement
+  const token = Cookies.get("token");
+  const { data: disbursementApiData, isLoading: isDisbursementLoading, isError: isDisbursementError } = useQuery({
+    queryKey: ["all-loan-distributed"],
+    queryFn: () => getAllLoanDistributed(token || ""),
+    enabled: !!token,
+  });
+
+  // Parse API response to get stats and disbursement list
+  const stats = disbursementApiData?.data
+    ? [
+        {
+          label: "Total Loans",
+          value: disbursementApiData.data["total loans"] ?? 0,
+          icon: "/assets/images/Users.png",
+        },
+        {
+          label: "Loans Disbursed",
+          value: disbursementApiData.data["loan distributed"] ?? 0,
+          icon: "/assets/images/Users.png",
+        },
+        {
+          label: "Amount Disbursed",
+          value: disbursementApiData.data["amount distributed "] ?? 0,
+          icon: "/assets/images/Users.png",
+        },
+      ]
+    : [
+        {
+          label: "Total Loans",
+          value: 0,
+          icon: "/assets/images/Users.png",
+        },
+        {
+          label: "Loans Disbursed",
+          value: 0,
+          icon: "/assets/images/Users.png",
+        },
+        {
+          label: "Amount Disbursed",
+          value: 0,
+          icon: "/assets/images/Users.png",
+        },
+      ];
+
+  // Convert API disbursement objects to array
+  const apiDisbursementList = disbursementApiData?.data
+    ? Object.keys(disbursementApiData.data)
+        .filter((key) => !isNaN(Number(key)))
+        .map((key) => {
+          const loan = disbursementApiData.data[key];
+          return {
+            id: loan.id,
+            name: loan.name,
+            amount: loan.Amount || loan.amount,
+            duration: loan.Duration || loan.duration,
+            date: loan.date,
+            disbursement: loan["disbursement status"],
+            loanStatus: loan["approval status"],
+          };
+        })
+    : [];
+
+  // Filter disbursement data based on selected filters and search term
+  const filteredDisbursementData = apiDisbursementList.filter((loan) => {
     const loanStatusMatch =
       loanStatusFilter === "Loan Status" ||
       loan.loanStatus === loanStatusFilter;
     const disbursementStatusMatch =
       disbursementStatusFilter === "Disbursement Status" ||
       loan.disbursement === disbursementStatusFilter;
-    // Not filtering by activeStatus so it doesn't affect the table data
-    return loanStatusMatch && disbursementStatusMatch;
+    const searchMatch =
+      !searchTerm ||
+      loan.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(loan.amount).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (loan.duration || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      loan.date.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      loan.disbursement.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      loan.loanStatus.toLowerCase().includes(searchTerm.toLowerCase());
+    return loanStatusMatch && disbursementStatusMatch && searchMatch;
   });
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
       {/* Header Component */}
       <Header
         adminName="Hi, Admin"
-        // adminRole="Administrator"
         adminImage="/assets/layout/admin.png"
-        // showNotification={true}
-        // notificationCount={0}
         onNotificationClick={handleNotificationClick}
-        // showAdminRole={false}
       />
 
       {/* Main Content */}
@@ -176,68 +251,29 @@ const Loans_disbursement = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 h-[120px]">
-          <div
-            className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="flex items-center gap-5">
-              <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src="/assets/images/Users.png"
-                  alt="Total Loans"
-                  className="w-7 h-7 object-contain"
-                />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-[#0000FF]">
-                  Total Loans
-                </p>
-                <p className="text-2xl font-bold text-[#0000FF]">30</p>
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src="/assets/images/Users.png"
-                  alt="Loans Disbursed"
-                  className="w-7 h-7 object-contain"
-                />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-[#0000FF]">
-                  Loans Disbursed
-                </p>
-                <p className="text-2xl font-bold text-[#0000FF]">5</p>
+          {stats.map((stat, idx) => (
+            <div
+              key={idx}
+              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
+              style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+            >
+              <div className="flex items-center gap-5">
+                <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                  <img
+                    src={stat.icon}
+                    alt={stat.label}
+                    className="w-7 h-7 object-contain"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[#0000FF]">
+                    {stat.label}
+                  </p>
+                  <p className="text-2xl font-bold text-[#0000FF]">{stat.value}</p>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div
-            className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src="/assets/images/Users.png"
-                  alt="Amount Disbursed"
-                  className="w-7 h-7 object-contain"
-                />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-[#0000FF]">
-                  Amount Disbursed
-                </p>
-                <p className="text-2xl font-bold text-[#0000FF]">N2,000,000</p>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* Disbursement Summary Section */}
@@ -291,6 +327,8 @@ const Loans_disbursement = () => {
               <input
                 type="text"
                 placeholder="Search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-12 pr-6 py-3.5 border border-[#00000080] rounded-lg text-[15px] w-[320px] focus:outline-none bg-white shadow-[0_2px_6px_rgba(0,0,0,0.05)] placeholder-gray-400"
               />
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -315,131 +353,145 @@ const Loans_disbursement = () => {
         {/* Disbursement Table */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 bg-[#EBEBEB]">
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    <input type="checkbox" className="rounded" />
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Name
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Amount
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Duration
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Disbursement
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Loan Status
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white">
-                {filteredDisbursementData.map((loan, index) => (
-                  <tr
-                    key={loan.id}
-                    className={`${
-                      index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                    } transition-colors border-b border-gray-100 last:border-b-0`}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+            {isDisbursementLoading ? (
+              <div className="py-16 text-center text-gray-500 text-lg">
+                Loading disbursements...
+              </div>
+            ) : isDisbursementError ? (
+              <div className="py-16 text-center text-red-500 text-lg">
+                Failed to load disbursements.
+              </div>
+            ) : filteredDisbursementData.length === 0 ? (
+              <div className="py-16 text-center text-gray-500 text-lg">
+                No disbursements found.
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-[#EBEBEB]">
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
                       <input type="checkbox" className="rounded" />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {loan.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {loan.amount}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {loan.duration}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span
-                        className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full"
-                        style={getDisbursementStatusColor(loan.disbursement)}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full mr-1.5"
-                          style={{
-                            backgroundColor:
-                              loan.disbursement.toLowerCase() === "completed"
-                                ? "#008000"
-                                : loan.disbursement.toLowerCase() === "pending"
-                                ? "#FF8C00"
-                                : "#6B7280",
-                          }}
-                        ></span>
-                        {loan.disbursement}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span
-                        className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full"
-                        style={getLoanStatusColor(loan.loanStatus)}
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full mr-1.5"
-                          style={{
-                            backgroundColor:
-                              loan.loanStatus.toLowerCase() === "active"
-                                ? "#008000"
-                                : loan.loanStatus.toLowerCase() === "repaid"
-                                ? "#0000FF"
-                                : loan.loanStatus.toLowerCase() === "overdue"
-                                ? "#FF0000"
-                                : loan.loanStatus.toLowerCase() === "pending"
-                                ? "#FF8C00"
-                                : "#6B7280",
-                          }}
-                        ></span>
-                        {loan.loanStatus}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
-                      <div className="flex items-center justify-center space-x-2">
-                        <button
-                          className="cursor-pointer"
-                          onClick={() =>
-                            handleViewRepaymentHistory(loan.id, loan.loanStatus)
-                          }
-                        >
-                          <img
-                            src="/assets/images/eye.svg"
-                            alt="View"
-                            className="w-8 h-8 object-contain"
-                          />
-                        </button>
-                        {loan.disbursement === "Pending" ? (
-                          <button
-                            className="text-white px-8 py-3.5 rounded-full hover:opacity-90 transition-opacity text-xs font-medium cursor-pointer"
-                            style={{ backgroundColor: "#273E8E" }}
-                            onClick={() => handleViewLoanDetail(loan.id)}
-                          >
-                            Send Loan
-                          </button>
-                        ) : (
-                          <button
-                            className="text-white px-7 py-3.5 rounded-full cursor-pointer hover:opacity-90 transition-opacity text-xs font-medium"
-                            style={{ backgroundColor: "#273E8E" }}
-                            onClick={() => handleViewLoanDetail(loan.id)}
-                          >
-                            View Details
-                          </button>
-                        )}
-                      </div>
-                    </td>
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Name
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Amount
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Duration
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Disbursement
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Loan Status
+                    </th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                      Action
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white">
+                  {filteredDisbursementData.map((loan, index) => (
+                    <tr
+                      key={loan.id}
+                      className={`${
+                        index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                      } transition-colors border-b border-gray-100 last:border-b-0`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <input type="checkbox" className="rounded" />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {loan.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {loan.amount}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {loan.duration}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span
+                          className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full"
+                          style={getDisbursementStatusColor(loan.disbursement)}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full mr-1.5"
+                            style={{
+                              backgroundColor:
+                                loan.disbursement.toLowerCase() === "completed"
+                                  ? "#008000"
+                                  : loan.disbursement.toLowerCase() === "pending"
+                                  ? "#FF8C00"
+                                  : "#6B7280",
+                            }}
+                          ></span>
+                          {loan.disbursement}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span
+                          className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full"
+                          style={getLoanStatusColor(loan.loanStatus)}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full mr-1.5"
+                            style={{
+                              backgroundColor:
+                                loan.loanStatus.toLowerCase() === "active"
+                                  ? "#008000"
+                                  : loan.loanStatus.toLowerCase() === "repaid"
+                                  ? "#0000FF"
+                                  : loan.loanStatus.toLowerCase() === "overdue"
+                                  ? "#FF0000"
+                                  : loan.loanStatus.toLowerCase() === "pending"
+                                  ? "#FF8C00"
+                                  : "#6B7280",
+                            }}
+                          ></span>
+                          {loan.loanStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <button
+                            className="cursor-pointer"
+                            onClick={() =>
+                              handleViewRepaymentHistory(loan.id, loan.loanStatus)
+                            }
+                          >
+                            <img
+                              src="/assets/images/eye.svg"
+                              alt="View"
+                              className="w-8 h-8 object-contain"
+                            />
+                          </button>
+                          {loan.disbursement === "Pending" ? (
+                            <button
+                              className="text-white px-8 py-3.5 rounded-full hover:opacity-90 transition-opacity text-xs font-medium cursor-pointer"
+                              style={{ backgroundColor: "#273E8E" }}
+                              onClick={() => handleViewLoanDetail(loan.id)}
+                            >
+                              Send Loan
+                            </button>
+                          ) : (
+                            <button
+                              className="text-white px-7 py-3.5 rounded-full cursor-pointer hover:opacity-90 transition-opacity text-xs font-medium"
+                              style={{ backgroundColor: "#273E8E" }}
+                              onClick={() => handleViewLoanDetail(loan.id)}
+                            >
+                              View Details
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>

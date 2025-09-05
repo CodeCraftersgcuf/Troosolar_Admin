@@ -6,6 +6,11 @@ export const getAllLoanStatus = async (token: string): Promise<any> => {
   return await apiCall(API_ENDPOINTS.ADMIN.AllLoanStatus, "GET", undefined, token);
 };
 
+//GET /all-loan-distributed
+export const getAllLoanDistributed = async (token: string): Promise<any> => {
+  return await apiCall(API_ENDPOINTS.ADMIN.AllLoanDistributed, "GET", undefined, token);
+};
+
 // GET /full-loan-detail/{id}
 export const getFullLoanDetail = async (
   id: number | string,

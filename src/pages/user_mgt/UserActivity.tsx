@@ -1,8 +1,10 @@
+import React, { useState, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { users } from "../../constants/usermgt";
-import React, { useState } from "react";
 import Header from "../../component/Header";
 import images from "../../constants/images";
+import { getSingleUser } from "../../utils/queries/users";
+import { useQuery } from "@tanstack/react-query";
+import Cookies from "js-cookie";
 
 const activities = [
   { activity: "User Created account", date: "05-07-25/07:22AM" },
@@ -14,37 +16,39 @@ const UserActivity: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const token = Cookies.get("token");
 
-  // Use user data from navigation state if available, otherwise fallback to users array or dummy values
-  const stateUser = location.state as
-    | {
-        id: string;
-        name: string;
-        email: string;
-        phone: string;
-        bvn: string;
-        date: string;
-      }
-    | undefined;
+  // Always fetch user from API using id from params
+  const { data: apiData, isLoading: isApiLoading } = useQuery({
+    queryKey: ["single-user", id],
+    queryFn: () => getSingleUser(id || "", token || ""),
+    enabled: !!id && !!token,
+    staleTime: 5 * 60 * 1000, // cache for 5 minutes
+  });
 
-  const user =
-    stateUser ||
-    users.find((u) => u.id === id) || {
-      id: id || "N/A",
-      name: "Unknown User",
-      email: "unknown@email.com",
-      phone: "0000000000",
-      bvn: "00000000000",
-      date: "01/01/1970",
+  // Memoize user data so it persists across tab changes
+  const user = useMemo(() => {
+    if (!apiData?.data) return null;
+    return {
+      id: String(apiData.data.id),
+      name: `${apiData.data.first_name} ${apiData.data.sur_name}`,
+      email: apiData.data.email,
+      phone: apiData.data.phone,
+      bvn: apiData.data.bvn || "",
+      date: apiData.data.created_at
+        ? new Date(apiData.data.created_at).toLocaleDateString("en-GB")
+        : "",
     };
+  }, [apiData]);
 
+  // Move hooks above all conditional returns
   const [showEdit, setShowEdit] = useState(false);
   const [form, setForm] = useState({
-    firstName: user.name.split(" ")[1] || user.name,
-    surname: user.name.split(" ")[0] || "",
-    email: user.email || "",
-    phone: user.phone || "",
-    bvn: user.bvn || "",
+    firstName: user?.name?.split(" ")[1] || user?.name || "",
+    surname: user?.name?.split(" ")[0] || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+    bvn: user?.bvn || "",
     password: "",
     referral: "",
   });
@@ -52,7 +56,6 @@ const UserActivity: React.FC = () => {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would typically update the user in your backend or state
     setSuccess(true);
     setTimeout(() => {
       setSuccess(false);
@@ -65,23 +68,29 @@ const UserActivity: React.FC = () => {
     console.log("Notification clicked in User Activity");
   };
 
+  // Show loading indicator if fetching from API
+  if (isApiLoading) {
+    return (
+      <div className="bg-[#F5F7FF] min-h-screen flex items-center justify-center">
+        <div className="text-center text-gray-500 text-lg py-20">
+          Loading user details...
+        </div>
+      </div>
+    );
+  }
+
+  // Show not found if user is still not available
   if (!user) return <div className="p-8 text-xl">User not found</div>;
+
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
-      {/* Header Component */}
       <Header
         adminName="Hi, Admin"
-        // adminRole="Administrator"
         adminImage="/assets/layout/admin.png"
-        // showNotification={true}
-        // notificationCount={0}
         onNotificationClick={handleNotificationClick}
       />
-
-      {/* Main Content */}
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6">{user.name}</h1>
-
         {/* Tabs */}
         <div className="flex gap-8 border-b border-gray-200 text-md mb-6">
           <button
@@ -92,6 +101,7 @@ const UserActivity: React.FC = () => {
                 ? "text-black font-semibold"
                 : "text-[#00000080]"
             }`}
+            onClick={() => navigate(`/user-activity/${user.id}`)}
           >
             Activity
             {!location.pathname.includes("/loans") &&
@@ -140,11 +150,9 @@ const UserActivity: React.FC = () => {
             )}
           </button>
         </div>
-
         {/* Profile Card */}
         <div
           className="bg-gradient-to-r from-[#4e4376] to-[#f9d423] rounded-2xl shadow-lg p-8 flex gap-8 items-center mb-8"
-          style={{}}
         >
           <div
             className="flex flex-col items-center w-60 rounded-lg p-5"
@@ -343,7 +351,6 @@ const UserActivity: React.FC = () => {
             </div>
           </div>
         </div>
-
         {/* Activity Section */}
         <div className="mb-4">
           <h2 className="text-xl font-semibold mb-2">Activity</h2>
