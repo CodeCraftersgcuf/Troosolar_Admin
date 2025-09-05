@@ -1,18 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import images from '../../constants/images';
 
 interface NewNotificationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (subject: string, message: string) => void;
+  subject?: string;
+  message?: string;
+  modalTitle?: string;
 }
 
-const NewNotificationModal = ({ isOpen, onClose, onSave }: NewNotificationModalProps) => {
-  const [subject, setSubject] = useState('');
-  const [message, setMessage] = useState('');
+const NewNotificationModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  subject: initialSubject = '',
+  message: initialMessage = '',
+  modalTitle = "New Notification"
+}: NewNotificationModalProps) => {
+  const [subject, setSubject] = useState(initialSubject);
+  const [message, setMessage] = useState(initialMessage);
+
+  useEffect(() => {
+    setSubject(initialSubject);
+  }, [initialSubject, isOpen]);
+
+  useEffect(() => {
+    setMessage(initialMessage);
+  }, [initialMessage, isOpen]);
 
   const handleSave = () => {
-    if (subject.trim() && message.trim()) {
+    if ((modalTitle === "Edit Notification" ? true : subject.trim()) && message.trim()) {
       onSave(subject, message);
       setSubject('');
       setMessage('');
@@ -40,21 +58,23 @@ const NewNotificationModal = ({ isOpen, onClose, onSave }: NewNotificationModalP
         </button>
 
         {/* Modal Header */}
-        <h2 className="text-xl font-semibold text-gray-800 mb-6">New Notification</h2>
+        <h2 className="text-xl font-semibold text-gray-800 mb-6">{modalTitle}</h2>
 
         {/* Subject Field */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Subject
-          </label>
-          <input
-            type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="Type subject"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#273E8E] focus:border-[#273E8E] outline-none text-sm"
-          />
-        </div>
+        {modalTitle !== "Edit Notification" && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Subject
+            </label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Type subject"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#273E8E] focus:border-[#273E8E] outline-none text-sm"
+            />
+          </div>
+        )}
 
         {/* Message Field */}
         <div className="mb-6">

@@ -61,6 +61,23 @@ const API_ENDPOINTS = {
 
     // --- Admin notifications ---
     AdminNotificationsCreate: API_DOMAIN + "/admin/notifications", // POST
+
+    // === Notifications
+    NotificationsList: API_DOMAIN + "/admin/notifications", // GET
+    AddNotification: API_DOMAIN + "/admin/notifications", // POST
+    DeleteNotification: (id: number | string) =>
+      `${API_DOMAIN}/admin/notifications/${id}`, // DELETE
+    UpdateNotification: (id: number | string) =>
+      `${API_DOMAIN}/admin/notifications/${id}`, // POST
+
+    // === Banner
+    BannersList: API_DOMAIN + "/admin/banners", // GET
+    AddBanner: API_DOMAIN + "/admin/banners", // POST
+    DeleteBanner: (id: number | string) =>
+      `${API_DOMAIN}/admin/banners/${id}`, // DELETE
+    UpdateBanner: (id: number | string) =>
+      `${API_DOMAIN}/admin/banners/${id}`, // POST
+
   },
 };
 
