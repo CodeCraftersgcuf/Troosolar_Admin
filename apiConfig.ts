@@ -78,7 +78,17 @@ const API_ENDPOINTS = {
     UpdateBanner: (id: number | string) =>
       `${API_DOMAIN}/admin/banners/${id}`, // POST
 
+    // === Financing Partners
+    FinancingPartnersList: API_DOMAIN + "/all-partners", // GET
+    AddFinancingPartner: API_DOMAIN + "/add-partner", // POST
+    DeleteFinancingPartner: (id: number | string) =>
+      `${API_DOMAIN}/delete_partner/${id}`, // DELETE
+    UpdateFinancingPartner: (id: number | string) =>
+      `${API_DOMAIN}/update-partner/${id}`, // POST
+
   },
+
+
 };
 
 export { API_DOMAIN, API_ENDPOINTS };
