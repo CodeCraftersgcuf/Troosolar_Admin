@@ -3,16 +3,29 @@ import { productCategories, brands } from "./product";
 import type { ProductCategory, Brand } from "./product";
 import AddNewCategory from "./AddNewCategory";
 import AddNewBrand from "./AddNewBrand";
+import ConfirmDeleteModal from "./ConfirmDeleteModal";
+
+//Code Related to the Integration
+import { getAllCategories } from "../../utils/queries/categories";
+import Cookies from "js-cookie";
+import { useQuery } from "@tanstack/react-query";
+import { deleteCategory } from "../../utils/mutations/categories";
+import { useMutation } from "@tanstack/react-query";
+
+const IMAGE_BASE_URL = "http://localhost:8000";
 
 const Product = () => {
-  const [categories, setCategories] =
-    useState<ProductCategory[]>(productCategories);
+  const [categories, setCategories] = useState<ProductCategory[]>(productCategories);
   const [brandList, setBrandList] = useState<Brand[]>(brands);
   const [activeTab, setActiveTab] = useState<"categories" | "brand">(
     "categories"
   );
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isAddBrandModalOpen, setIsAddBrandModalOpen] = useState(false);
+  const [editCategoryModalOpen, setEditCategoryModalOpen] = useState(false);
+  const [editCategoryData, setEditCategoryData] = useState<ProductCategory | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<ProductCategory | null>(null);
 
   // Enhanced dropdown states
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
@@ -113,13 +126,80 @@ const Product = () => {
     );
   };
 
+  // API integration for categories
+  const token = Cookies.get("token");
+  const { data: apiCategories, isLoading: isCategoriesLoading, isError: isCategoriesError, refetch } = useQuery({
+    queryKey: ["all-categories"],
+    queryFn: () => getAllCategories(token || ""),
+    enabled: !!token,
+  });
+
+  // Map API response to categories
+  useEffect(() => {
+    if (apiCategories?.status === "success" && Array.isArray(apiCategories.data)) {
+      setCategories(
+        apiCategories.data.map((cat: any) => ({
+          id: String(cat.id),
+          categoryName: cat.title,
+          image: cat.icon ? `${IMAGE_BASE_URL}${cat.icon}` : "/assets/images/category.png",
+          dateCreated: cat.created_at
+            ? new Date(cat.created_at).toLocaleString("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              }).replace(/\//g, "-").replace(",", "/")
+            : "",
+          status: "Active", // API doesn't provide status, default to Active
+          isSelected: false,
+        }))
+      );
+    }
+  }, [apiCategories]);
+
+  // Edit category logic
   const handleEdit = (id: string) => {
-    console.log("Edit category:", id);
-    // Add edit functionality here
+    const category = categories.find((cat) => cat.id === id);
+    if (category) {
+      setEditCategoryData(category);
+      setEditCategoryModalOpen(true);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setCategories((prev) => prev.filter((category) => category.id !== id));
+  // Save new category
+  const handleAddNewCategory = async (categoryName: string, image: File | null, status: string) => {
+    if (image) {
+      const imageUrl = URL.createObjectURL(image);
+      const newCategory: ProductCategory = {
+        id: (categories.length + 1).toString(),
+        categoryName,
+        image: imageUrl,
+        dateCreated: new Date()
+          .toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          })
+          .replace(/\//g, "-")
+          .replace(",", "/"),
+        status: status as "Active" | "Pending",
+        isSelected: false,
+      };
+      setCategories((prev) => [...prev, newCategory]);
+    }
+  };
+
+  // Save edited category
+  const handleEditCategorySave = async (categoryName: string, image: File | null, status: string) => {
+    // Only close modal and refetch, mutation is now handled in AddNewCategory
+    setEditCategoryModalOpen(false);
+    setEditCategoryData(null);
+    refetch();
   };
 
   const handleSelectBrand = (id: string) => {
@@ -143,35 +223,6 @@ const Product = () => {
 
   const handleDeleteBrand = (id: string) => {
     setBrandList((prev) => prev.filter((brand) => brand.id !== id));
-  };
-
-  const handleAddNewCategory = (
-    categoryName: string,
-    image: File | null,
-    status: string
-  ) => {
-    if (image) {
-      const imageUrl = URL.createObjectURL(image);
-      const newCategory: ProductCategory = {
-        id: (categories.length + 1).toString(),
-        categoryName,
-        image: imageUrl,
-        dateCreated: new Date()
-          .toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-          })
-          .replace(/\//g, "-")
-          .replace(",", "/"),
-        status: status as "Active" | "Pending",
-        isSelected: false,
-      };
-      setCategories((prev) => [...prev, newCategory]);
-    }
   };
 
   const handleAddNewBrand = (
@@ -198,6 +249,38 @@ const Product = () => {
       isSelected: false,
     };
     setBrandList((prev) => [...prev, newBrand]);
+  };
+
+  // Delete category mutation
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id: string) => deleteCategory(id, token || ""),
+    onSuccess: () => {
+      refetch();
+    },
+  });
+
+  // Show confirmation dialog before delete
+  const handleDelete = (id: string) => {
+    const category = categories.find((cat) => cat.id === id);
+    if (category) {
+      setCategoryToDelete(category);
+      setShowDeleteModal(true);
+    }
+  };
+
+  // Confirm delete action
+  const confirmDelete = () => {
+    if (categoryToDelete) {
+      deleteCategoryMutation.mutate(categoryToDelete.id);
+      setShowDeleteModal(false);
+      setCategoryToDelete(null);
+    }
+  };
+
+  // Cancel delete action
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setCategoryToDelete(null);
   };
 
   const allSelected = categories.every((category) => category.isSelected);
@@ -329,134 +412,149 @@ const Product = () => {
       {/* Categories Table */}
       {activeTab === "categories" && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="min-w-full">
-            {/* Table Header */}
-            <thead className="bg-[#EBEBEB]">
-              <tr>
-                <th className="px-6 py-4 text-center">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={(input) => {
-                      if (input)
-                        input.indeterminate = someSelected && !allSelected;
-                    }}
-                    onChange={(e) => handleSelectAll(e.target.checked)}
-                    className="w-4 h-4 text-[#273E8E] bg-gray-100 border-gray-300 rounded focus:ring-[#273E8E] focus:ring-2"
-                  />
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">
-                    Category Name
-                  </span>
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">Image</span>
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">
-                    Date Created
-                  </span>
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">Status</span>
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">Action</span>
-                </th>
-              </tr>
-            </thead>
-
-            {/* Table Body */}
-            <tbody className="divide-y divide-gray-100">
-              {categories.map((category, index) => (
-                <tr
-                  key={category.id}
-                  className={`${
-                    index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                  } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 `}
-                >
-                  {/* Checkbox */}
-                  <td className="px-6 py-4 text-center">
+          {isCategoriesLoading ? (
+            <div className="py-16 text-center text-gray-500 text-lg">
+              Loading categories...
+            </div>
+          ) : isCategoriesError ? (
+            <div className="py-16 text-center text-red-500 text-lg">
+              Failed to load categories.
+            </div>
+          ) : (
+            <table className="min-w-full">
+              {/* Table Header */}
+              <thead className="bg-[#EBEBEB]">
+                <tr>
+                  <th className="px-6 py-4 text-center">
                     <input
                       type="checkbox"
-                      checked={category.isSelected || false}
-                      onChange={() => handleSelectCategory(category.id)}
+                      checked={allSelected}
+                      ref={(input) => {
+                        if (input)
+                          input.indeterminate = someSelected && !allSelected;
+                      }}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
                       className="w-4 h-4 text-[#273E8E] bg-gray-100 border-gray-300 rounded focus:ring-[#273E8E] focus:ring-2"
                     />
-                  </td>
-
-                  {/* Category Name */}
-                  <td className="px-6 py-4 text-center">
-                    <span className="text-sm font-medium text-gray-900">
-                      {category.categoryName}
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">
+                      Category Name
                     </span>
-                  </td>
-
-                  {/* Image */}
-                  <td className="px-6 py-4 flex justify-center items-center">
-                    <div className="w-12 h-12  overflow-hidden ">
-                      <img
-                        src={category.image}
-                        alt={`${category.categoryName} category`}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          // Fallback if image fails to load
-                          const target = e.target as HTMLImageElement;
-                          target.src = "/assets/images/category.png"; // Fallback image
-                        }}
-                      />
-                    </div>
-                  </td>
-
-                  {/* Date Created */}
-                  <td className="px-6 py-4 text-center">
-                    <span className="text-sm text-gray-600">
-                      {category.dateCreated}
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">Image</span>
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">
+                      Date Created
                     </span>
-                  </td>
-
-                  {/* Status */}
-                  <td className="px-6 py-4 text-center">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        category.status === "Active"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-yellow-100 text-yellow-800"
-                      }`}
-                    >
-                      {category.status}
-                    </span>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center space-x-2">
-                      <button
-                        onClick={() => handleEdit(category.id)}
-                        className="bg-[#273E8E] text-white px-5 py-3 rounded-full text-sm font-medium hover:bg-[#1f2f7a] transition-colors cursor-pointer"
-                      >
-                        Edit Category
-                      </button>
-                      <button
-                        onClick={() => handleDelete(category.id)}
-                        className="bg-[#FF0000] text-white px-10 py-3 rounded-full text-sm font-medium hover:bg-red-600 transition-colors cursor-pointer"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">Status</span>
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">Action</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
 
+              {/* Table Body */}
+              <tbody className="divide-y divide-gray-100">
+                {categories.map((category, index) => (
+                  <tr
+                    key={category.id}
+                    className={`${
+                      index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                    } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 `}
+                  >
+                    {/* Checkbox */}
+                    <td className="px-6 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={category.isSelected || false}
+                        onChange={() => handleSelectCategory(category.id)}
+                        className="w-4 h-4 text-[#273E8E] bg-gray-100 border-gray-300 rounded focus:ring-[#273E8E] focus:ring-2"
+                      />
+                    </td>
+
+                    {/* Category Name */}
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-sm font-medium text-gray-900">
+                        {category.categoryName}
+                      </span>
+                    </td>
+
+                    {/* Image */}
+                    <td className="px-6 py-4 flex justify-center items-center">
+                      <div className="w-12 h-12  overflow-hidden ">
+                        <img
+                          src={category.image}
+                          alt={`${category.categoryName} category`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Fallback if image fails to load
+                            const target = e.target as HTMLImageElement;
+                            target.src = "/assets/images/category.png"; // Fallback image
+                          }}
+                        />
+                      </div>
+                    </td>
+
+                    {/* Date Created */}
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-sm text-gray-600">
+                        {category.dateCreated}
+                      </span>
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-6 py-4 text-center">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          category.status === "Active"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-yellow-100 text-yellow-800"
+                        }`}
+                      >
+                        {category.status}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex items-center justify-center space-x-2">
+                        <button
+                          onClick={() => handleEdit(category.id)}
+                          className="bg-[#273E8E] text-white px-5 py-3 rounded-full text-sm font-medium hover:bg-[#1f2f7a] transition-colors cursor-pointer"
+                        >
+                          Edit Category
+                        </button>
+                        <button
+                          onClick={() => handleDelete(category.id)}
+                          className="bg-[#FF0000] text-white px-10 py-3 rounded-full text-sm font-medium hover:bg-red-600 transition-colors cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
           {/* Empty State */}
           {categories.length === 0 && (
             <div className="px-6 py-8 text-center">
               <p className="text-gray-500">No categories found.</p>
             </div>
           )}
+          <ConfirmDeleteModal
+            isOpen={showDeleteModal}
+            onClose={cancelDelete}
+            onConfirm={confirmDelete}
+            message="Are you sure you want to delete this category?"
+          />
         </div>
       )}
 
@@ -593,6 +691,18 @@ const Product = () => {
         isOpen={isAddCategoryModalOpen}
         onClose={() => setIsAddCategoryModalOpen(false)}
         onSave={handleAddNewCategory}
+      />
+
+      {/* Edit Category Modal */}
+      <AddNewCategory
+        isOpen={editCategoryModalOpen}
+        onClose={() => {
+          setEditCategoryModalOpen(false);
+          setEditCategoryData(null);
+        }}
+        onSave={handleEditCategorySave}
+        editMode={true}
+        editData={editCategoryData}
       />
 
       {/* Add New Brand Modal */}

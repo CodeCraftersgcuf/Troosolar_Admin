@@ -1,17 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import images from '../../constants/images';
+
+//Code Related to the Integration
+import { addCategory, updateCategory } from '../../utils/mutations/categories';
+import Cookies from "js-cookie";
 
 interface AddNewCategoryProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (categoryName: string, image: File | null, status: string) => void;
+  editMode?: boolean;
+  editData?: any;
 }
 
-const AddNewCategory = ({ isOpen, onClose, onSave }: AddNewCategoryProps) => {
+const AddNewCategory = ({
+  isOpen,
+  onClose,
+  onSave,
+  editMode = false,
+  editData,
+}: AddNewCategoryProps) => {
   const [categoryName, setCategoryName] = useState('');
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [status, setStatus] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const token = Cookies.get("token");
+
+  useEffect(() => {
+    if (editMode && editData) {
+      setCategoryName(editData.categoryName || '');
+      setStatus(editData.status || '');
+      setImagePreview(editData.image || null);
+      setSelectedImage(null); // Only set if user uploads new image
+    } else {
+      setCategoryName('');
+      setSelectedImage(null);
+      setStatus('');
+      setImagePreview(null);
+    }
+  }, [editMode, editData, isOpen]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,16 +82,36 @@ const AddNewCategory = ({ isOpen, onClose, onSave }: AddNewCategoryProps) => {
     }
   };
 
-  const handleSave = () => {
-    if (categoryName.trim() && selectedImage && status) {
-      onSave(categoryName, selectedImage, status);
-      // Reset form
-      setCategoryName('');
-      setSelectedImage(null);
-      setStatus('');
-      setImagePreview(null);
-      onClose();
+  const handleSave = async () => {
+    setIsSaving(true);
+    if (!editMode) {
+      if (categoryName && selectedImage && status) {
+        const payload = { title: categoryName, icon: selectedImage };
+        await addCategory(payload, token || "");
+      }
+    } else {
+      // Edit mode: call updateCategory mutation
+      if (editData && categoryName && status) {
+        const payload = {
+          title: categoryName,
+          icon: selectedImage || new Blob(), // use new image if uploaded, else fallback
+        };
+        try {
+          const res = await updateCategory(editData.id, payload, token || "");
+          console.log("Update category response:", res);
+        } catch (err) {
+          console.error("Update category error:", err);
+        }
+      }
     }
+    await onSave(categoryName, selectedImage, status);
+    setIsSaving(false);
+    // Reset form
+    setCategoryName('');
+    setSelectedImage(null);
+    setStatus('');
+    setImagePreview(null);
+    onClose();
   };
 
   const handleClose = () => {
@@ -82,7 +130,9 @@ const AddNewCategory = ({ isOpen, onClose, onSave }: AddNewCategoryProps) => {
       <div className="bg-white rounded-lg w-full max-w-2xl mx-4 relative">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Add Category</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {editMode ? "Edit Category" : "Add Category"}
+          </h2>
           <button
             onClick={handleClose}
             className="w-8 h-8 flex items-center justify-center rounded-full cursor-pointer transition-colors"
@@ -206,10 +256,10 @@ const AddNewCategory = ({ isOpen, onClose, onSave }: AddNewCategoryProps) => {
         <div className="px-6 py-4">
           <button
             onClick={handleSave}
-            disabled={!categoryName.trim() || !selectedImage || !status}
+            disabled={!categoryName.trim() || !status || isSaving}
             className="w-full bg-[#273E8E] text-white py-3 rounded-full font-medium hover:bg-[#1f2f7a] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
           >
-            Save
+            {isSaving ? "Saving..." : "Save"}
           </button>
         </div>
       </div>

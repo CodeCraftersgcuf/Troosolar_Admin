@@ -86,6 +86,14 @@ const API_ENDPOINTS = {
     UpdateFinancingPartner: (id: number | string) =>
       `${API_DOMAIN}/update-partner/${id}`, // POST
 
+    // === Settings -- Categoriesq
+    CategoriesList: API_DOMAIN + "/categories", // GET
+    AddCategory: API_DOMAIN + "/categories", // POST
+    DeleteCategory: (id: number | string) =>
+      `${API_DOMAIN}/categories/${id}`, // DELETE
+    UpdateCategory: (id: number | string) =>
+      `${API_DOMAIN}/categories/${id}`, // POST
+  
   },
 
 
