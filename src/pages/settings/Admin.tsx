@@ -3,6 +3,14 @@ import { adminData, allAdminsData } from "./admin.ts";
 import EditProfile from "./EditProfile.tsx";
 import AdminDetail from "./AdminDetail.tsx";
 
+
+
+
+//Code Related to the Integration
+import { useQuery } from "@tanstack/react-query";
+import { getAllUsers } from "../../utils/queries/users.ts";
+import Cookies from "js-cookie";
+
 const Admin = () => {
   const [activeTab, setActiveTab] = useState<"activity" | "allAdmins">(
     "activity"
@@ -27,9 +35,61 @@ const Admin = () => {
     setSelectedAdminId(null);
   };
 
-  // If viewing admin details, show AdminDetail component
+  // API integration for users
+  const token = Cookies.get("token");
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["all-users"],
+    queryFn: () => getAllUsers(token || ""),
+    enabled: !!token,
+  });
+
+  // Map API response to admins table (only role === "Admin")
+  const apiAdmins = data?.data?.["all users data"]
+    ? data.data["all users data"]
+        .filter((u: any) => u.role === "Admin")
+        .map((u: any) => ({
+          id: String(u.id),
+          firstName: u.first_name,
+          surname: u.sur_name,
+          email: u.email,
+          phone: u.phone || "",
+          bvn: u.bvn || "",
+          password: "**********",
+          image: u.profile_picture || "/assets/layout/profile.png",
+          role: u.role,
+          userCode: u.user_code || "",
+          referralCode: u.refferal_code || "",
+          isActive: u.is_active === 1,
+          isVerified: u.is_verified === 1,
+          dateJoined: u.created_at
+            ? new Date(u.created_at).toLocaleString("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              }).replace(/\//g, "-").replace(",", "/")
+            : "",
+          activity: [], // You may fill this if API provides
+        }))
+    : [];
+
+  // Use API admins if available, else fallback to dummy
+  const adminsToShow = apiAdmins.length > 0 ? apiAdmins : allAdminsData;
+
+  // If viewing admin details, show AdminDetail component with correct data
   if (selectedAdminId) {
-    return <AdminDetail adminId={selectedAdminId} onGoBack={handleGoBack} />;
+    // Find the selected admin from the current adminsToShow list
+    const selectedAdmin = adminsToShow.find(a => a.id === selectedAdminId);
+    // Pass the full admin object to AdminDetail if found
+    return (
+      <AdminDetail
+        adminId={selectedAdminId}
+        adminData={selectedAdmin}
+        onGoBack={handleGoBack}
+      />
+    );
   }
 
   return (
@@ -235,99 +295,105 @@ const Admin = () => {
         {/* All Admins Tab Content */}
         {activeTab === "allAdmins" && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              {/* Table Head */}
-              <thead className="bg-[#EBEBEB]">
-                <tr>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-center text-sm font-medium text-black"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span>Name</span>
-                    </div>
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-center text-sm font-medium text-black"
-                  >
-                    Email
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-center text-sm font-medium text-black"
-                  >
-                    Role
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-center text-sm font-medium text-black"
-                  >
-                    BVN
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-center text-sm font-medium text-black"
-                  >
-                    Date Joined
-                  </th>
-                  <th
-                    scope="col"
-                    className="px-6 py-4 text-center text-sm font-medium text-black"
-                  >
-                    Action
-                  </th>
-                </tr>
-              </thead>
-
-              {/* Table Body */}
-              <tbody className="bg-white divide-y divide-gray-100">
-                {allAdminsData.map((admin, index) => (
-                  <tr
-                    key={admin.id}
-                    className={`${
-                      index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                    } transition-colors border-b border-gray-100 last:border-b-0`}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800 font-medium">
+            {isLoading ? (
+              <div className="py-8 text-center text-gray-500">Loading admins...</div>
+            ) : isError ? (
+              <div className="py-8 text-center text-red-500">Failed to load admins.</div>
+            ) : (
+              <table className="min-w-full divide-y divide-gray-200">
+                {/* Table Head */}
+                <thead className="bg-[#EBEBEB]">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-4 text-center text-sm font-medium text-black"
+                    >
                       <div className="flex items-center space-x-3">
                         <input
                           type="checkbox"
                           className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                        <span>
-                          {admin.firstName} {admin.surname}
-                        </span>
+                        <span>Name</span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {admin.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {admin.role}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {admin.bvn}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {admin.dateJoined}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button
-                        onClick={() => handleViewDetails(admin.id)}
-                        className="bg-[#273E8E] text-white px-5 py-3 rounded-full text-sm hover:bg-[#1f2f7a] transition-colors cursor-pointer"
-                      >
-                        View Details
-                      </button>
-                    </td>
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-4 text-center text-sm font-medium text-black"
+                    >
+                      Email
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-4 text-center text-sm font-medium text-black"
+                    >
+                      Role
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-4 text-center text-sm font-medium text-black"
+                    >
+                      BVN
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-4 text-center text-sm font-medium text-black"
+                    >
+                      Date Joined
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-4 text-center text-sm font-medium text-black"
+                    >
+                      Action
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+
+                {/* Table Body */}
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {adminsToShow.map((admin, index) => (
+                    <tr
+                      key={admin.id}
+                      className={`${
+                        index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                      } transition-colors border-b border-gray-100 last:border-b-0`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800 font-medium">
+                        <div className="flex items-center space-x-3">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span>
+                            {admin.firstName} {admin.surname}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {admin.email}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {admin.role}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {admin.bvn}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {admin.dateJoined}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <button
+                          onClick={() => handleViewDetails(admin.id)}
+                          className="bg-[#273E8E] text-white px-5 py-3 rounded-full text-sm hover:bg-[#1f2f7a] transition-colors cursor-pointer"
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
       </div>

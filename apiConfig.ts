@@ -93,7 +93,22 @@ const API_ENDPOINTS = {
       `${API_DOMAIN}/categories/${id}`, // DELETE
     UpdateCategory: (id: number | string) =>
       `${API_DOMAIN}/categories/${id}`, // POST
-  
+
+
+    // === Settings -- Brands
+    BrandsList: API_DOMAIN + "/brands", // GET
+    AddBrand: API_DOMAIN + "/brands", // POST
+    DeleteBrand: (id: number | string) =>
+      `${API_DOMAIN}/brands/${id}`, // DELETE
+    UpdateBrand: (id: number | string) =>
+      `${API_DOMAIN}/brands/${id}`, // POST
+    BrandById: (id: number | string) =>
+      `${API_DOMAIN}/brands/${id}`, // GET
+    BrandByCategory: (category: string) =>
+      `${API_DOMAIN}/categories/${category}/brands`, // GET
+    GetSingleBrandByCategory: (category: string, brandId: number | string) =>
+      `${API_DOMAIN}/categories/${category}/brands/${brandId}`, // GET
+
   },
 
 

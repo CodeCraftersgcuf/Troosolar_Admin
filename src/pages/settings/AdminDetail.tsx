@@ -4,14 +4,15 @@ import EditProfile from "./EditProfile.tsx";
 
 interface AdminDetailProps {
   adminId: string;
+  adminData?: any; // Add adminData prop to receive the actual admin data
   onGoBack: () => void;
 }
 
-const AdminDetail = ({ adminId, onGoBack }: AdminDetailProps) => {
+const AdminDetail = ({ adminId, adminData, onGoBack }: AdminDetailProps) => {
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
 
-  // Find the admin by ID
-  const admin = allAdminsData.find((admin) => admin.id === adminId);
+  // Use the passed adminData if available, otherwise fallback to finding in allAdminsData
+  const admin = adminData || allAdminsData.find((admin) => admin.id === adminId);
 
   if (!admin) {
     return (
@@ -70,7 +71,7 @@ const AdminDetail = ({ adminId, onGoBack }: AdminDetailProps) => {
           >
             <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white mb-6">
               <img
-                src="/assets/images/profile.png"
+                src={admin.image || "/assets/images/profile.png"}
                 alt="Admin Profile"
                 className="w-full h-full object-cover"
               />
@@ -107,16 +108,32 @@ const AdminDetail = ({ adminId, onGoBack }: AdminDetailProps) => {
                 <p className="text-lg font-medium">{admin.email}</p>
               </div>
               <div>
-                <p className="text-sm opacity-75 mb-1">Password</p>
-                <p className="text-lg font-medium">{admin.password}</p>
+                <p className="text-sm opacity-75 mb-1">Phone Number</p>
+                <p className="text-lg font-medium">{admin.phone || "N/A"}</p>
               </div>
             </div>
 
-            {/* Right Column - BVN and Delete Admin Button */}
+            {/* Right Column - Additional Info and Delete Admin Button */}
             <div className="text-white text-right flex flex-col justify-between">
-              <div>
-                <p className="text-sm opacity-75 mb-1">BVN</p>
-                <p className="text-lg font-medium">{admin.bvn}</p>
+              <div className="space-y-6">
+                <div>
+                  <p className="text-sm opacity-75 mb-1">User Code</p>
+                  <p className="text-lg font-medium">{admin.userCode || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-sm opacity-75 mb-1">Referral Code</p>
+                  <p className="text-lg font-medium">{admin.referralCode || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-sm opacity-75 mb-1">Status</p>
+                  <p className="text-lg font-medium">
+                    <span className={`px-2 py-1 rounded-full text-xs ${
+                      admin.isActive ? 'bg-green-500' : 'bg-red-500'
+                    }`}>
+                      {admin.isActive ? 'Active' : 'Inactive'}
+                    </span>
+                  </p>
+                </div>
               </div>
 
               <button className="bg-[#FFFFFF] text-black px-6 py-3 rounded-full font-semibold hover:bg-[#FFFFFF] transition-colors cursor-pointer">

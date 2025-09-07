@@ -6,6 +6,8 @@ import Tools from "./Tools.tsx";
 import Notifications from "./Notifications.tsx";
 import Product from "./Product.tsx";
 
+
+
 const Settings = () => {
   const [activeTab, setActiveTab] = useState<
     "admins" | "tools" | "product" | "financing" | "notifications"
@@ -33,11 +35,10 @@ const Settings = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`pb-2 cursor-pointer relative ${
-                activeTab === tab.id
+              className={`pb-2 cursor-pointer relative ${activeTab === tab.id
                   ? "text-black font-semibold"
                   : "text-[#00000080]"
-              }`}
+                }`}
             >
               {tab.label}
               {activeTab === tab.id && (

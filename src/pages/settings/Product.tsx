@@ -12,6 +12,14 @@ import { useQuery } from "@tanstack/react-query";
 import { deleteCategory } from "../../utils/mutations/categories";
 import { useMutation } from "@tanstack/react-query";
 
+import { getAllBrands } from "../../utils/queries/brands";
+import { getBrandsByCategory } from "../../utils/queries/brands";
+import { getBrandById } from "../../utils/queries/brands";
+import { getBrandsForCategory } from "../../utils/queries/brands";
+import { deleteBrand } from "../../utils/mutations/brands";
+
+
+
 const IMAGE_BASE_URL = "http://localhost:8000";
 
 const Product = () => {
@@ -26,6 +34,10 @@ const Product = () => {
   const [editCategoryData, setEditCategoryData] = useState<ProductCategory | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<ProductCategory | null>(null);
+  const [showDeleteBrandModal, setShowDeleteBrandModal] = useState(false);
+  const [brandToDelete, setBrandToDelete] = useState<Brand | null>(null);
+  const [editBrandModalOpen, setEditBrandModalOpen] = useState(false);
+  const [editBrandData, setEditBrandData] = useState<Brand | null>(null);
 
   // Enhanced dropdown states
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
@@ -144,13 +156,13 @@ const Product = () => {
           image: cat.icon ? `${IMAGE_BASE_URL}${cat.icon}` : "/assets/images/category.png",
           dateCreated: cat.created_at
             ? new Date(cat.created_at).toLocaleString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: true,
-              }).replace(/\//g, "-").replace(",", "/")
+              day: "2-digit",
+              month: "2-digit",
+              year: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            }).replace(/\//g, "-").replace(",", "/")
             : "",
           status: "Active", // API doesn't provide status, default to Active
           isSelected: false,
@@ -216,40 +228,37 @@ const Product = () => {
     );
   };
 
-  const handleEditBrand = (id: string) => {
-    console.log("Edit brand:", id);
-    // Add edit functionality here
-  };
+  // Fetch brands from API
+  const { data: apiBrands, isLoading: isBrandsLoading, isError: isBrandsError, refetch: refetchBrands } = useQuery({
+    queryKey: ["all-brands"],
+    queryFn: () => getAllBrands(token || ""),
+    enabled: !!token,
+  });
 
-  const handleDeleteBrand = (id: string) => {
-    setBrandList((prev) => prev.filter((brand) => brand.id !== id));
-  };
-
-  const handleAddNewBrand = (
-    categoryName: string,
-    brandName: string,
-    status: string
-  ) => {
-    const newBrand: Brand = {
-      id: (brandList.length + 1).toString(),
-      brandName,
-      category: categoryName,
-      dateCreated: new Date()
-        .toLocaleDateString("en-GB", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        })
-        .replace(/\//g, "-")
-        .replace(",", "/"),
-      status: status as "Active" | "Pending",
-      isSelected: false,
-    };
-    setBrandList((prev) => [...prev, newBrand]);
-  };
+  // Map API response to brandList
+  useEffect(() => {
+    if (apiBrands?.status === "success" && Array.isArray(apiBrands.data)) {
+      setBrandList(
+        apiBrands.data.map((b: any) => ({
+          id: String(b.id),
+          brandName: b.title,
+          category: b.category_id ? String(b.category_id) : "",
+          dateCreated: b.created_at
+            ? new Date(b.created_at).toLocaleString("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              }).replace(/\//g, "-").replace(",", "/")
+            : "",
+          status: "Active", // API doesn't provide status, default to Active
+          isSelected: false,
+        }))
+      );
+    }
+  }, [apiBrands]);
 
   // Delete category mutation
   const deleteCategoryMutation = useMutation({
@@ -283,6 +292,60 @@ const Product = () => {
     setCategoryToDelete(null);
   };
 
+  // Delete brand mutation
+  const deleteBrandMutation = useMutation({
+    mutationFn: (id: string) => deleteBrand(id, token || ""),
+    onSuccess: () => {
+      refetchBrands();
+    },
+  });
+
+  // Show confirmation dialog before delete (brand)
+  const handleDeleteBrand = (id: string) => {
+    const brand = brandList.find((b) => b.id === id);
+    if (brand) {
+      setBrandToDelete(brand);
+      setShowDeleteBrandModal(true);
+    }
+  };
+
+  // Confirm delete action (brand)
+  const confirmDeleteBrand = () => {
+    if (brandToDelete) {
+      deleteBrandMutation.mutate(brandToDelete.id);
+      setShowDeleteBrandModal(false);
+      setBrandToDelete(null);
+    }
+  };
+
+  // Cancel delete action (brand)
+  const cancelDeleteBrand = () => {
+    setShowDeleteBrandModal(false);
+    setBrandToDelete(null);
+  };
+
+  // Edit brand logic
+  const handleEditBrand = (id: string) => {
+    const brand = brandList.find((b) => b.id === id);
+    if (brand) {
+      setEditBrandData(brand);
+      setEditBrandModalOpen(true);
+    }
+  };
+
+  // Save new brand (just closes modal, mutation handled in AddNewBrand)
+  const handleAddNewBrand = async (categoryName: string, brandName: string, status: string) => {
+    setIsAddBrandModalOpen(false);
+    refetchBrands();
+  };
+
+  // Save edited brand (just closes modal, mutation handled in AddNewBrand)
+  const handleEditBrandSave = async (categoryName: string, brandName: string, status: string) => {
+    setEditBrandModalOpen(false);
+    setEditBrandData(null);
+    refetchBrands();
+  };
+
   const allSelected = categories.every((category) => category.isSelected);
   const someSelected = categories.some((category) => category.isSelected);
 
@@ -298,21 +361,19 @@ const Product = () => {
           <div className="bg-[#FFFFFF] rounded-full p-2 flex border border-gray-200 cursor-pointer">
             <button
               onClick={() => setActiveTab("categories")}
-              className={`px-6 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "categories"
+              className={`px-6 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${activeTab === "categories"
                   ? "bg-[#273E8E] text-white shadow-sm"
                   : "text-gray-600 hover:text-gray-800"
-              }`}
+                }`}
             >
               Categories
             </button>
             <button
               onClick={() => setActiveTab("brand")}
-              className={`px-6 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${
-                activeTab === "brand"
+              className={`px-6 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${activeTab === "brand"
                   ? "bg-[#273E8E] text-white shadow-sm"
                   : "text-gray-600 hover:text-gray-800"
-              }`}
+                }`}
             >
               Brand
             </button>
@@ -364,11 +425,10 @@ const Product = () => {
                     <button
                       key={option.value}
                       onClick={() => handleCategorySelect(option)}
-                      className={`w-full px-4 py-3 text-left text-sm hover:bg-gray-50 flex items-center transition-colors rounded-lg mb-2 last:mb-0 ${
-                        selectedCategoryFilter === option.value
+                      className={`w-full px-4 py-3 text-left text-sm hover:bg-gray-50 flex items-center transition-colors rounded-lg mb-2 last:mb-0 ${selectedCategoryFilter === option.value
                           ? "bg-blue-50 border border-blue-200"
                           : "bg-gray-50 border border-transparent"
-                      }`}
+                        }`}
                     >
                       {option.icon && (
                         <div className="w-14 h-14 mr-4 flex items-center justify-center bg-[#BEBEF1] rounded-full ">
@@ -464,9 +524,8 @@ const Product = () => {
                 {categories.map((category, index) => (
                   <tr
                     key={category.id}
-                    className={`${
-                      index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                    } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 `}
+                    className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                      } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 `}
                   >
                     {/* Checkbox */}
                     <td className="px-6 py-4 text-center">
@@ -511,11 +570,10 @@ const Product = () => {
                     {/* Status */}
                     <td className="px-6 py-4 text-center">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          category.status === "Active"
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${category.status === "Active"
                             ? "bg-green-100 text-green-800"
                             : "bg-yellow-100 text-yellow-800"
-                        }`}
+                          }`}
                       >
                         {category.status}
                       </span>
@@ -561,128 +619,141 @@ const Product = () => {
       {/* Brand Tab Content */}
       {activeTab === "brand" && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="min-w-full">
-            {/* Table Header */}
-            <thead className="bg-[#EBEBEB]">
-              <tr>
-                <th className="px-6 py-4 text-center">
-                  <input
-                    type="checkbox"
-                    checked={allBrandsSelected}
-                    ref={(input) => {
-                      if (input)
-                        input.indeterminate =
-                          someBrandsSelected && !allBrandsSelected;
-                    }}
-                    onChange={(e) => handleSelectAllBrands(e.target.checked)}
-                    className="w-4 h-4 text-[#273E8E] bg-gray-100 border-gray-300 rounded focus:ring-[#273E8E] focus:ring-2"
-                  />
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">
-                    Brand Name
-                  </span>
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">
-                    Category
-                  </span>
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">
-                    Date Created
-                  </span>
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">Status</span>
-                </th>
-                <th className="px-6 py-4 text-center">
-                  <span className="text-sm font-medium text-black">Action</span>
-                </th>
-              </tr>
-            </thead>
-
-            {/* Table Body */}
-            <tbody className="divide-y divide-gray-100">
-              {brandList.map((brand, index) => (
-                <tr
-                  key={brand.id}
-                  className={`${
-                    index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                  } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 `}
-                >
-                  {/* Checkbox */}
-                  <td className="px-6 py-4 text-center">
+          {isBrandsLoading ? (
+            <div className="py-16 text-center text-gray-500 text-lg">
+              Loading brands...
+            </div>
+          ) : isBrandsError ? (
+            <div className="py-16 text-center text-red-500 text-lg">
+              Failed to load brands.
+            </div>
+          ) : (
+            <table className="min-w-full">
+              {/* Table Header */}
+              <thead className="bg-[#EBEBEB]">
+                <tr>
+                  <th className="px-6 py-4 text-center">
                     <input
                       type="checkbox"
-                      checked={brand.isSelected || false}
-                      onChange={() => handleSelectBrand(brand.id)}
+                      checked={allBrandsSelected}
+                      ref={(input) => {
+                        if (input)
+                          input.indeterminate =
+                            someBrandsSelected && !allBrandsSelected;
+                      }}
+                      onChange={(e) => handleSelectAllBrands(e.target.checked)}
                       className="w-4 h-4 text-[#273E8E] bg-gray-100 border-gray-300 rounded focus:ring-[#273E8E] focus:ring-2"
                     />
-                  </td>
-
-                  {/* Brand Name */}
-                  <td className="px-6 py-4 text-center">
-                    <span className="text-sm font-medium text-gray-900">
-                      {brand.brandName}
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">
+                      Brand Name
                     </span>
-                  </td>
-
-                  {/* Category */}
-                  <td className="px-6 py-4 text-center">
-                    <span className="text-sm text-gray-600">
-                      {brand.category}
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">
+                      Category
                     </span>
-                  </td>
-
-                  {/* Date Created */}
-                  <td className="px-6 py-4 text-center">
-                    <span className="text-sm text-gray-600">
-                      {brand.dateCreated}
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">
+                      Date Created
                     </span>
-                  </td>
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">Status</span>
+                  </th>
+                  <th className="px-6 py-4 text-center">
+                    <span className="text-sm font-medium text-black">Action</span>
+                  </th>
+                </tr>
+              </thead>
 
-                  {/* Status */}
-                  <td className="px-6 py-4 text-center">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        brand.status === "Active"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-yellow-100 text-yellow-800"
-                      }`}
+              {/* Table Body */}
+              <tbody className="divide-y divide-gray-100">
+                {brandList.map((brand, index) => (
+                  <tr
+                    key={brand.id}
+                    className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                      } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 `}
+                  >
+                    {/* Checkbox */}
+                    <td className="px-6 py-4 text-center">
+                      <input
+                        type="checkbox"
+                        checked={brand.isSelected || false}
+                        onChange={() => handleSelectBrand(brand.id)}
+                        className="w-4 h-4 text-[#273E8E] bg-gray-100 border-gray-300 rounded focus:ring-[#273E8E] focus:ring-2"
+                      />
+                    </td>
+
+                    {/* Brand Name */}
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-sm font-medium text-gray-900">
+                        {brand.brandName}
+                      </span>
+                    </td>
+
+                    {/* Category */}
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-sm text-gray-600">
+                        {brand.category}
+                      </span>
+                    </td>
+
+                    {/* Date Created */}
+                    <td className="px-6 py-4 text-center">
+                      <span className="text-sm text-gray-600">
+                        {brand.dateCreated}
+                      </span>
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-6 py-4 text-center">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${brand.status === "Active"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-yellow-100 text-yellow-800"
+                          }`}
                     >
                       {brand.status}
                     </span>
-                  </td>
+                    </td>
 
-                  {/* Actions */}
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex space-x-2 justify-center items-center">
-                      <button
-                        onClick={() => handleEditBrand(brand.id)}
-                        className="bg-[#273E8E] text-white px-5 py-3 rounded-full text-sm font-medium hover:bg-[#1f2f7a] transition-colors cursor-pointer"
-                      >
-                        Edit Brand
-                      </button>
-                      <button
-                        onClick={() => handleDeleteBrand(brand.id)}
-                        className="bg-[#FF0000] text-white px-8 py-3 rounded-full text-sm font-medium hover:bg-red-600 transition-colors cursor-pointer"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
+                    {/* Actions */}
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex space-x-2 justify-center items-center">
+                        <button
+                          onClick={() => handleEditBrand(brand.id)}
+                          className="bg-[#273E8E] text-white px-5 py-3 rounded-full text-sm font-medium hover:bg-[#1f2f7a] transition-colors cursor-pointer"
+                        >
+                          Edit Brand
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBrand(brand.id)}
+                          className="bg-[#FF0000] text-white px-8 py-3 rounded-full text-sm font-medium hover:bg-red-600 transition-colors cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
           {/* Empty State */}
           {brandList.length === 0 && (
             <div className="px-6 py-8 text-center">
               <p className="text-gray-500">No brands found.</p>
             </div>
           )}
+          <ConfirmDeleteModal
+            isOpen={showDeleteBrandModal}
+            onClose={cancelDeleteBrand}
+            onConfirm={confirmDeleteBrand}
+            message="Are you sure you want to delete this brand?"
+          />
         </div>
       )}
 
@@ -710,6 +781,18 @@ const Product = () => {
         isOpen={isAddBrandModalOpen}
         onClose={() => setIsAddBrandModalOpen(false)}
         onSave={handleAddNewBrand}
+      />
+
+      {/* Edit Brand Modal */}
+      <AddNewBrand
+        isOpen={editBrandModalOpen}
+        onClose={() => {
+          setEditBrandModalOpen(false);
+          setEditBrandData(null);
+        }}
+        onSave={handleEditBrandSave}
+        editMode={true}
+        editData={editBrandData}
       />
     </div>
   );
