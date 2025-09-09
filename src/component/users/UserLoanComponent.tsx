@@ -1,10 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import Header from "../Header";
 import type { User } from "../../constants/usermgt";
 import type { LoanDetail } from "./UserLoanData";
 import KycModal from "./KycModal";
 import FullLoanDetail from "../../pages/loans_disbursement/FullLoanDetail";
+
+//Code Related to the Integration
+import { useQuery } from "@tanstack/react-query";
+import { getFullLoanDetail } from "../../utils/queries/loans";
+import Cookies from "js-cookie";
 
 type UserLoanComponentProps = {
   user: User;
@@ -16,6 +21,9 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
   userLoans,
 }) => {
   const navigate = useNavigate();
+  const { id: userIdFromParams } = useParams();
+  const token = Cookies.get("token");
+
   const [showSendDropdown, setShowSendDropdown] = useState(false);
   const [showApprovalDropdown, setShowApprovalDropdown] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
@@ -27,6 +35,21 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
   const sendDropdownRef = useRef<HTMLDivElement>(null);
   const approvalDropdownRef = useRef<HTMLDivElement>(null);
 
+  const {
+    data: loanApiData,
+    isLoading: isLoanLoading,
+    isError: isLoanError,
+  } = useQuery({
+    queryKey: ["user-loan-detail", userIdFromParams],
+    queryFn: () => getFullLoanDetail(userIdFromParams || "", token || ""),
+    enabled: !!userIdFromParams && !!token,
+  });
+
+  const apiLoans = loanApiData?.data?.loans || [];
+  const apiUserInfo = loanApiData?.data?.user_info || {};
+  const apiWalletInfo = loanApiData?.data?.wallet_info || {};
+
+  console.log("API Loans Data:", loanApiData);
   const savePartnerSelection = () => {
     const userKey = `user_partner_${user?.name
       ?.replace(/\s+/g, "_")
@@ -203,7 +226,9 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
 
       {/* Main Content */}
       <div className="p-6">
-        <h1 className="text-2xl font-bold mb-6">{user.name}</h1>
+        <h1 className="text-2xl font-bold mb-6">
+          {apiUserInfo.name || user.name}
+        </h1>
 
         {/* Tabs */}
         <div className="flex gap-8 border-b border-gray-200 mb-6">
@@ -337,7 +362,11 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                 <div className="text-[12px] font-semibold text-[#FFFFFFB2] mb-8">
                   Loan Wallet
                 </div>
-                <div className="text-3xl font-bold mb-6">NO</div>
+                <div className="text-3xl font-bold mb-6">
+                  {apiWalletInfo.loan_balance !== undefined
+                    ? `₦${apiWalletInfo.loan_balance}`
+                    : "NO"}
+                </div>
 
                 <div className="bg-[#1D3073] border border-[#4361C9] rounded-xl p-4">
                   <div className="text-[8px] text-[#FFFFFF80]">
@@ -353,7 +382,12 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                 <div className="text-[12px] font-semibold text-[#FFFFFFB2]">
                   General Wallet
                 </div>
-                <div className="text-3xl font-bold mb-2">N200,000</div>
+                <div className="text-3xl font-bold mb-2">
+                  {apiWalletInfo.shop_balance !== undefined &&
+                  apiWalletInfo.shop_balance !== null
+                    ? `₦${apiWalletInfo.shop_balance}`
+                    : "N/A"}
+                </div>
                 <button
                   className="bg-white text-[#000000] cursor-pointer text-sm rounded-full px-8 py-4 font-semibold mt-2"
                   onClick={() => setShowKycModal(true)}
@@ -417,161 +451,102 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
               Loans Summary
             </h2>
           </div>
-          <div className="flex items-center gap-2 mb-5">
-            <div className="relative inline-block">
-              <button className="bg-white border border-[#00000080] rounded-lg px-3 py-2 text-sm flex items-center gap-5 cursor-pointer">
-                More Actions
-                <svg
-                  width="12"
-                  height="6"
-                  viewBox="0 0 12 6"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M1 1L6 5L11 1"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
+          {isLoanLoading ? (
+            <div className="py-8 text-center text-gray-500">
+              Loading loans...
             </div>
-            <div className="relative inline-block">
-              {/* Send Status Dropdown */}
-              <div ref={sendDropdownRef}>
-                <button
-                  className="bg-white border border-[#00000080] rounded-lg px-3 py-2 text-sm flex items-center gap-5 cursor-pointer"
-                  onClick={() => {
-                    setShowSendDropdown(!showSendDropdown);
-                    setShowApprovalDropdown(false);
-                  }}
-                >
-                  Send Status
-                  <svg
-                    width="12"
-                    height="6"
-                    viewBox="0 0 12 6"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M1 1L6 5L11 1"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                {showSendDropdown && (
-                  <div className="absolute left-0 mt-1 w-36 bg-white border border-gray-200 rounded-md shadow-lg z-10">
-                    <div className="py-1 p-5">
-                      <button className="w-full px-4 py-2 text-sm text-left cursor-pointer">
-                        Pending
-                      </button>
-                      <button className="w-full px-4 py-2 text-sm text-left cursor-pointer">
-                        Completed
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+          ) : isLoanError ? (
+            <div className="py-8 text-center text-red-500">
+              Failed to load loans.
             </div>
-            <div className="relative inline-block">
-              {/* Approval Status Dropdown */}
-              <div ref={approvalDropdownRef}>
-                <button
-                  className="bg-white border border-[#00000080] rounded-lg px-3 py-2 text-sm flex items-center gap-5 cursor-pointer"
-                  onClick={() => {
-                    setShowApprovalDropdown(!showApprovalDropdown);
-                    setShowSendDropdown(false);
-                  }}
-                >
-                  Approval Status
-                  <svg
-                    width="12"
-                    height="6"
-                    viewBox="0 0 12 6"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M1 1L6 5L11 1"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                {showApprovalDropdown && (
-                  <div className="absolute left-0 mt-1 w-36 bg-white border border-gray-200 rounded-md shadow-lg z-10">
-                    <div className="py-1 p-5">
-                      <button className="w-full px-4 py-2 text-sm text-left cursor-pointer">
-                        Pending
-                      </button>
-                      <button className="w-full px-4 py-2 text-sm text-left cursor-pointer">
-                        Completed
-                      </button>
-                      <button className="w-full px-4 py-2 text-sm text-left cursor-pointer">
-                        Rejected
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+          ) : apiLoans.length === 0 ? (
+            <div className="py-8 text-center text-gray-500">
+              No loans found for this user.
             </div>
-          </div>
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="bg-[#EBEBEB] text-black">
-                  <th className="p-4 w-12 text-center">
-                    <input className="cursor-pointer" type="checkbox" />
-                  </th>
-                  <th className="p-4 text-center">Name</th>
-                  <th className="p-4 text-center">Amount</th>
-                  <th className="p-4 text-center">Date</th>
-                  <th className="p-4 text-center">Send Status</th>
-                  <th className="p-4 text-center">Approval</th>
-                  <th className="p-4 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {userLoans.map((loan, idx) => (
-                  <tr
-                    key={loan.id}
-                    className={`${
-                      idx % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                    } hover:bg-gray-50`}
-                  >
-                    <td className="p-4 text-center">
+          ) : (
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="bg-[#EBEBEB] text-black">
+                    <th className="p-4 w-12 text-center">
                       <input className="cursor-pointer" type="checkbox" />
-                    </td>
-                    <td className="p-4 text-center">{loan.name}</td>
-                    <td className="p-4 text-center">₦{loan.loanAmount}</td>
-                    <td className="p-4 text-center">05-07-25/07:22AM</td>
-                    <td className="p-4 text-center">
-                      <StatusBadge status={loan.sendStatus} />
-                    </td>
-                    <td className="p-4 text-center">
-                      <StatusBadge status={loan.approvalStatus} />
-                    </td>
-                    <td className="p-4 text-center">
-                      <button
-                        className="bg-[#273E8E] text-white px-4 py-3 rounded-full text-sm cursor-pointer"
-                        onClick={() => viewLoanDetails(loan.id)}
-                      >
-                        View Details
-                      </button>
-                    </td>
+                    </th>
+                    <th className="p-4 text-center">Name</th>
+                    <th className="p-4 text-center">Amount</th>
+                    <th className="p-4 text-center">Date</th>
+                    <th className="p-4 text-center">Send Status</th>
+                    <th className="p-4 text-center">Approval</th>
+                    <th className="p-4 text-center">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {apiLoans.map((loan: any, idx: number) => (
+                    <tr
+                      key={loan.loan_application_id}
+                      className={`${
+                        idx % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                      } hover:bg-gray-50`}
+                    >
+                      <td className="p-4 text-center">
+                        <input className="cursor-pointer" type="checkbox" />
+                      </td>
+                      <td className="p-4 text-center">
+                        {loan.user_name || loan.beneficiary_name || "-"}
+                      </td>
+                      <td className="p-4 text-center">
+                        ₦{loan.loan_amount}
+                      </td>
+                      <td className="p-4 text-center">
+                        {loan.created_at
+                          ? new Date(loan.created_at)
+                              .toLocaleString("en-GB", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                hour12: true,
+                              })
+                              .replace(/\//g, "-")
+                              .replace(",", "/")
+                          : "-"}
+                      </td>
+                      <td className="p-4 text-center">
+                        <StatusBadge
+                          status={
+                            loan.loan_status?.send_status
+                              ? loan.loan_status.send_status.charAt(0).toUpperCase() +
+                                loan.loan_status.send_status.slice(1)
+                              : "Pending"
+                          }
+                        />
+                      </td>
+                      <td className="p-4 text-center">
+                        <StatusBadge
+                          status={
+                            loan.loan_status?.approval_status
+                              ? loan.loan_status.approval_status.charAt(0).toUpperCase() +
+                                loan.loan_status.approval_status.slice(1)
+                              : "Pending"
+                          }
+                        />
+                      </td>
+                      <td className="p-4 text-center">
+                        <button
+                          className="bg-[#273E8E] text-white px-4 py-3 rounded-full text-sm cursor-pointer"
+                          onClick={() =>
+                            viewLoanDetails(String(loan.loan_application_id))
+                          }
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>

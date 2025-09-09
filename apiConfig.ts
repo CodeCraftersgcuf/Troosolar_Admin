@@ -35,7 +35,9 @@ const API_ENDPOINTS = {
 
     // --- Orders (admin/shop) ---
     OrdersList: API_DOMAIN + "/orders", // GET
-    OrderShow: (id: number | string) => `${API_DOMAIN}/orders/${id}`, // GET
+        OrderShow: (id: number | string) => `${API_DOMAIN}/orders/${id}`, // GET
+
+    OrderShowUser: (id: number | string) => `${API_DOMAIN}/orders/user/${id}`, // GET
 
     // --- Products (admin/shop) ---
     ProductsList: API_DOMAIN + "/products", // GET
@@ -49,7 +51,7 @@ const API_ENDPOINTS = {
     // --- Transactions (admin) ---
     TransactionsList: API_DOMAIN + "/transactions", // GET
     TransactionShow: (id: number | string) =>
-      `${API_DOMAIN}/transactions/${id}`, // GET
+      `${API_DOMAIN}/transactions/user/${id}`, // GET
 
     // --- Balances (admin) ---
     AllBalances: API_DOMAIN + "/all-balances", // GET

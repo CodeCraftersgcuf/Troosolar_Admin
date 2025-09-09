@@ -5,6 +5,11 @@ import Header from "../../component/Header";
 import { users } from "../../constants/usermgt";
 import images from "../../constants/images";
 
+//code related to API call
+import { getSingleTransaction } from "../../utils/queries/transactions";
+import { useQuery } from "@tanstack/react-query";
+import Cookies from "js-cookie";
+
 // User-specific transaction data
 const userTransactionsData = {
   "1": {
@@ -237,9 +242,26 @@ const UserTransactions = () => {
   const [activeTab, setActiveTab] = useState("Transactions");
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const token = Cookies.get("token");
 
-  const tabs = ["Activity", "Loans", "Transactions", "Orders"];
+  // API call for user transactions
+  const {
+    data: apiData,
+    isLoading: isApiLoading,
+    isError: isApiError,
+  } = useQuery({
+    queryKey: ["single-transaction", id],
+    queryFn: () => getSingleTransaction(id || "", token || ""),
+    enabled: !!id && !!token,
+  });
+
+  // Map API response
+  const apiUserInfo = apiData?.user_info || {};
+  const apiWalletInfo = apiData?.wallet_info || {};
+  const apiSummary = apiData?.summary || {};
+  const apiTransactions = apiData?.transactions || [];
 
   // Handle click outside to close dropdown
   useEffect(() => {
@@ -258,13 +280,22 @@ const UserTransactions = () => {
     };
   }, [dropdownRef]);
 
-  // Get user-specific data
-  const userData =
-    userTransactionsData[id as keyof typeof userTransactionsData];
-  const user = users.find((u) => u.id === id);
+  // Use API data if available
+  const displayUser = apiUserInfo.name ? apiUserInfo : null;
+  const displaySummary = apiSummary.total_transactions !== undefined ? apiSummary : null;
+  const displayTransactions = apiTransactions;
 
   // Fallback if user not found
-  if (!userData || !user) {
+  if (isApiLoading) {
+    return (
+      <div className="bg-[#F5F7FF] min-h-screen p-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900">Loading user...</h1>
+        </div>
+      </div>
+    );
+  }
+  if (!apiUserInfo.name) {
     return (
       <div className="bg-[#F5F7FF] min-h-screen p-8">
         <div className="text-center">
@@ -307,41 +338,48 @@ const UserTransactions = () => {
     console.log("Notification clicked");
   };
 
-  const filteredTransactions = userData.transactions.filter(
-    (transaction: any) => {
-      if (selectedFilter === "All") return true;
-      if (selectedFilter === "Deposit") return transaction.type === "Deposit";
-      if (selectedFilter === "Withdrawals")
-        return transaction.type.includes("Withdrawal");
-      if (selectedFilter === "Status") return transaction.status === "Pending";
-      return true;
+  // Filters
+  const filteredTransactions = displayTransactions.filter((transaction: any) => {
+    // Search filter
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      const name = transaction.name?.toLowerCase() || "";
+      const txId = (transaction.tx_id || transaction.txId || "").toLowerCase();
+      const title = transaction.title?.toLowerCase() || "";
+      if (!name.includes(term) && !txId.includes(term) && !title.includes(term)) {
+        return false;
+      }
     }
-  );
+    // Tab filters
+    if (selectedFilter === "All") return true;
+    if (selectedFilter === "Deposit") return transaction.type === "deposit" || transaction.type === "Deposit";
+    if (selectedFilter === "Withdrawals") return transaction.type?.toLowerCase().includes("withdrawal");
+    if (selectedFilter === "Status") return transaction.status === "Pending" || transaction.status === "pending";
+    if (selectedFilter === "Completed") return transaction.status === "Completed" || transaction.status === "paid";
+    if (selectedFilter === "Pending") return transaction.status === "Pending" || transaction.status === "pending";
+    if (selectedFilter === "Failed") return transaction.status === "Failed" || transaction.status === "failed";
+    return true;
+  });
 
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
       {/* Header Component */}
       <Header
         adminName="Hi, Admin"
-        // adminRole="Administrator"
         adminImage="/assets/layout/admin.png"
-        // showNotification={true}
-        // notificationCount={0}
-        onNotificationClick={handleNotificationClick}
+        onNotificationClick={() => {}}
       />
-
       {/* Main Content */}
       <div className="p-6">
         {/* Header */}
         <div className="">
           <h1 className="text-2xl font-bold mb-3">
-            {userData.user.name}
+            {displayUser?.name}
           </h1>
         </div>
-
         {/* Tab Navigation */}
         <div className="flex border-b border-gray-200 mb-6">
-          {tabs.map((tab) => (
+          {["Activity", "Loans", "Transactions", "Orders"].map((tab) => (
             <button
               key={tab}
               className={`px-4 py-3 text-md font-medium border-b-2 transition-colors cursor-pointer ${
@@ -355,19 +393,21 @@ const UserTransactions = () => {
             </button>
           ))}
         </div>
-
         {/* Summary Cards */}
-        <TransactionSummaryCards
-          totalTransactions={userData.user.totalTransactions}
-          totalDeposits={userData.user.totalDeposits}
-          totalWithdrawals={userData.user.totalWithdrawals}
-        />
-
+        {isApiLoading ? (
+          <div className="py-8 text-center text-gray-500">Loading summary...</div>
+        ) : isApiError ? (
+          <div className="py-8 text-center text-red-500">Failed to load summary.</div>
+        ) : (
+          <TransactionSummaryCards
+            totalTransactions={displaySummary?.total_transactions || 0}
+            totalDeposits={displaySummary?.total_deposits || 0}
+            totalWithdrawals={displaySummary?.total_withdrawals || 0}
+          />
+        )}
         {/* Transactions Section */}
         <div className="space-y-4">
-          {/* Section Title */}
           <h2 className="text-lg font-semibold text-gray-900">Transactions</h2>
-
           {/* Filters Bar - Separate from table */}
           <div className="flex items-center justify-between">
             <div className="flex space-x-4">
@@ -496,140 +536,141 @@ const UserTransactions = () => {
                   type="text"
                   placeholder="Search"
                   className="pl-12 pr-6 py-3.5 border border-[#00000080] rounded-lg text-[15px] w-[320px] focus:outline-none bg-white shadow-[0_2px_6px_rgba(0,0,0,0.05)] placeholder-gray-400"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
                 />
               </div>
             </div>
           </div>
 
           {/* Table Container - Separate white background */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 bg-[#EBEBEB]">
-                  <th className="px-6 py-4 text-center text-xs uppercase tracking-wider">
-                    <input
-                      type="checkbox"
-                      className="rounded border-gray-300 w-4 h-4"
-                    />
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
-                    Tx ID
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTransactions.map((transaction, index) => (
-                  <tr
-                    key={transaction.id}
-                    className={`${
-                      index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                    } transition-colors border-b border-gray-100 last:border-b-0`}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+          {isApiLoading ? (
+            <div className="py-8 text-center text-gray-500">Loading transactions...</div>
+          ) : isApiError ? (
+            <div className="py-8 text-center text-red-500">Failed to load transactions.</div>
+          ) : filteredTransactions.length === 0 ? (
+            <div className="py-8 text-center text-gray-500">No transactions found.</div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-[#EBEBEB]">
+                    <th className="px-6 py-4 text-center text-xs uppercase tracking-wider">
                       <input
                         type="checkbox"
-                        className="rounded border-gray-300 w-4 h-4 "
+                        className="rounded border-gray-300 w-4 h-4"
                       />
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-black text-center">
-                      {transaction.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center font-medium">
-                      ₦{transaction.amount.toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {transaction.date}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {transaction.type.includes("Withdrawal") ? (
-                        <div>
-                          <div className="font-medium">
-                            {transaction.type.split(" - ")[0]}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {transaction.type.split(" - ")[1]}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="font-medium">{transaction.type}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
-                      {transaction.txId}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <span
-                        className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${
-                          transaction.status === "Completed"
-                            ? "border border-[#008000]"
-                            : transaction.status === "Pending"
-                            ? "border border-[#FFA500]"
-                            : transaction.status === "Rejected"
-                            ? "border border-[#FF0000]"
-                            : "border border-[#6B7280]"
-                        }`}
-                        style={
-                          transaction.status === "Completed"
-                            ? { backgroundColor: "#00800033", color: "#008000" }
-                            : transaction.status === "Pending"
-                            ? { backgroundColor: "#FFA50033", color: "#FF8C00" }
-                            : transaction.status === "Rejected"
-                            ? { backgroundColor: "#FF000033", color: "#FF0000" }
-                            : { backgroundColor: "#6B728033", color: "#6B7280" }
-                        }
-                      >
-                        <span
-                          className="w-1.5 h-1.5 rounded-full mr-1.5"
-                          style={{
-                            backgroundColor:
-                              transaction.status === "Completed"
-                                ? "#008000"
-                                : transaction.status === "Pending"
-                                ? "#FF8C00"
-                                : transaction.status === "Rejected"
-                                ? "#FF0000"
-                                : "#6B7280",
-                          }}
-                        ></span>
-                        {transaction.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <button className="p-1 cursor-pointer">
-                        {/* <svg
-                          width="16"
-                          height="16"
-                          fill="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                        </svg> */}
-                        <img src={images.dots} alt="" />
-                      </button>
-                    </td>
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
+                      Tx ID
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 text-center text-xs font-medium text-black uppercase tracking-wider">
+                      Action
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filteredTransactions.map((transaction: any, index: number) => (
+                    <tr
+                      key={transaction.id}
+                      className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"} transition-colors border-b border-gray-100 last:border-b-0`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 w-4 h-4 "
+                        />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-black text-center">
+                        {transaction.name}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center font-medium">
+                        ₦{transaction.price ? Number(transaction.price).toLocaleString() : transaction.amount?.toLocaleString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {transaction.date}
+                        {transaction.time ? `/${transaction.time}` : ""}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {transaction.payment_method ? (
+                          <div>
+                            <div className="font-medium">
+                              {transaction.payment_method}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {transaction.title || transaction.type}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="font-medium">{transaction.type}</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-black text-center">
+                        {transaction.tx_id || transaction.txId}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <span
+                          className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${
+                            transaction.status === "Completed" || transaction.status === "paid"
+                              ? "border border-[#008000]"
+                              : transaction.status === "Pending" || transaction.status === "pending"
+                              ? "border border-[#FFA500]"
+                              : transaction.status === "Rejected" || transaction.status === "failed"
+                              ? "border border-[#FF0000]"
+                              : "border border-[#6B7280]"
+                          }`}
+                          style={
+                            transaction.status === "Completed" || transaction.status === "paid"
+                              ? { backgroundColor: "#00800033", color: "#008000" }
+                              : transaction.status === "Pending" || transaction.status === "pending"
+                              ? { backgroundColor: "#FFA50033", color: "#FF8C00" }
+                              : transaction.status === "Rejected" || transaction.status === "failed"
+                              ? { backgroundColor: "#FF000033", color: "#FF0000" }
+                              : { backgroundColor: "#6B728033", color: "#6B7280" }
+                          }
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full mr-1.5"
+                            style={{
+                              backgroundColor:
+                                transaction.status === "Completed" || transaction.status === "paid"
+                                  ? "#008000"
+                                  : transaction.status === "Pending" || transaction.status === "pending"
+                                  ? "#FF8C00"
+                                  : transaction.status === "Rejected" || transaction.status === "failed"
+                                  ? "#FF0000"
+                                  : "#6B7280",
+                            }}
+                          ></span>
+                          {transaction.status === "paid" ? "Completed" : transaction.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <button className="p-1 cursor-pointer">
+                          <img src={images.dots} alt="" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>

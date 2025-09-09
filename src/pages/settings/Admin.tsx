@@ -4,8 +4,6 @@ import EditProfile from "./EditProfile.tsx";
 import AdminDetail from "./AdminDetail.tsx";
 
 
-
-
 //Code Related to the Integration
 import { useQuery } from "@tanstack/react-query";
 import { getAllUsers } from "../../utils/queries/users.ts";
