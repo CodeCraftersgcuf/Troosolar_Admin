@@ -10,3 +10,8 @@ export const getAllTransactions = async (token: string): Promise<any> => {
 export const getSingleTransaction = async (id: number | string, token: string): Promise<any> => {
   return await apiCall(API_ENDPOINTS.ADMIN.TransactionShow(id), "GET", undefined, token);
 };
+
+//GET /All Transactions
+export const getAllUserTransactions = async (token: string): Promise<any> => {
+  return await apiCall(API_ENDPOINTS.ADMIN.AllTransaction, "GET", undefined, token);
+}

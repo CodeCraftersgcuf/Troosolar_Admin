@@ -1,4 +1,4 @@
-const API_DOMAIN = "http://localhost:8000/api";
+const API_DOMAIN = "https://troosolar.hmstech.org/api";
 
 const API_ENDPOINTS = {
   ADMIN: {
@@ -52,6 +52,8 @@ const API_ENDPOINTS = {
     TransactionsList: API_DOMAIN + "/transactions", // GET
     TransactionShow: (id: number | string) =>
       `${API_DOMAIN}/transactions/user/${id}`, // GET
+    
+    AllTransaction: API_DOMAIN + "/admin/users", // GET
 
     // --- Balances (admin) ---
     AllBalances: API_DOMAIN + "/all-balances", // GET
