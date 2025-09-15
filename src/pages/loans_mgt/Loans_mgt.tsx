@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Header from "../../component/Header";
-import { loanData, getStatusBgColor } from "./loanmgt";
+import { getStatusBgColor } from "./loanmgt";
 import KycProfile from "./kycprofile";
 import images from "../../constants/images";
 
@@ -207,11 +207,11 @@ const Loans_mgt = () => {
           const loan = loanApiData.data[key];
           return {
             id: idx,
-            name: loan.name,
-            amount: loan.Amount,
-            date: loan.date,
-            sendStatus: loan["send status"],
-            approval: loan["approval status"],
+            name: loan?.name || "Unknown",
+            amount: loan?.Amount || "N/A",
+            date: loan?.date || "N/A",
+            sendStatus: loan?.["send status"] || "Pending",
+            approval: loan?.["approval status"] || "Pending",
           };
         })
     : [];
@@ -522,18 +522,18 @@ const Loans_mgt = () => {
                             className="w-1.5 h-1.5 rounded-full mr-1.5"
                             style={{
                               backgroundColor:
-                                loan.sendStatus.toLowerCase() === "completed"
+                                (loan.sendStatus || "").toLowerCase() === "completed"
                                   ? "#008000"
-                                  : loan.sendStatus.toLowerCase() === "pending"
+                                  : (loan.sendStatus || "").toLowerCase() === "pending"
                                   ? "#FF8C00"
-                                  : loan.sendStatus.toLowerCase() === "delivered"
+                                  : (loan.sendStatus || "").toLowerCase() === "delivered"
                                   ? "#008000"
-                                  : loan.sendStatus.toLowerCase() === "rejected"
+                                  : (loan.sendStatus || "").toLowerCase() === "rejected"
                                   ? "#FF0000"
                                   : "#6B7280",
                             }}
                           ></span>
-                          {loan.sendStatus}
+                          {loan.sendStatus || "Pending"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
@@ -545,18 +545,18 @@ const Loans_mgt = () => {
                             className="w-1.5 h-1.5 rounded-full mr-1.5"
                             style={{
                               backgroundColor:
-                                loan.approval.toLowerCase() === "completed"
+                                (loan.approval || "").toLowerCase() === "completed"
                                   ? "#008000"
-                                  : loan.approval.toLowerCase() === "pending"
+                                  : (loan.approval || "").toLowerCase() === "pending"
                                   ? "#FF8C00"
-                                  : loan.approval.toLowerCase() === "delivered"
+                                  : (loan.approval || "").toLowerCase() === "delivered"
                                   ? "#008000"
-                                  : loan.approval.toLowerCase() === "rejected"
+                                  : (loan.approval || "").toLowerCase() === "rejected"
                                   ? "#FF0000"
                                   : "#6B7280",
                             }}
                           ></span>
-                          {loan.approval}
+                          {loan.approval || "Pending"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-center">

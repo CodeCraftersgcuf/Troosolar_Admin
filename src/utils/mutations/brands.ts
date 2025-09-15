@@ -16,7 +16,7 @@ const buildCategoryFormData = (payload: {
 export const addBrand = async (
   payload: { title: string; category_id: string | number },
   token: string
-): Promise<any> => {
+): Promise<unknown> => {
   const formData = buildCategoryFormData(payload);
   return await apiCall(API_ENDPOINTS.ADMIN.AddBrand, "POST", formData, token);
 };
@@ -26,8 +26,20 @@ export const updateBrand = async (
   id: number | string,
   payload: { title: string; category_id: string | number },
   token: string
-): Promise<any> => {
+): Promise<unknown> => {
+  console.log("updateBrand called with:", {
+    id,
+    payload,
+    token: token ? "present" : "missing",
+  });
   const formData = buildCategoryFormData(payload);
+
+  // Debug: Log FormData contents
+  console.log("FormData contents:");
+  for (const [key, value] of formData.entries()) {
+    console.log(`${key}:`, value);
+  }
+
   return await apiCall(
     API_ENDPOINTS.ADMIN.UpdateBrand(id),
     "PUT",
@@ -40,7 +52,7 @@ export const updateBrand = async (
 export const deleteBrand = async (
   id: number | string,
   token: string
-): Promise<any> => {
+): Promise<unknown> => {
   return await apiCall(
     API_ENDPOINTS.ADMIN.DeleteBrand(id),
     "DELETE",

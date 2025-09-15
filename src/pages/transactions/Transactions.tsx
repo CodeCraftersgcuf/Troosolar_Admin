@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import Header from "../../component/Header";
-import { transactionData, getTransactionStatusColor } from './transaction';
-import type { TransactionData } from './transaction';
+import { getTransactionStatusColor } from './transaction';
 import TransactionDetail from './TransactionDetail';
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import StatsLoadingSkeleton from "../../components/common/StatsLoadingSkeleton";
@@ -17,7 +16,17 @@ const Transactions = () => {
   const [statusFilter, setStatusFilter] = useState("Status");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [showTransactionDetail, setShowTransactionDetail] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<{
+    id: number;
+    title: string;
+    amount: string;
+    status: string;
+    type: string;
+    method: string;
+    transacted_at: string;
+    tx_id?: string;
+    reference?: string;
+  } | null>(null);
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const token = Cookies.get("token");
@@ -37,19 +46,30 @@ const Transactions = () => {
   const transactions = apiData?.transactions || [];
 
   // Filter transaction data based on selected filters and search
-  const filteredTransactionData = transactions.filter((transaction: any) => {
-    const statusMatch = statusFilter === "Status" || transaction.status === statusFilter;
-    const typeMatch = selectedFilter === "All" || transaction.payment_method === selectedFilter.toLowerCase();
+  const filteredTransactionData = transactions.filter((transaction: {
+    id: number;
+    title: string;
+    amount: string;
+    status: string;
+    type: string;
+    method: string;
+    transacted_at: string;
+    tx_id?: string;
+    reference?: string;
+  }) => {
+    const statusMatch = statusFilter === "Status" || transaction.status === statusFilter.toLowerCase();
+    const typeMatch = selectedFilter === "All" || transaction.type === selectedFilter.toLowerCase();
     let searchMatch = true;
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       searchMatch = (
-        (transaction.name || "").toLowerCase().includes(term) ||
-        (transaction.price || "").toLowerCase().includes(term) ||
-        (transaction.date || "").toLowerCase().includes(term) ||
+        (transaction.title || "").toLowerCase().includes(term) ||
+        (transaction.amount || "").toLowerCase().includes(term) ||
+        (transaction.transacted_at || "").toLowerCase().includes(term) ||
         (transaction.tx_id || "").toLowerCase().includes(term) ||
         (transaction.status || "").toLowerCase().includes(term) ||
-        (transaction.title || "").toLowerCase().includes(term)
+        (transaction.type || "").toLowerCase().includes(term) ||
+        (transaction.method || "").toLowerCase().includes(term)
       );
     }
     return statusMatch && typeMatch && searchMatch;
@@ -70,7 +90,17 @@ const Transactions = () => {
 
   const handleDropdownAction = (action: string, transactionId: string | number) => {
     if (action === 'View Transaction details') {
-      const transaction = transactions.find((t: any) => String(t.id) === String(transactionId));
+      const transaction = transactions.find((t: {
+        id: number;
+        title: string;
+        amount: string;
+        status: string;
+        type: string;
+        method: string;
+        transacted_at: string;
+        tx_id?: string;
+        reference?: string;
+      }) => String(t.id) === String(transactionId));
       if (transaction) {
         setSelectedTransaction(transaction);
         setShowTransactionDetail(true);
@@ -208,30 +238,30 @@ const Transactions = () => {
               <div className="flex bg-white rounded-full cursor-pointer border border-gray-200 p-2 shadow-sm">
                 <button
                   className={`px-4.5 py-2 rounded-full cursor-pointer text-sm font-medium transition-colors ${selectedFilter === 'All'
-                      ? 'bg-[#273E8E] text-white'
-                      : 'text-gray-600 '
+                    ? 'bg-[#273E8E] text-white'
+                    : 'text-gray-600 '
                     }`}
                   onClick={() => setSelectedFilter('All')}
                 >
                   All
                 </button>
                 <button
-                  className={`px-4 py-1.5 rounded-full  cursor-pointer text-sm font-medium transition-colors ${selectedFilter === 'Deposit'
-                      ? 'bg-[#273E8E] text-white'
-                      : 'text-gray-600 '
+                  className={`px-4 py-1.5 rounded-full  cursor-pointer text-sm font-medium transition-colors ${selectedFilter === 'deposit'
+                    ? 'bg-[#273E8E] text-white'
+                    : 'text-gray-600 '
                     }`}
-                  onClick={() => setSelectedFilter('Deposit')}
+                  onClick={() => setSelectedFilter('deposit')}
                 >
                   Deposit
                 </button>
                 <button
-                  className={`px-4 py-1.5 rounded-full cursor-pointer text-sm font-medium transition-colors ${selectedFilter === 'Withdrawals'
-                      ? 'bg-[#273E8E] text-white'
-                      : 'text-gray-600 '
+                  className={`px-4 py-1.5 rounded-full cursor-pointer text-sm font-medium transition-colors ${selectedFilter === 'withdrawal'
+                    ? 'bg-[#273E8E] text-white'
+                    : 'text-gray-600 '
                     }`}
-                  onClick={() => setSelectedFilter('Withdrawals')}
+                  onClick={() => setSelectedFilter('withdrawal')}
                 >
-                  Withdrawals
+                  Withdrawal
                 </button>
               </div>
 
@@ -250,7 +280,7 @@ const Transactions = () => {
                 {isStatusDropdownOpen && (
                   <div className="absolute mt-2 w-48 origin-top-right rounded-xl shadow-xl bg-white border border-gray-200 z-50">
                     <ul className="py-2">
-                      {["Status", "Pending", "Completed"].map((option: string, index: number) => (
+                      {["Status", "paid", "pending", "failed"].map((option: string, index: number) => (
                         <li
                           key={index}
                           onClick={() => handleStatusSelect(option)}
@@ -294,7 +324,7 @@ const Transactions = () => {
         </div>
         {/* Transaction Table */}
         {isLoading ? (
-          <LoadingSpinner message="Loading transactions..." />
+          <LoadingSpinner />
         ) : isError ? (
           <div className="py-8 text-center text-red-500">Failed to load transactions.</div>
         ) : filteredTransactionData.length === 0 ? (
@@ -308,35 +338,45 @@ const Transactions = () => {
                     <th className="px-6 py-4 text-center text-sm font-medium text-gray-200">
                       <input type="checkbox" className="rounded" />
                     </th>
-                    <th className="px-6 py-4 text-center text-sm font-medium text-black">Name</th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">Title</th>
                     <th className="px-6 py-4 text-center text-sm font-medium text-black">Amount</th>
                     <th className="px-6 py-4 text-center text-sm font-medium text-black">Date</th>
                     <th className="px-6 py-4 text-center text-sm font-medium text-black">Type</th>
-                    <th className="px-6 py-4 text-center text-sm font-medium text-black">Tx ID</th>
+                    <th className="px-6 py-4 text-center text-sm font-medium text-black">Reference</th>
                     <th className="px-6 py-4 text-center text-sm font-medium text-black">Status</th>
                     <th className="px-6 py-4 text-center text-sm font-medium text-black">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white">
-                  {filteredTransactionData.map((transaction: any, index: number) => (
+                  {filteredTransactionData.map((transaction: {
+                    id: number;
+                    title: string;
+                    amount: string;
+                    status: string;
+                    type: string;
+                    method: string;
+                    transacted_at: string;
+                    tx_id?: string;
+                    reference?: string;
+                  }, index: number) => (
                     <tr key={transaction.id} className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"} transition-colors border-b border-gray-100 last:border-b-0`}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input type="checkbox" className="rounded" />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">
-                        {transaction.name}
+                        {transaction.title || "N/A"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 text-center">
-                        ₦{transaction.price ? Number(transaction.price).toLocaleString() : "-"}
+                        ₦{transaction.amount ? Number(transaction.amount).toLocaleString() : "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">
-                        {transaction.date}/{transaction.time}
+                        {transaction.transacted_at ? new Date(transaction.transacted_at).toLocaleDateString() : "N/A"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">
-                        {transaction.payment_method}
+                        {transaction.type || "N/A"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">
-                        {transaction.tx_id}
+                        {transaction.tx_id || transaction.reference || "N/A"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <span
@@ -360,7 +400,7 @@ const Transactions = () => {
                         <div className="flex items-center space-x-2 relative">
                           <button
                             className="relative p-2 text-gray-600 hover:text-gray-900"
-                            onClick={() => handleDropdownToggle(transaction.id)}
+                            onClick={() => handleDropdownToggle(String(transaction.id))}
                           >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                               <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
@@ -368,7 +408,7 @@ const Transactions = () => {
                           </button>
 
                           {/* Dropdown Menu */}
-                          {openDropdownId === transaction.id && (
+                          {openDropdownId === String(transaction.id) && (
                             <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                               <div className="py-2">
                                 <button

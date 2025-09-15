@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from "react";
 import images from "../../constants/images";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+
+//Code Related to the Integration
+import { getUserKycDetail } from "../../utils/queries/user_kyc";
+import { useQuery } from "@tanstack/react-query";
+import Cookies from "js-cookie";
+
 
 type KycProfileProps = {
   isOpen: boolean;
@@ -28,6 +35,14 @@ const KycProfile: React.FC<KycProfileProps> = ({
   const [activeKycSubTab, setActiveKycSubTab] = useState<
     "document" | "beneficiary" | "loanDetails"
   >("document");
+
+  // API integration for KYC data
+  const token = Cookies.get("token");
+  const { data: kycApiData, isLoading: isKycLoading, isError: isKycError } = useQuery({
+    queryKey: ["user-kyc-detail", userId],
+    queryFn: () => getUserKycDetail(userId, token || ""),
+    enabled: isOpen && !!userId && !!token,
+  });
 
   // Helper functions for user-specific data
   const getUserBankName = (userId: number) => {
@@ -108,46 +123,69 @@ const KycProfile: React.FC<KycProfileProps> = ({
     repaymentDuration: getRepaymentDuration(userId),
   });
 
-  // Update form data whenever userId changes
+  // Update form data whenever userId changes or API data is available
   useEffect(() => {
     // Reset tabs to default state when user changes
     setActiveKycTab("personal");
     setActiveKycSubTab("document");
 
-    // Update personal data
-    setPersonalData({
-      firstName: userName?.split(" ")[0] || "",
-      surname:
-        userName?.split(" ")[1] ||
-        userName?.split(" ").slice(1).join(" ") ||
-        "",
-      email: userEmail,
-      phone: userPhone,
-      bvn: userBvn,
-    });
+    if (kycApiData?.data) {
+      const userData = kycApiData.data.user;
+      const loanData = kycApiData.data.loan_application;
 
-    // Update credit data
-    setCreditData({
-      accountNumber: `${userId.toString().padStart(10, "0")}`,
-      bankName: getUserBankName(userId),
-      accountName: userName,
-    });
+      // Update personal data from API
+      setPersonalData({
+        firstName: userData?.first_name || userName?.split(" ")[0] || "",
+        surname: userData?.sur_name || userName?.split(" ")[1] || userName?.split(" ").slice(1).join(" ") || "",
+        email: userData?.email || userEmail,
+        phone: userData?.phone || userPhone,
+        bvn: userData?.bvn || userBvn,
+      });
 
-    // Update KYC data
-    setKycData({
-      selectedDocument: "National ID",
-      beneficiaryName: `${userName} Next of Kin`,
-      beneficiaryRelationship: getUserRelationship(userId),
-      beneficiaryEmail: `${userName
-        ?.split(" ")[0]
-        ?.toLowerCase()}.kin@example.com`,
-      beneficiaryPhone: `+234 90${userId
-        .toString()
-        .padStart(2, "0")} 123 456${userId}`,
-      loanAmount: getLoanAmount(userId),
-      repaymentDuration: getRepaymentDuration(userId),
-    });
-  }, [userId, userName, userEmail, userPhone, userBvn]);
+      // Update credit data (using fallback data since not in API)
+      setCreditData({
+        accountNumber: `${userId.toString().padStart(10, "0")}`,
+        bankName: getUserBankName(userId),
+        accountName: userData ? `${userData.first_name} ${userData.sur_name}` : userName,
+      });
+
+      // Update KYC data from API
+      setKycData({
+        selectedDocument: loanData?.title_document || "National ID",
+        beneficiaryName: loanData?.beneficiary_name || `${userName} Next of Kin`,
+        beneficiaryRelationship: loanData?.beneficiary_relationship || getUserRelationship(userId),
+        beneficiaryEmail: loanData?.beneficiary_email || `${userName?.split(" ")[0]?.toLowerCase()}.kin@example.com`,
+        beneficiaryPhone: loanData?.beneficiary_phone || `+234 90${userId.toString().padStart(2, "0")} 123 456${userId}`,
+        loanAmount: loanData?.loan_amount ? `₦${loanData.loan_amount.toLocaleString()}` : getLoanAmount(userId),
+        repaymentDuration: loanData?.repayment_duration ? `${loanData.repayment_duration} months` : getRepaymentDuration(userId),
+      });
+    } else {
+      // Fallback to mock data if API data is not available
+      setPersonalData({
+        firstName: userName?.split(" ")[0] || "",
+        surname: userName?.split(" ")[1] || userName?.split(" ").slice(1).join(" ") || "",
+        email: userEmail,
+        phone: userPhone,
+        bvn: userBvn,
+      });
+
+      setCreditData({
+        accountNumber: `${userId.toString().padStart(10, "0")}`,
+        bankName: getUserBankName(userId),
+        accountName: userName,
+      });
+
+      setKycData({
+        selectedDocument: "National ID",
+        beneficiaryName: `${userName} Next of Kin`,
+        beneficiaryRelationship: getUserRelationship(userId),
+        beneficiaryEmail: `${userName?.split(" ")[0]?.toLowerCase()}.kin@example.com`,
+        beneficiaryPhone: `+234 90${userId.toString().padStart(2, "0")} 123 456${userId}`,
+        loanAmount: getLoanAmount(userId),
+        repaymentDuration: getRepaymentDuration(userId),
+      });
+    }
+  }, [userId, userName, userEmail, userPhone, userBvn, kycApiData]);
 
   // Save functions
   const savePersonalDetails = () => {
@@ -183,6 +221,26 @@ const KycProfile: React.FC<KycProfileProps> = ({
 
         {/* Modal Box */}
         <div className="relative bg-white w-full max-w-[675px] h-[100vh] rounded-xl shadow-lg overflow-y-auto z-10">
+          {/* Loading State */}
+          {isKycLoading && (
+            <div className="flex items-center justify-center h-full">
+              <LoadingSpinner />
+            </div>
+          )}
+
+          {/* Error State */}
+          {isKycError && (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center text-red-500">
+                <p className="text-lg font-medium">Failed to load KYC data</p>
+                <p className="text-sm mt-2">Please try again later</p>
+              </div>
+            </div>
+          )}
+
+          {/* Content - only show when not loading and no error */}
+          {!isKycLoading && !isKycError && (
+            <>
           {/* Header */}
           <div className="flex justify-between items-center px-5 pt-4 pb-2">
             <h2 className="text-xl font-semibold">User Details</h2>
@@ -495,50 +553,112 @@ const KycProfile: React.FC<KycProfileProps> = ({
 
                   <div className="mb-4">
                     <label className="block text-sm font-medium mb-1">
-                      Upload Document
+                      Uploaded Document
                     </label>
-                    <div className="border border-dashed border-gray-300 rounded-md p-6 text-center">
-                      <div className="flex justify-center mb-2">
-                        <svg
-                          width="48"
-                          height="48"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <rect
-                            x="4"
-                            y="2"
-                            width="16"
-                            height="20"
-                            rx="2"
-                            stroke="#D1D5DB"
-                            strokeWidth="2"
-                          />
-                          <path
-                            d="M8 10H16"
-                            stroke="#D1D5DB"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                          />
-                          <path
-                            d="M8 14H16"
-                            stroke="#D1D5DB"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                          />
-                          <path
-                            d="M8 18H12"
-                            stroke="#D1D5DB"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                          />
-                        </svg>
+                    {kycApiData?.data?.loan_application?.upload_document ? (
+                      <div className="border border-gray-300 rounded-md p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <rect
+                                  x="4"
+                                  y="2"
+                                  width="16"
+                                  height="20"
+                                  rx="2"
+                                  stroke="#3B82F6"
+                                  strokeWidth="2"
+                                />
+                                <path
+                                  d="M8 10H16"
+                                  stroke="#3B82F6"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                                <path
+                                  d="M8 14H16"
+                                  stroke="#3B82F6"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                                <path
+                                  d="M8 18H12"
+                                  stroke="#3B82F6"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {kycApiData.data.loan_application.title_document || "Document"}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {kycApiData.data.loan_application.upload_document}
+                              </p>
+                            </div>
+                          </div>
+                          <a
+                            href={kycApiData.data.loan_application.upload_document}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          >
+                            View
+                          </a>
+                        </div>
                       </div>
-                      <p className="text-gray-500 text-sm">
-                        Select a clear copy of your document to upload
-                      </p>
-                    </div>
+                    ) : (
+                      <div className="border border-dashed border-gray-300 rounded-md p-6 text-center">
+                        <div className="flex justify-center mb-2">
+                          <svg
+                            width="48"
+                            height="48"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <rect
+                              x="4"
+                              y="2"
+                              width="16"
+                              height="20"
+                              rx="2"
+                              stroke="#D1D5DB"
+                              strokeWidth="2"
+                            />
+                            <path
+                              d="M8 10H16"
+                              stroke="#D1D5DB"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d="M8 14H16"
+                              stroke="#D1D5DB"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d="M8 18H12"
+                              stroke="#D1D5DB"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        </div>
+                        <p className="text-gray-500 text-sm">
+                          No document uploaded
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -703,6 +823,8 @@ const KycProfile: React.FC<KycProfileProps> = ({
                 Save
               </button>
             </div>
+          )}
+            </>
           )}
         </div>
       </div>

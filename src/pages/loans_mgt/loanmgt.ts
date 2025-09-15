@@ -19,7 +19,12 @@ export const loanData: LoanData[] = [
 ];
 
 // Helper function to get status background color
-export const getStatusBgColor = (status: string) => {
+export const getStatusBgColor = (status: string | undefined | null) => {
+  // Handle null, undefined, or empty string cases
+  if (!status || typeof status !== 'string') {
+    return { backgroundColor: '#6B728033', color: '#6B7280' };
+  }
+  
   switch (status.toLowerCase()) {
     case 'pending':
       return { backgroundColor: '#FFA50033', color: '#FF8C00' };

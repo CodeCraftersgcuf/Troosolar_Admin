@@ -2,7 +2,6 @@ import React from "react";
 import { users as initialUsers, stats as initialStats } from "../../constants/usermgt";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { addLoanForNewUser } from "../../component/users/UserLoanData";
 import UserMgtHeader from "../../components/user_mgt/UserMgtHeader";
 import UserMgtStats from "../../components/user_mgt/UserMgtStats";
 import UserMgtTableControls from "../../components/user_mgt/UserMgtTableControls";
@@ -11,21 +10,22 @@ import UserMgtAddUserModal from "../../components/user_mgt/UserMgtAddUserModal";
 
 // Import Related to the Integration
 import { getAllUsers } from "../../utils/queries/users";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 
 const User_mgt: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [users, setUsers] = useState(initialUsers);
+  const [users] = useState(initialUsers);
   const [showMoreActionsDropdown, setShowMoreActionsDropdown] = useState(false);
   const [showSortByDropdown, setShowSortByDropdown] = useState(false);
   const [selectedSortBy, setSelectedSortBy] = useState("Sort By");
   const [openDropdownIndex, setOpenDropdownIndex] = useState<number | null>(
     null
   );
-  const moreActionsRef = useRef<HTMLDivElement>(null);
-  const sortByRef = useRef<HTMLDivElement>(null);
+  const moreActionsRef = useRef<HTMLDivElement>(null!);
+  const sortByRef = useRef<HTMLDivElement>(null!);
   const dotsDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [newUser, setNewUser] = useState({
     name: "",
@@ -33,7 +33,6 @@ const User_mgt: React.FC = () => {
     phone: "",
     bvn: "",
   });
-  const [formError, setFormError] = useState("");
 
   // API integration for users
   const token = Cookies.get("token");
@@ -44,19 +43,30 @@ const User_mgt: React.FC = () => {
   });
 
   // Map API response to users table
-  const apiUsers = data?.data?.["all users data"]
-    ? data.data["all users data"].map((u: any) => ({
-      id: String(u.id),
-      name: `${u.first_name} ${u.sur_name}`,
-      email: u.email,
-      phone: u.phone,
-      bvn: u.bvn || "",
-      date: u.created_at
-        ? new Date(u.created_at).toLocaleDateString("en-GB")
-        : "",
-      is_active: u.is_active,
-    }))
-    : [];
+  const apiUsers = React.useMemo(() => {
+    return data?.data?.["all users data"]
+      ? data.data["all users data"].map((u: {
+          id: number;
+          first_name: string;
+          sur_name: string;
+          email: string;
+          phone: string;
+          bvn?: string;
+          created_at?: string;
+          is_active: number;
+        }) => ({
+        id: String(u.id),
+        name: `${u.first_name} ${u.sur_name}`,
+        email: u.email,
+        phone: u.phone,
+        bvn: u.bvn || "",
+        date: u.created_at
+          ? new Date(u.created_at).toLocaleDateString("en-GB")
+          : "",
+        is_active: u.is_active,
+      }))
+      : [];
+  }, [data]);
 
   // Map API response to stats cards
   const stats = data?.data
@@ -89,14 +99,14 @@ const User_mgt: React.FC = () => {
     let filtered = baseUsers;
 
     if (selectedMoreAction === "Active") {
-      filtered = filtered.filter((u: any) => u.is_active === 1);
+      filtered = filtered.filter((u: { is_active: number }) => u.is_active === 1);
     } else if (selectedMoreAction === "Inactive") {
-      filtered = filtered.filter((u: any) => u.is_active === 0);
+      filtered = filtered.filter((u: { is_active: number }) => u.is_active === 0);
     }
 
     if (searchTerm) {
       filtered = filtered.filter(
-        (u: any) =>
+        (u: { name: string; email: string; phone: string }) =>
           u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
           u.phone.toLowerCase().includes(searchTerm.toLowerCase())
@@ -154,69 +164,16 @@ const User_mgt: React.FC = () => {
     }));
   };
 
-  // Get today's date in the format DD/MM/YYYY
-  const getCurrentDate = () => {
-    const today = new Date();
-    const day = String(today.getDate()).padStart(2, "0");
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const year = today.getFullYear();
-    return `${day}/${month}/${year}`;
-  };
 
-  // Generate a unique ID
-  const generateId = () => {
-    return ((apiUsers.length || users.length) + 1).toString();
-  };
-
-  // Handle form submission
-  const handleAddUser = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Basic validation
-    if (!newUser.name || !newUser.email || !newUser.phone || !newUser.bvn) {
-      setFormError("All fields are required");
-      return;
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newUser.email)) {
-      setFormError("Please enter a valid email address");
-      return;
-    }
-
-    // Phone validation (simple)
-    if (newUser.phone.length < 10) {
-      setFormError("Phone number must be at least 10 digits");
-      return;
-    }
-
-    // Create new user with today's date and a new ID
-    const userId = generateId();
-    const newUserWithDetails = {
-      id: userId,
-      ...newUser,
-      date: getCurrentDate(),
-    };
-
-    // Add the new user to the list
-    setUsers([...users, newUserWithDetails]);
-
-    // Also create a default loan for this user
-    addLoanForNewUser(userId, newUser.name);
-
-    // Reset the form and close modal
-    setFormError("");
-    setShowAddModal(false);
-    setNewUser({ name: "", email: "", phone: "", bvn: "" });
-
-    // Show success message
-    alert("User added successfully with default loan information!");
-  };
 
   // Handle notification click
   const handleNotificationClick = () => {
     console.log("Notification clicked in User Management");
+  };
+
+  // Handle user added callback to refresh data
+  const handleUserAdded = () => {
+    queryClient.invalidateQueries({ queryKey: ["all-users"] });
   };
 
   return (
@@ -269,8 +226,7 @@ const User_mgt: React.FC = () => {
         <UserMgtAddUserModal
           showAddModal={showAddModal}
           setShowAddModal={setShowAddModal}
-          formError={formError}
-          handleAddUser={handleAddUser}
+          onUserAdded={handleUserAdded}
           newUser={newUser}
           handleInputChange={handleInputChange}
         />

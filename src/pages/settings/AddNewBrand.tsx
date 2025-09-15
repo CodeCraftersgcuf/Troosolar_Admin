@@ -1,19 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import images from '../../constants/images';
 
-
 //Code Related to the Integration
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import Cookies from "js-cookie";
 import { addBrand } from '../../utils/mutations/brands';
 import { updateBrand } from '../../utils/mutations/brands';
+import { getAllCategories } from '../../utils/queries/categories';
+
+// API Response Interface
+interface ApiCategory {
+  id: number;
+  title: string;
+  icon: string;
+  created_at: string;
+  updated_at: string;
+}
 
 interface AddNewBrandProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (categoryName: string, brandName: string, status: string) => void;
   editMode?: boolean;
-  editData?: any;
+  editData?: {
+    id: string;
+    category: string;
+    brandName: string;
+    status: string;
+  };
 }
 
 const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: AddNewBrandProps) => {
@@ -21,6 +35,19 @@ const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: Ad
   const [brandName, setBrandName] = useState('');
   const [status, setStatus] = useState('');
   const token = Cookies.get("token");
+
+  // Fetch categories from API
+  const { data: categoriesResponse, isLoading: categoriesLoading } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => getAllCategories(token || ''),
+    enabled: !!token && isOpen,
+  });
+
+  // Extract categories data from API response
+  const apiCategories: ApiCategory[] = useMemo(() => 
+    (categoriesResponse as { data?: ApiCategory[] })?.data || [], 
+    [categoriesResponse]
+  );
 
   useEffect(() => {
     if (editMode && editData) {
@@ -63,16 +90,22 @@ const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: Ad
   const handleSave = () => {
     if (categoryName.trim() && brandName.trim() && status) {
       if (editMode && editData) {
-        updateMutation.mutate({
+        const updatePayload = {
           id: editData.id,
           title: brandName,
           category_id: categoryName,
-        });
+        };
+        console.log('Update Brand Payload:', updatePayload);
+        console.log('Category Name (ID):', categoryName);
+        console.log('Brand Name:', brandName);
+        updateMutation.mutate(updatePayload);
       } else {
-        addMutation.mutate({
+        const addPayload = {
           title: brandName,
           category_id: categoryName,
-        });
+        };
+        console.log('Add Brand Payload:', addPayload);
+        addMutation.mutate(addPayload);
       }
     }
   };
@@ -111,20 +144,26 @@ const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: Ad
               <select
                 value={categoryName}
                 onChange={(e) => setCategoryName(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#273E8E] focus:border-[#273E8E] outline-none appearance-none bg-white text-gray-500"
+                disabled={categoriesLoading}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#273E8E] focus:border-[#273E8E] outline-none appearance-none bg-white text-gray-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
-                <option value="">Select category</option>
-                <option value="1">Solar Panel</option>
-                <option value="2">Inverter</option>
-                <option value="3">Batteries</option>
-                <option value="4">MPPT Chargers</option>
-                <option value="5">LED Bulbs</option>
-                <option value="6">Solar Fans</option>
+                <option value="">
+                  {categoriesLoading ? 'Loading categories...' : 'Select category'}
+                </option>
+                {apiCategories.map((category) => (
+                  <option key={category.id} value={category.id.toString()}>
+                    {category.title}
+                  </option>
+                ))}
               </select>
               <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                {categoriesLoading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                ) : (
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                )}
               </div>
             </div>
           </div>

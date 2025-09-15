@@ -111,6 +111,13 @@ const API_ENDPOINTS = {
       `${API_DOMAIN}/categories/${category}/brands`, // GET
     GetSingleBrandByCategory: (category: string, brandId: number | string) =>
       `${API_DOMAIN}/categories/${category}/brands/${brandId}`, // GET
+
+    //Add User
+    AddUser: API_DOMAIN + "/add-user", // POST
+
+    //Kyc-Detail
+    Get_User_Kyc_Detail: (id: number | string) =>
+      `${API_DOMAIN}/loan-kyc-details/${id}`, // GET
   },
 };
 

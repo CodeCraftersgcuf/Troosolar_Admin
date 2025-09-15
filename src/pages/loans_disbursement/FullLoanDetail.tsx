@@ -1,11 +1,10 @@
 import React, { useState } from "react";
 import DisburseModal from "../../components/modals/DisburseModal";
 import images from "../../constants/images";
-import type { LoanDetail } from "../../component/users/UserLoanData";
 import jsPDF from 'jspdf';
 
 //code related to the integration
-import { getFullLoanDetail } from "../../utils/queries/loans";
+import { getSingleLoanDetail } from "../../utils/queries/loans";
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 
@@ -30,7 +29,7 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
   const token = Cookies.get("token");
   const { data: apiLoan, isLoading: isLoanLoading, isError: isLoanError } = useQuery({
     queryKey: ["full-loan-detail", loanId],
-    queryFn: () => getFullLoanDetail(loanId, token || ""),
+    queryFn: () => getSingleLoanDetail(loanId, token || ""),
     enabled: isOpen && !!loanId && !!token,
   });
 
@@ -38,20 +37,31 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
   const currentLoan = apiLoan?.data
     ? {
         id: String(apiLoan.data.id ?? loanId),
-        userId: String(apiLoan.data.id ?? loanId),
-        name: apiLoan.data.name || "Unknown User",
-        loanLimit: apiLoan.data["loan limit"] !== null ? `₦${apiLoan.data["loan limit"]}` : "N/A",
-        loanAmount: apiLoan.data.amount !== null ? `₦${apiLoan.data.amount}` : "N/A",
-        loanPeriod: apiLoan.data["repayment duration"] !== null ? `${apiLoan.data["repayment duration"]} months` : "N/A",
-        repaymentDuration: apiLoan.data["repayment duration"] !== null ? `${apiLoan.data["repayment duration"]} months` : "N/A",
-        financingPartner: apiLoan.data["financing partner"] || "N/A",
-        interestRate: apiLoan.data["interest rate"] !== null ? `${apiLoan.data["interest rate"]}%` : "N/A",
-        sendStatus: apiLoan.data["send_status"] || "Pending",
-        sendDate: apiLoan.data["send_date"] || "Not yet sent",
-        approvalStatus: apiLoan.data["approval_status"] || "Pending",
-        approvalDate: apiLoan.data["approval_date"] || "Not yet approved",
-        disbursementStatus: apiLoan.data["disbursement_status"] || "Pending",
-        disbursementDate: apiLoan.data["disbursement_date"] || "Not yet disbursed",
+        userId: String(apiLoan.data.user_id ?? loanId),
+        name: apiLoan.data.user ? `${apiLoan.data.user.first_name} ${apiLoan.data.user.sur_name}` : "Unknown User",
+        loanLimit: apiLoan.data.mono?.loan_limit !== null ? `₦${apiLoan.data.mono.loan_limit}` : "N/A",
+        loanAmount: apiLoan.data.loan_amount !== null ? `₦${apiLoan.data.loan_amount.toLocaleString()}` : "N/A",
+        loanPeriod: apiLoan.data.repayment_duration !== null ? `${apiLoan.data.repayment_duration} months` : "N/A",
+        repaymentDuration: apiLoan.data.mono?.repayment_duration !== null ? `${apiLoan.data.mono.repayment_duration} months` : "N/A",
+        financingPartner: "Mono",
+        interestRate: apiLoan.data.mono?.interest_rate !== null ? `${apiLoan.data.mono.interest_rate}%` : "N/A",
+        sendStatus: apiLoan.data.status || "Pending",
+        sendDate: apiLoan.data.created_at ? new Date(apiLoan.data.created_at).toLocaleDateString() : "Not yet sent",
+        approvalStatus: apiLoan.data.mono?.status || "Pending",
+        approvalDate: apiLoan.data.mono?.updated_at ? new Date(apiLoan.data.mono.updated_at).toLocaleDateString() : "Not yet approved",
+        disbursementStatus: apiLoan.data.loan_status || "Pending",
+        disbursementDate: apiLoan.data.updated_at ? new Date(apiLoan.data.updated_at).toLocaleDateString() : "Not yet disbursed",
+        // Additional fields from the API response
+        beneficiaryName: apiLoan.data.beneficiary_name || "N/A",
+        beneficiaryEmail: apiLoan.data.beneficiary_email || "N/A",
+        beneficiaryRelationship: apiLoan.data.beneficiary_relationship || "N/A",
+        beneficiaryPhone: apiLoan.data.beneficiary_phone || "N/A",
+        titleDocument: apiLoan.data.title_document || "N/A",
+        uploadDocument: apiLoan.data.upload_document || "N/A",
+        totalAmount: apiLoan.data.mono?.total_amount ? `₦${apiLoan.data.mono.total_amount.toLocaleString()}` : "N/A",
+        downPayment: apiLoan.data.mono?.down_payment ? `₦${apiLoan.data.mono.down_payment.toLocaleString()}` : "N/A",
+        creditScore: apiLoan.data.mono?.credit_score || "N/A",
+        isOverdue: apiLoan.data.mono?.is_overdue || false,
       }
     : null;
 
@@ -88,25 +98,6 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
     );
   }
 
-  // Handle disbursement status change
-  const handleDisburse = (loanId: string, status: string) => {
-    const loan = currentLoan;
-    if (loan) {
-      const updatedLoan: LoanDetail = {
-        ...loan,
-        disbursementStatus: status as "Pending" | "Completed",
-        disbursementDate:
-          status === "Completed"
-            ? new Date().toLocaleDateString()
-            : "Not yet disbursed",
-      };
-
-      // Notify parent component about the change
-      if (onDisbursementUpdate) {
-        onDisbursementUpdate(loanId, status);
-      }
-    }
-  };
 
   // Handle account statement download
   const handleDownloadStatement = () => {
@@ -204,15 +195,17 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
       yPosition += 10;
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
-      doc.text("Total Income: ₦2,000,000", 25, yPosition);
+      doc.text(`Loan Amount: ${loan.loanAmount}`, 25, yPosition);
       yPosition += 6;
-      doc.text("Monthly Income: ₦200,000", 25, yPosition);
+      doc.text(`Total Amount: ${loan.totalAmount}`, 25, yPosition);
       yPosition += 6;
-      doc.text("Total Debt: ₦400,000", 25, yPosition);
+      doc.text(`Down Payment: ${loan.downPayment}`, 25, yPosition);
       yPosition += 6;
-      doc.text("  • ABC Bank: ₦200,000", 30, yPosition);
+      doc.text(`Interest Rate: ${loan.interestRate}`, 25, yPosition);
       yPosition += 6;
-      doc.text("  • Defa Bank: ₦200,000", 30, yPosition);
+      doc.text(`Credit Score: ${loan.creditScore}`, 25, yPosition);
+      yPosition += 6;
+      doc.text(`Overdue Status: ${loan.isOverdue ? 'Overdue' : 'Current'}`, 25, yPosition);
       
       // Footer
       yPosition += 20;
@@ -276,7 +269,7 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
     );
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !currentLoan) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end items-end sm:items-center">
@@ -419,6 +412,67 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
               </div>
             </div>
 
+            {/* Beneficiary Information */}
+            <div className="mb-6">
+              <h3 className="text-sm font-medium my-3">Beneficiary Information</h3>
+              <div className="space-y-0 border-[#00000080] border rounded-lg p-5">
+                <div className="flex justify-between py-3 border-b border-[#CDCDCD]">
+                  <span className="text-[#00000080] text-sm">Beneficiary Name</span>
+                  <span className="font-medium text-sm text-right">
+                    {currentLoan.beneficiaryName}
+                  </span>
+                </div>
+                <div className="flex justify-between py-3 border-b border-[#CDCDCD]">
+                  <span className="text-[#00000080] text-sm">Beneficiary Email</span>
+                  <span className="font-medium text-sm text-right">
+                    {currentLoan.beneficiaryEmail}
+                  </span>
+                </div>
+                <div className="flex justify-between py-3 border-b border-[#CDCDCD]">
+                  <span className="text-[#00000080] text-sm">Relationship</span>
+                  <span className="font-medium text-sm text-right">
+                    {currentLoan.beneficiaryRelationship}
+                  </span>
+                </div>
+                <div className="flex justify-between py-3">
+                  <span className="text-[#00000080] text-sm">Phone Number</span>
+                  <span className="font-medium text-sm text-right">
+                    {currentLoan.beneficiaryPhone}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Document Information */}
+            <div className="mb-6">
+              <h3 className="text-sm font-medium my-3">Document Information</h3>
+              <div className="space-y-0 border-[#00000080] border rounded-lg p-5">
+                <div className="flex justify-between py-3 border-b border-[#CDCDCD]">
+                  <span className="text-[#00000080] text-sm">Document Type</span>
+                  <span className="font-medium text-sm text-right">
+                    {currentLoan.titleDocument}
+                  </span>
+                </div>
+                <div className="flex justify-between py-3">
+                  <span className="text-[#00000080] text-sm">Uploaded Document</span>
+                  <span className="font-medium text-sm text-right">
+                    {currentLoan.uploadDocument !== "N/A" ? (
+                      <a 
+                        href={currentLoan.uploadDocument} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 underline"
+                      >
+                        View Document
+                      </a>
+                    ) : (
+                      "N/A"
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <button
               className={`w-full py-3 rounded-full font-medium my-5 transition-colors cursor-pointer ${
                 currentLoan.disbursementStatus === "Completed"
@@ -440,48 +494,64 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
         {activeTab === "financial" && (
           <div className="px-5">
             <div className="mb-6">
-              <h3 className="text-sm font-medium my-3">Credit Check Data</h3>
+              <h3 className="text-sm font-medium my-3">Loan Financial Summary</h3>
               <div className="space-y-0 border border-[#00000080] rounded-lg p-2 overflow-hidden">
                 <div className="flex justify-between py-3 px-3 border-b border-[#CDCDCD]">
-                  <span className="text-gray-500 text-sm">Total Income</span>
+                  <span className="text-gray-500 text-sm">Loan Amount</span>
                   <span className="font-medium text-sm text-right">
-                    ₦2,000,000
+                    {currentLoan.loanAmount}
+                  </span>
+                </div>
+                <div className="flex justify-between py-3 px-3 border-b border-[#CDCDCD]">
+                  <span className="text-gray-500 text-sm">Total Amount</span>
+                  <span className="font-medium text-sm text-right">
+                    {currentLoan.totalAmount}
+                  </span>
+                </div>
+                <div className="flex justify-between py-3 px-3 border-b border-[#CDCDCD]">
+                  <span className="text-gray-500 text-sm">Down Payment</span>
+                  <span className="font-medium text-sm text-right">
+                    {currentLoan.downPayment}
                   </span>
                 </div>
                 <div className="flex justify-between py-3 px-3">
-                  <span className="text-gray-500 text-sm">Monthly Income</span>
+                  <span className="text-gray-500 text-sm">Interest Rate</span>
                   <span className="font-medium text-sm text-right">
-                    ₦200,000
+                    {currentLoan.interestRate}
                   </span>
                 </div>
               </div>
             </div>
 
             <div className="mb-6">
-              <h3 className="text-sm font-medium my-3">Debt Status</h3>
+              <h3 className="text-sm font-medium my-3">Credit Information</h3>
               <div className="space-y-0 border border-[#00000080] rounded-lg p-2 overflow-hidden">
                 <div className="flex justify-between py-3 px-3 border-b border-[#CDCDCD]">
-                  <span className="text-gray-500 text-sm">Debt Status</span>
+                  <span className="text-gray-500 text-sm">Credit Score</span>
                   <span className="font-medium text-sm text-right">
-                    Owing 2 institutions
+                    {currentLoan.creditScore}
                   </span>
                 </div>
                 <div className="flex justify-between py-3 px-3 border-b border-[#CDCDCD]">
-                  <span className="text-gray-500 text-sm">ABC Bank</span>
+                  <span className="text-gray-500 text-sm">Loan Limit</span>
                   <span className="font-medium text-sm text-right">
-                    ₦200,000
+                    {currentLoan.loanLimit}
                   </span>
                 </div>
                 <div className="flex justify-between py-3 px-3 border-b border-[#CDCDCD]">
-                  <span className="text-gray-500 text-sm">Defa Bank</span>
+                  <span className="text-gray-500 text-sm">Repayment Duration</span>
                   <span className="font-medium text-sm text-right">
-                    ₦200,000
+                    {currentLoan.repaymentDuration}
                   </span>
                 </div>
                 <div className="flex justify-between py-3 px-3">
-                  <span className="text-gray-500 text-sm">Total Owed</span>
+                  <span className="text-gray-500 text-sm">Overdue Status</span>
                   <span className="font-medium text-sm text-right">
-                    ₦400,000
+                    {currentLoan.isOverdue ? (
+                      <span className="text-red-600">Overdue</span>
+                    ) : (
+                      <span className="text-green-600">Current</span>
+                    )}
                   </span>
                 </div>
               </div>
