@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from "../../../apiConfig";
 
 
 // GET /api/Categories
-export const getAllCategories = async (token: string): Promise<any> => {
+export const getAllCategories = async (token: string): Promise<unknown> => {
   return await apiCall(
     API_ENDPOINTS.ADMIN.CategoriesList,
     "GET",
