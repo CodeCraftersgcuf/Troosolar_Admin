@@ -36,8 +36,8 @@ const Settings = () => {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={`pb-2 cursor-pointer relative ${activeTab === tab.id
-                  ? "text-black font-semibold"
-                  : "text-[#00000080]"
+                ? "text-black font-semibold"
+                : "text-[#00000080]"
                 }`}
             >
               {tab.label}

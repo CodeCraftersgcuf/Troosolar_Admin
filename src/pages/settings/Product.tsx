@@ -4,6 +4,7 @@ import type { ProductCategory, Brand } from "./product";
 import AddNewCategory from "./AddNewCategory";
 import AddNewBrand from "./AddNewBrand";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
 
 //Code Related to the Integration
 import { getAllCategories } from "../../utils/queries/categories";
@@ -20,7 +21,7 @@ import { deleteBrand } from "../../utils/mutations/brands";
 
 
 
-const IMAGE_BASE_URL = "http://localhost:8000";
+const IMAGE_BASE_URL = "https://troosolar.hmstech.org";
 
 const Product = () => {
   const [categories, setCategories] = useState<ProductCategory[]>(productCategories);
@@ -473,9 +474,7 @@ const Product = () => {
       {activeTab === "categories" && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           {isCategoriesLoading ? (
-            <div className="py-16 text-center text-gray-500 text-lg">
-              Loading categories...
-            </div>
+            <LoadingSpinner message="Loading categories..." />
           ) : isCategoriesError ? (
             <div className="py-16 text-center text-red-500 text-lg">
               Failed to load categories.
@@ -620,9 +619,7 @@ const Product = () => {
       {activeTab === "brand" && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           {isBrandsLoading ? (
-            <div className="py-16 text-center text-gray-500 text-lg">
-              Loading brands...
-            </div>
+            <LoadingSpinner message="Loading brands..." />
           ) : isBrandsError ? (
             <div className="py-16 text-center text-red-500 text-lg">
               Failed to load brands.

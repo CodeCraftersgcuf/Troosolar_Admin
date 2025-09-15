@@ -4,6 +4,8 @@ import { shopOrderData } from "./shpmgt";
 import images from "../../constants/images";
 import type { ShopOrderData } from "./shpmgt";
 import TicketDetailModal from "./TicketDetailModal";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+import StatsLoadingSkeleton from "../../components/common/StatsLoadingSkeleton";
 
 //Code Related to the Integration
 import { getAllTickets } from "../../utils/queries/tickets";
@@ -106,74 +108,80 @@ const Tickets = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div
-            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-[120px]"
-            style={{
-              boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)",
-            }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-19 h-19 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src={images.users}
-                  alt=""
-                  className="w-9 h-9 object-contain"
-                />
+          {isLoading ? (
+            <StatsLoadingSkeleton count={3} />
+          ) : (
+            <>
+              <div
+                className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-[120px]"
+                style={{
+                  boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)",
+                }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-19 h-19 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                    <img
+                      src={images.users}
+                      alt=""
+                      className="w-9 h-9 object-contain"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-600">
+                      Total Tickets
+                    </p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {summary.total_tickets}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-blue-600">
-                  Total Tickets
-                </p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {isLoading ? "--" : summary.total_tickets}
-                </p>
+              <div
+                className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-[120px]"
+                style={{
+                  boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)",
+                }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-19 h-19 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                    <img
+                      src={images.users}
+                      alt=""
+                      className="w-9 h-9 object-contain"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-600">Pending</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {summary.pending_tickets}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div
-            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-[120px]"
-            style={{
-              boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)",
-            }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-19 h-19 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src={images.users}
-                  alt=""
-                  className="w-9 h-9 object-contain"
-                />
+              <div
+                className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-[120px]"
+                style={{
+                  boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)",
+                }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-19 h-19 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                    <img
+                      src={images.users}
+                      alt=""
+                      className="w-9 h-9 object-contain"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-600">Answered</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {summary.answered_tickets}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-blue-600">Pending</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {isLoading ? "--" : summary.pending_tickets}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div
-            className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 h-[120px]"
-            style={{
-              boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)",
-            }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-19 h-19 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src={images.users}
-                  alt=""
-                  className="w-9 h-9 object-contain"
-                />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-blue-600">Answered</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {isLoading ? "--" : summary.answered_tickets}
-                </p>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
 
         {/* Tickets Summary Section */}
@@ -257,9 +265,7 @@ const Tickets = () => {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div>
             {isLoading ? (
-              <div className="py-16 text-center text-gray-500 text-lg">
-                Loading tickets...
-              </div>
+              <LoadingSpinner message="Loading tickets..." />
             ) : isError ? (
               <div className="py-16 text-center text-red-500 text-lg">
                 Failed to load tickets.

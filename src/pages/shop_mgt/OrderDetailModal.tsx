@@ -1,6 +1,5 @@
 import images from "../../constants/images";
-import type { ShopOrderData } from "./shpmgt";
-
+import { useState, useEffect } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
@@ -8,12 +7,54 @@ import { getSingleOrder } from "../../utils/queries/orders";
 
 interface OrderDetailModalProps {
   isOpen: boolean;
-  order: any;
+  order: {
+    id: number;
+    order_number?: string;
+    order_status?: string;
+    payment_status?: string;
+    payment_method?: string;
+    total_price?: string;
+    created_at?: string;
+    delivery_address?: {
+      address?: string;
+      phone_number?: string;
+    };
+    items?: Array<{
+      item?: {
+        title?: string;
+        featured_image?: string;
+      };
+    }>;
+    user_info?: {
+      name?: string;
+      phone?: string;
+    };
+    include_user_info?: {
+      first_name?: string;
+      phone?: string;
+    };
+    installation?: {
+      installation_date?: string;
+      installation_fee?: string;
+      technician_name?: string;
+    };
+  } | null;
   onClose: () => void;
 }
 
 const OrderDetailModal = ({ isOpen, order, onClose }: OrderDetailModalProps) => {
   const token = Cookies.get("token");
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
+
+  // Reset image loading state when order changes
+  useEffect(() => {
+    if (order?.id) {
+      setImageLoading(true);
+      setImageError(false);
+    }
+  }, [order?.id]);
+
   // Fetch order details from API
   const {
     data: apiData,
@@ -21,7 +62,7 @@ const OrderDetailModal = ({ isOpen, order, onClose }: OrderDetailModalProps) => 
     isError,
   } = useQuery({
     queryKey: ["single-order-detail", order?.id],
-    queryFn: () => getSingleOrder(order?.id, token || ""),
+    queryFn: () => getSingleOrder(order?.id || 0, token || ""),
     enabled: !!order?.id && isOpen,
   });
 
@@ -50,6 +91,17 @@ const OrderDetailModal = ({ isOpen, order, onClose }: OrderDetailModalProps) => 
   const data = apiData.data;
   const productName = data.items && data.items.length > 0 ? data.items[0].item?.title : "-";
   const productImage = data.items && data.items.length > 0 ? data.items[0].item?.featured_image : "/assets/images/newman1.png";
+
+  // Image load handlers
+  const handleImageLoad = () => {
+    setImageLoading(false);
+    setImageError(false);
+  };
+
+  const handleImageError = () => {
+    setImageLoading(false);
+    setImageError(true);
+  };
   const customerName = data.user_info?.name || data.include_user_info?.first_name || "-";
   const customerPhone = data.user_info?.phone || data.include_user_info?.phone || "-";
   const deliveryAddress = data.delivery_address?.address || "-";
@@ -59,6 +111,8 @@ const OrderDetailModal = ({ isOpen, order, onClose }: OrderDetailModalProps) => 
   const orderAmount = data.total_price ? `₦${Number(data.total_price).toLocaleString()}` : "-";
   const paymentMethod = data.payment_method || "-";
   const installation = data.installation || null;
+
+  const Base_image_url = "https://troosolar.hmstech.org";
 
   return (
     <div className="fixed inset-0 backdrop-brightness-50 flex items-end justify-end z-50 p-4">
@@ -102,8 +156,27 @@ const OrderDetailModal = ({ isOpen, order, onClose }: OrderDetailModalProps) => 
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-2">Product Details</h3>
               <div className="flex items-center space-x-3 p-1.5 bg-white border border-[#00000080] rounded-2xl">
-                <div className="w-19 h-19 bg-[#F3F3F3] rounded-2xl flex items-center justify-center flex-shrink-0">
-                  <img src={productImage || "/assets/images/newman1.png"} alt={productName} className="w-full h-full object-cover rounded-lg" />
+                <div className="w-19 h-19 bg-[#F3F3F3] rounded-2xl flex items-center justify-center flex-shrink-0 relative">
+                  {imageLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#273E8E]"></div>
+                    </div>
+                  )}
+                  {imageError ? (
+                    <div className="w-full h-full flex items-center justify-center bg-gray-200 rounded-lg">
+                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <img
+                      src={`${Base_image_url}${productImage}`}
+                      alt={productName}
+                      className={`w-full h-full object-cover rounded-lg ${imageLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
+                      onLoad={handleImageLoad}
+                      onError={handleImageError}
+                    />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-medium text-gray-900 truncate">{productName}</h4>

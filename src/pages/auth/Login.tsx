@@ -25,17 +25,17 @@ const Login = () => {
 
     // Mutation for admin login
     const { mutate, isPending } = useMutation({
-      mutationFn: adminLogin,
-      onSuccess: (data) => {
-        if (data?.token) {
-          Cookies.set("token", data.token, { expires: 7 });
+        mutationFn: adminLogin,
+        onSuccess: (data) => {
+            if (data?.token) {
+                Cookies.set("token", data.token, { expires: 7 });
+            }
+            setLoginError(null);
+            navigate("/dashboard");
+        },
+        onError: (error: any) => {
+            setLoginError(error?.message || "Login failed");
         }
-        setLoginError(null);
-        navigate("/dashboard");
-      },
-      onError: (error: any) => {
-        setLoginError(error?.message || "Login failed");
-      }
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,7 +51,7 @@ const Login = () => {
         setLoginError(null);
         // Only call mutation if both fields are filled
         if (formData.email && formData.password) {
-          mutate({ email: formData.email, password: formData.password });
+            mutate({ email: formData.email, password: formData.password });
         }
     };
 
@@ -179,7 +179,7 @@ const Login = () => {
 
                             {/* Show error if login fails */}
                             {loginError && (
-                              <div className="text-red-600 text-sm text-center">{loginError}</div>
+                                <div className="text-red-600 text-sm text-center">{loginError}</div>
                             )}
 
                             <button
@@ -188,23 +188,23 @@ const Login = () => {
                                 disabled={!formData.email || !formData.password || isPending}
                             >
                                 {isPending ? (
-                                  <span className="mr-2">Logging in...</span>
+                                    <span className="mr-2">Logging in...</span>
                                 ) : null}
                                 {!isPending ? (isLogin ? "Login" : "Create Account") : null}
                             </button>
-
+{/* 
                             <p className="text-start text-sm">
                                 {isLogin
                                     ? "Don't have an account?"
                                     : "I already have an account"}
-                            </p>
-
+                            </p> */}
+{/* 
                             <button
                                 type="button"
                                 className="w-full bg-[#e8a91d] text-white py-3 rounded-lg transition duration-200"
                             >
                                 {isLogin ? "Register" : "Login"}
-                            </button>
+                            </button> */}
                         </form>
                     </div>
                 </div>
@@ -311,7 +311,7 @@ const Login = () => {
 
                     {/* Show error if login fails */}
                     {loginError && (
-                      <div className="text-red-600 text-sm text-center">{loginError}</div>
+                        <div className="text-red-600 text-sm text-center">{loginError}</div>
                     )}
 
                     <button
@@ -320,11 +320,11 @@ const Login = () => {
                         disabled={!formData.email || !formData.password || isPending}
                     >
                         {isPending ? (
-                          <span className="mr-2">Logging in...</span>
+                            <span className="mr-2">Logging in...</span>
                         ) : null}
                         {!isPending ? (isLogin ? "Login" : "Create Account") : null}
                     </button>
-
+{/* 
                     <p className={isLogin ? "text-start text-sm" : "text-start text-sm"}>
                         {isLogin ? "I don't have an account" : "I already have an account"}
                     </p>
@@ -334,7 +334,7 @@ const Login = () => {
                         className="w-full bg-[#e8a91d] text-white py-3 rounded-full"
                     >
                         {isLogin ? "Create Account" : "Login"}
-                    </button>
+                    </button> */}
                 </form>
             </div>
         </>

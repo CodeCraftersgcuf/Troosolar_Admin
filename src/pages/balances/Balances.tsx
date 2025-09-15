@@ -2,6 +2,8 @@ import { useState } from "react";
 import Header from "../../component/Header";
 import { balanceData } from "./balance";
 import type { BalanceData } from "./balance";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+import BalanceCardsLoadingSkeleton from "../../components/common/BalanceCardsLoadingSkeleton";
 import images from "../../constants/images";
 
 //Code Related to the Integration
@@ -140,39 +142,43 @@ const Balances = () => {
         </div>
 
         {/* Balance Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Total Loan Balance Card */}
-          <div
-            className="bg-[#273E8E] rounded-2xl p-8 text-white relative overflow-hidden"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="relative z-10">
-              <h3 className="text-lg font-medium mb-6">Total Loan Balance</h3>
-              <p className="text-4xl font-bold mb-8">
-                N{formatAmount(summary.total_loan_balance)}
-              </p>
-              <div className="flex justify-end">
-                <button className="bg-white bg-opacity-20 hover:bg-opacity-30 text-[#273E8E] px-5 py-3 rounded-full text-sm font-medium transition-colors">
-                  Fund Wallet
-                </button>
+        {isLoading ? (
+          <BalanceCardsLoadingSkeleton />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* Total Loan Balance Card */}
+            <div
+              className="bg-[#273E8E] rounded-2xl p-8 text-white relative overflow-hidden"
+              style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+            >
+              <div className="relative z-10">
+                <h3 className="text-lg font-medium mb-6">Total Loan Balance</h3>
+                <p className="text-4xl font-bold mb-8">
+                  N{formatAmount(summary.total_loan_balance)}
+                </p>
+                <div className="flex justify-end">
+                  <button className="bg-white bg-opacity-20 hover:bg-opacity-30 text-[#273E8E] px-5 py-3 rounded-full text-sm font-medium transition-colors">
+                    Fund Wallet
+                  </button>
+                </div>
+              </div>
+            </div>
+            {/* Total Shopping Balance Card */}
+            <div
+              className="bg-[#E8A91D] rounded-2xl p-8 text-white relative overflow-hidden"
+              style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+            >
+              <div className="relative z-10">
+                <h3 className="text-lg font-medium mb-6">
+                  Total Shopping Balance
+                </h3>
+                <p className="text-4xl font-bold">
+                  N{formatAmount(summary.total_shopping_balance)}
+                </p>
               </div>
             </div>
           </div>
-          {/* Total Shopping Balance Card */}
-          <div
-            className="bg-[#E8A91D] rounded-2xl p-8 text-white relative overflow-hidden"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="relative z-10">
-              <h3 className="text-lg font-medium mb-6">
-                Total Shopping Balance
-              </h3>
-              <p className="text-4xl font-bold">
-                N{formatAmount(summary.total_shopping_balance)}
-              </p>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Balance Summary Section */}
         <div className="mb-6">
@@ -221,9 +227,7 @@ const Balances = () => {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div>
             {isLoading ? (
-              <div className="py-16 text-center text-gray-500 text-lg">
-                Loading balances...
-              </div>
+              <LoadingSpinner message="Loading balances..." />
             ) : isError ? (
               <div className="py-16 text-center text-red-500 text-lg">
                 Failed to load balances.

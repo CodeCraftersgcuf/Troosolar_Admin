@@ -7,6 +7,8 @@ import {
 } from "./loandisbursement";
 import FullLoanDetail from "./FullLoanDetail";
 import RepaymentHistory from "../../components/modals/RepaymentHistory";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+import StatsLoadingSkeleton from "../../components/common/StatsLoadingSkeleton";
 import images from "../../constants/images";
 
 
@@ -250,30 +252,34 @@ const Loans_disbursement = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 h-[120px]">
-          {stats.map((stat, idx) => (
-            <div
-              key={idx}
-              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
-              style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-            >
-              <div className="flex items-center gap-5">
-                <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                  <img
-                    src={stat.icon}
-                    alt={stat.label}
-                    className="w-7 h-7 object-contain"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[#0000FF]">
-                    {stat.label}
-                  </p>
-                  <p className="text-2xl font-bold text-[#0000FF]">{stat.value}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {isDisbursementLoading ? (
+            <StatsLoadingSkeleton count={3} />
+          ) : (
+            stats.map((stat, idx) => (
+              <div
+                key={idx}
+                className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
+                style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+              >
+                <div className="flex items-center gap-5">
+                  <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                    <img
+                      src={stat.icon}
+                      alt={stat.label}
+                      className="w-7 h-7 object-contain"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#0000FF]">
+                      {stat.label}
+                    </p>
+                    <p className="text-2xl font-bold text-[#0000FF]">{stat.value}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Disbursement Summary Section */}
@@ -354,9 +360,7 @@ const Loans_disbursement = () => {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div className="overflow-x-auto">
             {isDisbursementLoading ? (
-              <div className="py-16 text-center text-gray-500 text-lg">
-                Loading disbursements...
-              </div>
+              <LoadingSpinner message="Loading disbursements..." />
             ) : isDisbursementError ? (
               <div className="py-16 text-center text-red-500 text-lg">
                 Failed to load disbursements.

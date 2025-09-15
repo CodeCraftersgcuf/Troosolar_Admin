@@ -3,6 +3,8 @@ import Header from "../../component/Header";
 import { transactionData, getTransactionStatusColor } from './transaction';
 import type { TransactionData } from './transaction';
 import TransactionDetail from './TransactionDetail';
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+import StatsLoadingSkeleton from "../../components/common/StatsLoadingSkeleton";
 import images from "../../constants/images";
 
 //Code Related to Integration
@@ -132,60 +134,66 @@ const Transactions = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 h-[120px]">
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="flex items-center gap-5">
-              <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src="/assets/images/Users.png"
-                  alt="Total Users"
-                  className="w-6 h-6 object-contain"
-                />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {isLoading ? (
+            <StatsLoadingSkeleton count={3} />
+          ) : (
+            <>
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
+                style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+              >
+                <div className="flex items-center gap-5">
+                  <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                    <img
+                      src="/assets/images/Users.png"
+                      alt="Total Users"
+                      className="w-6 h-6 object-contain"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#0000FF]">Total Users</p>
+                    <p className="text-2xl font-bold text-[#0000FF]">{summary?.total_users || 0}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-[#0000FF]">Total Users</p>
-                <p className="text-2xl font-bold text-[#0000FF]">{summary?.total_users || 0}</p>
-              </div>
-            </div>
-          </div>
 
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src="/assets/images/Users.png"
-                  alt="Total Transactions"
-                  className="w-6 h-6 object-contain"
-                />
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
+                style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                    <img
+                      src="/assets/images/Users.png"
+                      alt="Total Transactions"
+                      className="w-6 h-6 object-contain"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#0000FF]">Total Transactions</p>
+                    <p className="text-2xl font-bold text-[#0000FF]">{summary?.total_transactions || 0}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-[#0000FF]">Total Transactions</p>
-                <p className="text-2xl font-bold text-[#0000FF]">{summary?.total_transactions || 0}</p>
-              </div>
-            </div>
-          </div>
 
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100"
-            style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                <img
-                  src="/assets/images/Users.png"
-                  alt="Transactions"
-                  className="w-6 h-6 object-contain"
-                />
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
+                style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                    <img
+                      src="/assets/images/Users.png"
+                      alt="Transactions"
+                      className="w-6 h-6 object-contain"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#0000FF]">Transactions</p>
+                    <p className="text-2xl font-bold text-[#0000FF]">₦{summary?.total_transaction_amount ? Number(summary.total_transaction_amount).toLocaleString() : 0}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-[#0000FF]">Transactions</p>
-                <p className="text-2xl font-bold text-[#0000FF]">₦{summary?.total_transaction_amount ? Number(summary.total_transaction_amount).toLocaleString() : 0}</p>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
 
         {/* Transaction Summary Section */}
@@ -286,7 +294,7 @@ const Transactions = () => {
         </div>
         {/* Transaction Table */}
         {isLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading transactions...</div>
+          <LoadingSpinner message="Loading transactions..." />
         ) : isError ? (
           <div className="py-8 text-center text-red-500">Failed to load transactions.</div>
         ) : filteredTransactionData.length === 0 ? (

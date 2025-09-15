@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import AddPartner from "./AddPartner";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
 
 //Code Related to Integration
 import { deletePartnerFinancing } from "../../utils/mutations/finance";
@@ -89,11 +90,11 @@ const FinancingPartner = () => {
         partners.map((p) =>
           p.id === editData.id
             ? {
-                ...p,
-                name: partnerData.partnerName,
-                status: partnerData.status,
-                // Optionally update other fields if needed
-              }
+              ...p,
+              name: partnerData.partnerName,
+              status: partnerData.status,
+              // Optionally update other fields if needed
+            }
             : p
         )
       );
@@ -161,9 +162,7 @@ const FinancingPartner = () => {
       {/* Partners Table */}
       <div className="bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden">
         {isLoading ? (
-          <div className="py-16 text-center text-gray-500 text-lg">
-            Loading partners...
-          </div>
+          <LoadingSpinner message="Loading partners..." />
         ) : isError ? (
           <div className="py-16 text-center text-red-500 text-lg">
             Failed to load partners.
@@ -211,9 +210,8 @@ const FinancingPartner = () => {
               {partners.map((partner, index) => (
                 <tr
                   key={partner.id}
-                  className={`${
-                    index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                  } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 `}
+                  className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                    } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 `}
                 >
                   <td className="px-8 py-4 text-center">
                     <div className="flex justify-center items-center space-x-1">
@@ -243,11 +241,10 @@ const FinancingPartner = () => {
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span
-                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                        partner.status === "Active"
+                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${partner.status === "Active"
                           ? "bg-green-100 text-green-800"
                           : "bg-red-100 text-red-800"
-                      }`}
+                        }`}
                     >
                       {partner.status}
                     </span>

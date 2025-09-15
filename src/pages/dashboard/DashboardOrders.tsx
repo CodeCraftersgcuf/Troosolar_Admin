@@ -25,7 +25,7 @@ const DashboardOrders: React.FC<DashboardOrdersProps> = ({ orders }) => (
           <div className="flex items-center space-x-3">
             <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
               <img
-                src={"/assets/images/newman1.png"}
+                src={order.image}
                 alt={order.name}
                 className="w-10 h-10 object-contain"
                 onError={(e) => {

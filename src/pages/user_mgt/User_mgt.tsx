@@ -46,37 +46,37 @@ const User_mgt: React.FC = () => {
   // Map API response to users table
   const apiUsers = data?.data?.["all users data"]
     ? data.data["all users data"].map((u: any) => ({
-        id: String(u.id),
-        name: `${u.first_name} ${u.sur_name}`,
-        email: u.email,
-        phone: u.phone,
-        bvn: u.bvn || "",
-        date: u.created_at
-          ? new Date(u.created_at).toLocaleDateString("en-GB")
-          : "",
-        is_active: u.is_active,
-      }))
+      id: String(u.id),
+      name: `${u.first_name} ${u.sur_name}`,
+      email: u.email,
+      phone: u.phone,
+      bvn: u.bvn || "",
+      date: u.created_at
+        ? new Date(u.created_at).toLocaleDateString("en-GB")
+        : "",
+      is_active: u.is_active,
+    }))
     : [];
 
   // Map API response to stats cards
   const stats = data?.data
     ? [
-        {
-          label: "Total Users",
-          value: data.data.total_users,
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "New Users",
-          value: data.data["new user"],
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "Users with Loans",
-          value: data.data["user with loan balance"],
-          icon: "/assets/images/Users.png",
-        },
-      ]
+      {
+        label: "Total Users",
+        value: data.data.total_users,
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "New Users",
+        value: data.data["new user"],
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "Users with Loans",
+        value: data.data["user with loan balance"],
+        icon: "/assets/images/Users.png",
+      },
+    ]
     : initialStats;
 
   // Filtering and actions
@@ -226,7 +226,7 @@ const User_mgt: React.FC = () => {
         <h1 className="text-2xl font-bold mb-6 text-gray-800">
           User Management
         </h1>
-        <UserMgtStats stats={stats} />
+        <UserMgtStats stats={stats} isLoading={isLoading} />
         <div className="mb-5">
           <h1 className="font-bold text-2xl">Users</h1>
         </div>
@@ -247,7 +247,12 @@ const User_mgt: React.FC = () => {
           searchTerm={searchTerm}
         />
         {isLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading users...</div>
+          <div className="py-8 text-center">
+            <div className="inline-flex items-center justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#273E8E]"></div>
+              <span className="ml-3 text-gray-500">Loading users...</span>
+            </div>
+          </div>
         ) : isError ? (
           <div className="py-8 text-center text-red-500">Failed to load users.</div>
         ) : (

@@ -338,29 +338,50 @@ const Loans_mgt = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {stats.map((stat, idx) => (
-            <div
-              key={idx}
-              className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
-              style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
-            >
-              <div className="flex items-center gap-5">
-                <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
-                  <img
-                    src={stat.icon}
-                    alt={stat.label}
-                    className="w-7 h-7 object-contain"
-                  />
-                </div>
-                <div>
-                  <p className="text-md font-medium text-[#0000FF]">
-                    {stat.label}
-                  </p>
-                  <p className="text-2xl font-bold text-[#0000FF]">{stat.value}</p>
+          {isLoansLoading ? (
+            // Show loading indicators for 3 stat cards
+            Array.from({ length: 3 }).map((_, idx) => (
+              <div
+                key={idx}
+                className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
+                style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+              >
+                <div className="flex items-center gap-5">
+                  <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#273E8E]"></div>
+                  </div>
+                  <div>
+                    <div className="h-4 bg-gray-200 rounded w-20 mb-2 animate-pulse"></div>
+                    <div className="h-8 bg-gray-200 rounded w-12 animate-pulse"></div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            stats.map((stat, idx) => (
+              <div
+                key={idx}
+                className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 h-[120px]"
+                style={{ boxShadow: "5px 5px 10px 0px rgba(109, 108, 108, 0.25)" }}
+              >
+                <div className="flex items-center gap-5">
+                  <div className="w-17 h-17 bg-[#0000FF33] rounded-full flex items-center justify-center">
+                    <img
+                      src={stat.icon}
+                      alt={stat.label}
+                      className="w-7 h-7 object-contain"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-md font-medium text-[#0000FF]">
+                      {stat.label}
+                    </p>
+                    <p className="text-2xl font-bold text-[#0000FF]">{stat.value}</p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Loans Summary Section */}
@@ -431,8 +452,11 @@ const Loans_mgt = () => {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div className="overflow-x-auto">
             {isLoansLoading ? (
-              <div className="py-16 text-center text-gray-500 text-lg">
-                Loading loans...
+              <div className="py-16 text-center">
+                <div className="inline-flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#273E8E]"></div>
+                  <span className="ml-3 text-gray-500 text-lg">Loading loans...</span>
+                </div>
               </div>
             ) : isLoansError ? (
               <div className="py-16 text-center text-red-500 text-lg">

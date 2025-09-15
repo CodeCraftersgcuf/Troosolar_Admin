@@ -4,6 +4,7 @@ import TransactionSummaryCards from "../../component/TransactionSummaryCards";
 import Header from "../../component/Header";
 import { users } from "../../constants/usermgt";
 import images from "../../constants/images";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
 
 //code related to API call
 import { getSingleTransaction } from "../../utils/queries/transactions";
@@ -289,8 +290,8 @@ const UserTransactions = () => {
   if (isApiLoading) {
     return (
       <div className="bg-[#F5F7FF] min-h-screen p-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Loading user...</h1>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <LoadingSpinner message="Loading user..." />
         </div>
       </div>
     );
@@ -395,7 +396,7 @@ const UserTransactions = () => {
         </div>
         {/* Summary Cards */}
         {isApiLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading summary...</div>
+          <LoadingSpinner message="Loading summary..." />
         ) : isApiError ? (
           <div className="py-8 text-center text-red-500">Failed to load summary.</div>
         ) : (
@@ -545,7 +546,7 @@ const UserTransactions = () => {
 
           {/* Table Container - Separate white background */}
           {isApiLoading ? (
-            <div className="py-8 text-center text-gray-500">Loading transactions...</div>
+            <LoadingSpinner message="Loading transactions..." />
           ) : isApiError ? (
             <div className="py-8 text-center text-red-500">Failed to load transactions.</div>
           ) : filteredTransactions.length === 0 ? (

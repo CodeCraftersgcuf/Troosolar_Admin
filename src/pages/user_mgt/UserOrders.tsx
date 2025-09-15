@@ -4,6 +4,7 @@ import Header from "../../component/Header";
 import { users } from "../../constants/usermgt";
 import OrderDetailModal from "../shop_mgt/OrderDetailModal";
 import type { ShopOrderData } from "../shop_mgt/shpmgt";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
 
 //Code Related to the Integration
 import { useQuery } from "@tanstack/react-query";
@@ -130,7 +131,7 @@ const UserOrders = () => {
         </div>
         {/* Summary Cards */}
         {isApiLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading orders summary...</div>
+          <LoadingSpinner message="Loading orders summary..." />
         ) : isApiError ? (
           <div className="py-8 text-center text-red-500">Failed to load orders summary.</div>
         ) : (
@@ -260,7 +261,7 @@ const UserOrders = () => {
         </div>
         {/* Orders Table */}
         {isApiLoading ? (
-          <div className="py-8 text-center text-gray-500">Loading orders...</div>
+          <LoadingSpinner message="Loading orders..." />
         ) : isApiError ? (
           <div className="py-8 text-center text-red-500">Failed to load orders.</div>
         ) : filteredOrders.length === 0 ? (

@@ -5,6 +5,7 @@ import images from "../../constants/images";
 import { getSingleUser } from "../../utils/queries/users";
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
 
 const activities = [
   { activity: "User Created account", date: "05-07-25/07:22AM" },
@@ -72,9 +73,7 @@ const UserActivity: React.FC = () => {
   if (isApiLoading) {
     return (
       <div className="bg-[#F5F7FF] min-h-screen flex items-center justify-center">
-        <div className="text-center text-gray-500 text-lg py-20">
-          Loading user details...
-        </div>
+        <LoadingSpinner message="Loading user details..." />
       </div>
     );
   }

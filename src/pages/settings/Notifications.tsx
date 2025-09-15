@@ -4,6 +4,7 @@ import type { NotificationItem } from "./notifications";
 import Banner from "./Banner";
 import NewNotificationModal from "./NewNotificationModal";
 import ConfirmDeleteModal from "./ConfirmDeleteModal";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
 
 // Integration
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -200,7 +201,7 @@ const Notifications = () => {
       {activeType === "notification" ? (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           {isLoading ? (
-            <div className="px-6 py-8 text-center text-gray-500">Loading notifications...</div>
+            <LoadingSpinner message="Loading notifications..." />
           ) : isError ? (
             <div className="px-6 py-8 text-center text-red-500">Failed to load notifications.</div>
           ) : (

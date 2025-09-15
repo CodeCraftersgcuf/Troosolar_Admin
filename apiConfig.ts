@@ -35,7 +35,7 @@ const API_ENDPOINTS = {
 
     // --- Orders (admin/shop) ---
     OrdersList: API_DOMAIN + "/orders", // GET
-        OrderShow: (id: number | string) => `${API_DOMAIN}/orders/${id}`, // GET
+    OrderShow: (id: number | string) => `${API_DOMAIN}/orders/${id}`, // GET
 
     OrderShowUser: (id: number | string) => `${API_DOMAIN}/orders/user/${id}`, // GET
 
@@ -52,7 +52,7 @@ const API_ENDPOINTS = {
     TransactionsList: API_DOMAIN + "/transactions", // GET
     TransactionShow: (id: number | string) =>
       `${API_DOMAIN}/transactions/user/${id}`, // GET
-    
+
     AllTransaction: API_DOMAIN + "/admin/users", // GET
 
     // --- Balances (admin) ---
@@ -61,7 +61,8 @@ const API_ENDPOINTS = {
     // --- Tickets ---
     AllTickets: API_DOMAIN + "/admin/tickets", // GET
     TicketShow: (id: number | string) => `${API_DOMAIN}/admin/tickets/${id}`, // GET
-    ReplyTicket: (id: number | string) => `${API_DOMAIN}/admin/tickets/${id}/reply`, // POST
+    ReplyTicket: (id: number | string) =>
+      `${API_DOMAIN}/admin/tickets/${id}/reply`, // POST
 
     // --- Admin notifications ---
     AdminNotificationsCreate: API_DOMAIN + "/admin/notifications", // POST
@@ -77,45 +78,34 @@ const API_ENDPOINTS = {
     // === Banner
     BannersList: API_DOMAIN + "/admin/banners", // GET
     AddBanner: API_DOMAIN + "/admin/banners", // POST
-    DeleteBanner: (id: number | string) =>
-      `${API_DOMAIN}/admin/banners/${id}`, // DELETE
-    UpdateBanner: (id: number | string) =>
-      `${API_DOMAIN}/admin/banners/${id}`, // POST
+    DeleteBanner: (id: number | string) => `${API_DOMAIN}/admin/banners/${id}`, // DELETE
+    UpdateBanner: (id: number | string) => `${API_DOMAIN}/admin/banners/${id}`, // POST
 
     // === Financing Partners
-    FinancingPartnersList: API_DOMAIN + "/all-partners", // GET
-    AddFinancingPartner: API_DOMAIN + "/add-partner", // POST
+    FinancingPartnersList: API_DOMAIN + "/admin/all-partners", // GET
+    AddFinancingPartner: API_DOMAIN + "/admin/add-partner", // POST
     DeleteFinancingPartner: (id: number | string) =>
-      `${API_DOMAIN}/delete_partner/${id}`, // DELETE
+      `${API_DOMAIN}/admin/delete_partner/${id}`, // DELETE
     UpdateFinancingPartner: (id: number | string) =>
-      `${API_DOMAIN}/update-partner/${id}`, // POST
+      `${API_DOMAIN}/admin/update-partner/${id}`, // POST
 
     // === Settings -- Categoriesq
     CategoriesList: API_DOMAIN + "/categories", // GET
     AddCategory: API_DOMAIN + "/categories", // POST
-    DeleteCategory: (id: number | string) =>
-      `${API_DOMAIN}/categories/${id}`, // DELETE
-    UpdateCategory: (id: number | string) =>
-      `${API_DOMAIN}/categories/${id}`, // POST
-
+    DeleteCategory: (id: number | string) => `${API_DOMAIN}/categories/${id}`, // DELETE
+    UpdateCategory: (id: number | string) => `${API_DOMAIN}/categories/${id}`, // POST
 
     // === Settings -- Brands
     BrandsList: API_DOMAIN + "/brands", // GET
     AddBrand: API_DOMAIN + "/brands", // POST
-    DeleteBrand: (id: number | string) =>
-      `${API_DOMAIN}/brands/${id}`, // DELETE
-    UpdateBrand: (id: number | string) =>
-      `${API_DOMAIN}/brands/${id}`, // POST
-    BrandById: (id: number | string) =>
-      `${API_DOMAIN}/brands/${id}`, // GET
+    DeleteBrand: (id: number | string) => `${API_DOMAIN}/brands/${id}`, // DELETE
+    UpdateBrand: (id: number | string) => `${API_DOMAIN}/brands/${id}`, // POST
+    BrandById: (id: number | string) => `${API_DOMAIN}/brands/${id}`, // GET
     BrandByCategory: (category: string) =>
       `${API_DOMAIN}/categories/${category}/brands`, // GET
     GetSingleBrandByCategory: (category: string, brandId: number | string) =>
       `${API_DOMAIN}/categories/${category}/brands/${brandId}`, // GET
-
   },
-
-
 };
 
 export { API_DOMAIN, API_ENDPOINTS };

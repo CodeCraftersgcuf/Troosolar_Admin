@@ -6,7 +6,7 @@ import DashboardLatestUsers from "./DashboardLatestUsers";
 import Header from "../../component/Header";
 
 //Code related to the Integration 
-import {getAdminDashboard} from "../../utils/queries/dashboard";
+import { getAdminDashboard } from "../../utils/queries/dashboard";
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 
@@ -43,72 +43,74 @@ const Dashboard: React.FC = () => {
     enabled: !!token,
   });
 
+  const Image_url = "https://troosolar.hmstech.org";
+
   // Map API response to dashboard stats
   const stats = data?.data?.counts
     ? [
-        {
-          title: "Total Users",
-          value: String(data.data.counts.total_users),
-          color: "text-blue-600",
-          icon: "/assets/images/Users.png",
-        },
-        {
-          title: "Total Loans",
-          value: String(data.data.counts.total_loans),
-          color: "text-red-600",
-          icon: "/assets/images/totalloans.png",
-        },
-        {
-          title: "Total Orders",
-          value: String(data.data.counts.total_orders),
-          color: "text-purple-600",
-          icon: "/assets/images/totalorders.png",
-        },
-        {
-          title: "Loans",
-          value: `₦${data.data.counts.loan_amount}`,
-          color: "text-green-600",
-          icon: "/assets/images/loans.png",
-        },
-      ]
+      {
+        title: "Total Users",
+        value: String(data.data.counts.total_users),
+        color: "text-blue-600",
+        icon: "/assets/images/Users.png",
+      },
+      {
+        title: "Total Loans",
+        value: String(data.data.counts.total_loans),
+        color: "text-red-600",
+        icon: "/assets/images/totalloans.png",
+      },
+      {
+        title: "Total Orders",
+        value: String(data.data.counts.total_orders),
+        color: "text-purple-600",
+        icon: "/assets/images/totalorders.png",
+      },
+      {
+        title: "Loans",
+        value: `₦${data.data.counts.loan_amount}`,
+        color: "text-green-600",
+        icon: "/assets/images/loans.png",
+      },
+    ]
     : staticStats;
 
   // Map API response to chart data
   // Correct chart data mapping for Chart.js
   const chartData = data?.data?.chart
     ? {
-        labels: data.data.chart.map((item: any) => item.month),
-        datasets: [
-          {
-            label: "Approved loans",
-            data: data.data.chart.map((item: any) => Number(item.approved_loan)),
-            backgroundColor: "#D4A216",
-            barPercentage: 0.7,
-            categoryPercentage: 0.7,
-          },
-          {
-            label: "Pending loans",
-            data: data.data.chart.map((item: any) => Number(item.pending_loan)),
-            backgroundColor: "#1D4ED8",
-            barPercentage: 0.7,
-            categoryPercentage: 0.7,
-          },
-          {
-            label: "Overdue loans",
-            data: data.data.chart.map((item: any) => Number(item.overdue_loan)),
-            backgroundColor: "#DC2626",
-            barPercentage: 0.7,
-            categoryPercentage: 0.7,
-          },
-          {
-            label: "Total Orders",
-            data: data.data.chart.map((item: any) => Number(item.orders)),
-            backgroundColor: "#000000",
-            barPercentage: 0.7,
-            categoryPercentage: 0.7,
-          },
-        ],
-      }
+      labels: data.data.chart.map((item: any) => item.month),
+      datasets: [
+        {
+          label: "Approved loans",
+          data: data.data.chart.map((item: any) => Number(item.approved_loan)),
+          backgroundColor: "#D4A216",
+          barPercentage: 0.7,
+          categoryPercentage: 0.7,
+        },
+        {
+          label: "Pending loans",
+          data: data.data.chart.map((item: any) => Number(item.pending_loan)),
+          backgroundColor: "#1D4ED8",
+          barPercentage: 0.7,
+          categoryPercentage: 0.7,
+        },
+        {
+          label: "Overdue loans",
+          data: data.data.chart.map((item: any) => Number(item.overdue_loan)),
+          backgroundColor: "#DC2626",
+          barPercentage: 0.7,
+          categoryPercentage: 0.7,
+        },
+        {
+          label: "Total Orders",
+          data: data.data.chart.map((item: any) => Number(item.orders)),
+          backgroundColor: "#000000",
+          barPercentage: 0.7,
+          categoryPercentage: 0.7,
+        },
+      ],
+    }
     : staticChartData;
 
   // Dynamically calculate max Y value for chart
@@ -173,21 +175,22 @@ const Dashboard: React.FC = () => {
   // Map API response to latest orders
   const latestOrders = data?.data?.latest_orders
     ? data.data.latest_orders.slice(0, 3).map((order: any) => ({
-        name: order.product,
-        price: `₦${order.total_price}`,
-        user: order.customer,
-      }))
+      name: order.product,
+      price: `₦${order.total_price}`,
+      user: order.customer,
+      image: `${Image_url}${order.product_image}`,
+    }))
     : [];
 
   // Map API response to latest users
   const latestUsers = data?.data?.latest_users
     ? data.data.latest_users.slice(0, 3).map((user: any) => ({
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        bvn: "", // Not provided in API response
-        date: user.created_at,
-      }))
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      bvn: "", // Not provided in API response
+      date: user.created_at,
+    }))
     : [];
 
   return (
