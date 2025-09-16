@@ -71,7 +71,7 @@ const Loans_mgt = () => {
   const [showSendToPartnerModal, setShowSendToPartnerModal] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -166,58 +166,59 @@ const Loans_mgt = () => {
     enabled: !!token,
   });
 
+  console.log("Loan API Data:", loanApiData);
   // Parse API response to get stats and loan list
   const stats = loanApiData?.data
     ? [
-        {
-          label: "Total Loans",
-          value: loanApiData.data["total loans"] ?? 0,
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "Loans Sent",
-          value: loanApiData.data["loan send"] ?? 0,
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "Loan Approved",
-          value: loanApiData.data["loan approved"] ?? 0,
-          icon: "/assets/images/Users.png",
-        },
-      ]
+      {
+        label: "Total Loans",
+        value: loanApiData.data["total loans"] ?? 0,
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "Loans Sent",
+        value: loanApiData.data["loan send"] ?? 0,
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "Loan Approved",
+        value: loanApiData.data["loan approved"] ?? 0,
+        icon: "/assets/images/Users.png",
+      },
+    ]
     : [
-        {
-          label: "Total Loans",
-          value: 0,
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "Loans Sent",
-          value: 0,
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "Loan Approved",
-          value: 0,
-          icon: "/assets/images/Users.png",
-        },
-      ];
+      {
+        label: "Total Loans",
+        value: 0,
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "Loans Sent",
+        value: 0,
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "Loan Approved",
+        value: 0,
+        icon: "/assets/images/Users.png",
+      },
+    ];
 
   // Convert API loan objects to array
   const apiLoanList = loanApiData?.data
     ? Object.keys(loanApiData.data)
-        .filter((key) => !isNaN(Number(key)))
-        .map((key, idx) => {
-          const loan = loanApiData.data[key];
-          return {
-            id: idx,
-            name: loan?.name || "Unknown",
-            amount: loan?.Amount || "N/A",
-            date: loan?.date || "N/A",
-            sendStatus: loan?.["send status"] || "Pending",
-            approval: loan?.["approval status"] || "Pending",
-          };
-        })
+      .filter((key) => !isNaN(Number(key)))
+      .map((key, idx) => {
+        const loan = loanApiData.data[key];
+        return {
+          id: loan?.id || idx, // Use actual loan ID from API (15, 16, etc.), fallback to index
+          name: loan?.name || "Unknown",
+          amount: loan?.amount || "N/A", // Use 'amount' field from your API response
+          date: loan?.date || "N/A",
+          sendStatus: loan?.send_status || "Pending", // Use 'send_status' field from your API response
+          approval: loan?.approval_status || "Pending", // Use 'approval_status' field from your API response
+        };
+      })
     : [];
 
   // Filter loan data based on selected filters and search term
@@ -254,9 +255,9 @@ const Loans_mgt = () => {
       {/* KYC Profile Modal */}
       {selectedUser && (
         <KycProfile
+          userId={selectedUser.id}
           isOpen={showKycModal}
           onClose={() => setShowKycModal(false)}
-          userId={selectedUser.id}
           userName={selectedUser.name}
           userEmail={selectedUser.email}
           userPhone={selectedUser.phone}
@@ -512,9 +513,8 @@ const Loans_mgt = () => {
                   {currentLoans.map((loan, index) => (
                     <tr
                       key={loan.id}
-                      className={`${
-                        index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                      } transition-colors border-b border-gray-100 last:border-b-0`}
+                      className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                        } transition-colors border-b border-gray-100 last:border-b-0`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <input type="checkbox" className="rounded " />
@@ -540,12 +540,12 @@ const Loans_mgt = () => {
                                 (loan.sendStatus || "").toLowerCase() === "completed"
                                   ? "#008000"
                                   : (loan.sendStatus || "").toLowerCase() === "pending"
-                                  ? "#FF8C00"
-                                  : (loan.sendStatus || "").toLowerCase() === "delivered"
-                                  ? "#008000"
-                                  : (loan.sendStatus || "").toLowerCase() === "rejected"
-                                  ? "#FF0000"
-                                  : "#6B7280",
+                                    ? "#FF8C00"
+                                    : (loan.sendStatus || "").toLowerCase() === "delivered"
+                                      ? "#008000"
+                                      : (loan.sendStatus || "").toLowerCase() === "rejected"
+                                        ? "#FF0000"
+                                        : "#6B7280",
                             }}
                           ></span>
                           {loan.sendStatus || "Pending"}
@@ -563,12 +563,12 @@ const Loans_mgt = () => {
                                 (loan.approval || "").toLowerCase() === "completed"
                                   ? "#008000"
                                   : (loan.approval || "").toLowerCase() === "pending"
-                                  ? "#FF8C00"
-                                  : (loan.approval || "").toLowerCase() === "delivered"
-                                  ? "#008000"
-                                  : (loan.approval || "").toLowerCase() === "rejected"
-                                  ? "#FF0000"
-                                  : "#6B7280",
+                                    ? "#FF8C00"
+                                    : (loan.approval || "").toLowerCase() === "delivered"
+                                      ? "#008000"
+                                      : (loan.approval || "").toLowerCase() === "rejected"
+                                        ? "#FF0000"
+                                        : "#6B7280",
                             }}
                           ></span>
                           {loan.approval || "Pending"}
@@ -589,7 +589,7 @@ const Loans_mgt = () => {
               </table>
             )}
           </div>
-          
+
           {/* Pagination Controls */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
@@ -598,21 +598,20 @@ const Loans_mgt = () => {
                   Showing {startIndex + 1} to {Math.min(endIndex, filteredLoanData.length)} of {filteredLoanData.length} results
                 </span>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 {/* Previous Button */}
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                    currentPage === 1
-                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
-                  }`}
+                  className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === 1
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                    }`}
                 >
                   Previous
                 </button>
-                
+
                 {/* Page Numbers */}
                 <div className="flex items-center space-x-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -626,32 +625,30 @@ const Loans_mgt = () => {
                     } else {
                       pageNumber = currentPage - 2 + i;
                     }
-                    
+
                     return (
                       <button
                         key={pageNumber}
                         onClick={() => setCurrentPage(pageNumber)}
-                        className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                          currentPage === pageNumber
-                            ? 'bg-[#273E8E] text-white border-[#273E8E]'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                        }`}
+                        className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === pageNumber
+                          ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
                       >
                         {pageNumber}
                       </button>
                     );
                   })}
                 </div>
-                
+
                 {/* Next Button */}
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                    currentPage === totalPages
-                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
-                  }`}
+                  className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === totalPages
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                    }`}
                 >
                   Next
                 </button>
