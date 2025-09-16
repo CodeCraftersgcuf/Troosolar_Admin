@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from "react";
 import type { User } from "../../constants/usermgt";
- import images from "../../constants/images";
+import images from "../../constants/images";
+
+
+//Code Related to the Integration
+import { getUserKycDetail } from "../../utils/queries/user_kyc";
+import { useQuery } from "@tanstack/react-query";
+import Cookies from "js-cookie";
 
 
 
@@ -23,6 +29,17 @@ const KycModal: React.FC<KycModalProps> = ({
   const [activeKycSubTab, setActiveKycSubTab] = useState<
     "document" | "beneficiary" | "loanDetails"
   >("document");
+
+  const token = Cookies.get("token");
+
+  // Fetch KYC details from API
+  const { data: kycApiData, isLoading: isKycLoading, isError: isKycError } = useQuery({
+    queryKey: ["user-kyc-detail", user.id],
+    queryFn: () => getUserKycDetail(user.id, token || ""),
+    enabled: !!token && !!user.id && isOpen,
+  });
+
+  console.log("KYC API Data:", kycApiData);
 
   // Helper functions for user-specific data
   const getUserBankName = (userId: number) => {
@@ -205,97 +222,105 @@ const KycModal: React.FC<KycModalProps> = ({
           {/* Personal Details Content */}
           {activeKycTab === "personal" && (
             <div className="p-5">
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">
-                  First Name
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded p-2 text-sm"
-                  placeholder="Enter your first name"
-                  value={personalData.firstName}
-                  onChange={(e) =>
-                    setPersonalData({
-                      ...personalData,
-                      firstName: e.target.value,
-                    })
-                  }
-                />
-              </div>
+              {isKycLoading ? (
+                <div className="text-center py-8">
+                  <div className="text-gray-500">Loading personal details...</div>
+                </div>
+              ) : isKycError ? (
+                <div className="text-center py-8">
+                  <div className="text-red-500">Failed to load personal details.</div>
+                </div>
+              ) : kycApiData?.data?.user ? (
+                <div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">
+                      First Name
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      value={kycApiData.data.user.first_name || "N/A"}
+                      readOnly
+                    />
+                  </div>
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">
-                  Surname
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded p-2 text-sm"
-                  placeholder="Enter your surname"
-                  value={personalData.surname}
-                  onChange={(e) =>
-                    setPersonalData({
-                      ...personalData,
-                      surname: e.target.value,
-                    })
-                  }
-                />
-              </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">
+                      Surname
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      value={kycApiData.data.user.sur_name || "N/A"}
+                      readOnly
+                    />
+                  </div>
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  className="w-full border border-gray-300 rounded p-2 text-sm"
-                  placeholder="Enter your email address"
-                  value={personalData.email}
-                  onChange={(e) =>
-                    setPersonalData({
-                      ...personalData,
-                      email: e.target.value,
-                    })
-                  }
-                />
-              </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      value={kycApiData.data.user.email || "N/A"}
+                      readOnly
+                    />
+                  </div>
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">
-                  Phone Number
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded p-2 text-sm"
-                  placeholder="Enter your phone number"
-                  value={personalData.phone}
-                  onChange={(e) =>
-                    setPersonalData({
-                      ...personalData,
-                      phone: e.target.value,
-                    })
-                  }
-                />
-              </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">
+                      Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      value={kycApiData.data.user.phone || "N/A"}
+                      readOnly
+                    />
+                  </div>
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-1">BVN</label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded p-2 text-sm"
-                  placeholder="BVN Number"
-                  value={personalData.bvn}
-                  onChange={(e) =>
-                    setPersonalData({ ...personalData, bvn: e.target.value })
-                  }
-                />
-              </div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">
+                      User Code
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      value={kycApiData.data.user.user_code || "N/A"}
+                      readOnly
+                    />
+                  </div>
 
-              <button
-                className="w-full bg-[#273E8E] text-white py-3 rounded-full mt-8 cursor-pointer"
-                onClick={savePersonalDetails}
-              >
-                Save
-              </button>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">
+                      Referral Code
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      value={kycApiData.data.user.refferal_code || "N/A"}
+                      readOnly
+                    />
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium mb-1">
+                      Account Status
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded p-2 text-sm"
+                      value={kycApiData.data.user.is_active ? "Active" : "Inactive"}
+                      readOnly
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-500">No personal data available.</div>
+                </div>
+              )}
             </div>
           )}
 
@@ -430,243 +455,281 @@ const KycModal: React.FC<KycModalProps> = ({
               {/* Document Content */}
               {activeKycSubTab === "document" && (
                 <div>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-1">
-                      Select Document
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        className="w-full border border-gray-300 rounded p-2 pr-8 text-sm"
-                        placeholder="Select Document"
-                        value={kycData.selectedDocument}
-                        onChange={(e) =>
-                          setKycData({
-                            ...kycData,
-                            selectedDocument: e.target.value,
-                          })
-                        }
-                      />
-                      <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M6 9L12 15L18 9"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </div>
+                  {isKycLoading ? (
+                    <div className="text-center py-8">
+                      <div className="text-gray-500">Loading document details...</div>
                     </div>
-                  </div>
+                  ) : isKycError ? (
+                    <div className="text-center py-8">
+                      <div className="text-red-500">Failed to load document details.</div>
+                    </div>
+                  ) : kycApiData?.data?.loan_application ? (
+                    <div>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Document Type
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border border-gray-300 rounded p-2 text-sm"
+                          value={kycApiData.data.loan_application.title_document || "N/A"}
+                          readOnly
+                        />
+                      </div>
 
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-1">
-                      Upload Document
-                    </label>
-                    <div className="border border-dashed border-gray-300 rounded-md p-6 text-center">
-                      <div className="flex justify-center mb-2">
-                        <svg
-                          width="48"
-                          height="48"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <rect
-                            x="4"
-                            y="2"
-                            width="16"
-                            height="20"
-                            rx="2"
-                            stroke="#D1D5DB"
-                            strokeWidth="2"
-                          />
-                          <path
-                            d="M8 10H16"
-                            stroke="#D1D5DB"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                          />
-                          <path
-                            d="M8 14H16"
-                            stroke="#D1D5DB"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                          />
-                          <path
-                            d="M8 18H12"
-                            stroke="#D1D5DB"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                          />
-                        </svg>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Uploaded Document
+                        </label>
+                        {kycApiData.data.loan_application.upload_document ? (
+                          <div className="border border-gray-300 rounded-md p-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                                  <svg
+                                    width="24"
+                                    height="24"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    <rect
+                                      x="4"
+                                      y="2"
+                                      width="16"
+                                      height="20"
+                                      rx="2"
+                                      stroke="#6B7280"
+                                      strokeWidth="2"
+                                    />
+                                    <path
+                                      d="M8 10H16"
+                                      stroke="#6B7280"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                    />
+                                    <path
+                                      d="M8 14H16"
+                                      stroke="#6B7280"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                    />
+                                    <path
+                                      d="M8 18H12"
+                                      stroke="#6B7280"
+                                      strokeWidth="2"
+                                      strokeLinecap="round"
+                                    />
+                                  </svg>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {kycApiData.data.loan_application.title_document || "Document"}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {kycApiData.data.loan_application.upload_document}
+                                  </p>
+                                </div>
+                              </div>
+                              <a
+                                href={`https://troosolar.hmstech.org/${kycApiData.data.loan_application.upload_document}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                              >
+                                View
+                              </a>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="border border-dashed border-gray-300 rounded-md p-6 text-center">
+                            <div className="flex justify-center mb-2">
+                              <svg
+                                width="48"
+                                height="48"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <rect
+                                  x="4"
+                                  y="2"
+                                  width="16"
+                                  height="20"
+                                  rx="2"
+                                  stroke="#D1D5DB"
+                                  strokeWidth="2"
+                                />
+                                <path
+                                  d="M8 10H16"
+                                  stroke="#D1D5DB"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                                <path
+                                  d="M8 14H16"
+                                  stroke="#D1D5DB"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                                <path
+                                  d="M8 18H12"
+                                  stroke="#D1D5DB"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            </div>
+                            <p className="text-gray-500 text-sm">
+                              No document uploaded
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-gray-500 text-sm">
-                        Select a clear copy of your document to upload
-                      </p>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="text-gray-500">No document data available.</div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Beneficiary Content */}
               {activeKycSubTab === "beneficiary" && (
                 <div>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-1">
-                      Beneficiary Name
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full border border-gray-300 rounded p-2 text-sm"
-                      placeholder="Enter beneficiary name"
-                      value={kycData.beneficiaryName}
-                      onChange={(e) =>
-                        setKycData({
-                          ...kycData,
-                          beneficiaryName: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
+                  {isKycLoading ? (
+                    <div className="text-center py-8">
+                      <div className="text-gray-500">Loading beneficiary details...</div>
+                    </div>
+                  ) : isKycError ? (
+                    <div className="text-center py-8">
+                      <div className="text-red-500">Failed to load beneficiary details.</div>
+                    </div>
+                  ) : kycApiData?.data?.loan_application ? (
+                    <div>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Beneficiary Name
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border border-gray-300 rounded p-2 text-sm"
+                          value={kycApiData.data.loan_application.beneficiary_name || "N/A"}
+                          readOnly
+                        />
+                      </div>
 
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-1">
-                      Beneficiary Relationship
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        className="w-full border border-gray-300 rounded p-2 pr-8 text-sm"
-                        placeholder="Select Relationship"
-                        value={kycData.beneficiaryRelationship}
-                        onChange={(e) =>
-                          setKycData({
-                            ...kycData,
-                            beneficiaryRelationship: e.target.value,
-                          })
-                        }
-                      />
-                      <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M6 9L12 15L18 9"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Beneficiary Relationship
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border border-gray-300 rounded p-2 text-sm"
+                          value={kycApiData.data.loan_application.beneficiary_relationship || "N/A"}
+                          readOnly
+                        />
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Beneficiary Email
+                        </label>
+                        <input
+                          type="email"
+                          className="w-full border border-gray-300 rounded p-2 text-sm"
+                          value={kycApiData.data.loan_application.beneficiary_email || "N/A"}
+                          readOnly
+                        />
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Beneficiary Phone Number
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border border-gray-300 rounded p-2 text-sm"
+                          value={kycApiData.data.loan_application.beneficiary_phone || "N/A"}
+                          readOnly
+                        />
                       </div>
                     </div>
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-1">
-                      Beneficiary Email
-                    </label>
-                    <input
-                      type="email"
-                      className="w-full border border-gray-300 rounded p-2 text-sm"
-                      placeholder="Enter beneficiary email"
-                      value={kycData.beneficiaryEmail}
-                      onChange={(e) =>
-                        setKycData({
-                          ...kycData,
-                          beneficiaryEmail: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-1">
-                      Beneficiary Phone Number
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full border border-gray-300 rounded p-2 text-sm"
-                      placeholder="Enter beneficiary phone number"
-                      value={kycData.beneficiaryPhone}
-                      onChange={(e) =>
-                        setKycData({
-                          ...kycData,
-                          beneficiaryPhone: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="text-gray-500">No beneficiary data available.</div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Loan Details Content */}
               {activeKycSubTab === "loanDetails" && (
                 <div>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-1">
-                      Loan Amount
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full border border-gray-300 rounded p-2 text-sm"
-                      placeholder="Enter Loan Amount"
-                      value={kycData.loanAmount}
-                      onChange={(e) =>
-                        setKycData({ ...kycData, loanAmount: e.target.value })
-                      }
-                    />
-                  </div>
+                  {isKycLoading ? (
+                    <div className="text-center py-8">
+                      <div className="text-gray-500">Loading loan details...</div>
+                    </div>
+                  ) : isKycError ? (
+                    <div className="text-center py-8">
+                      <div className="text-red-500">Failed to load loan details.</div>
+                    </div>
+                  ) : kycApiData?.data?.loan_application ? (
+                    <div>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Loan Amount
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border border-gray-300 rounded p-2 text-sm"
+                          value={kycApiData.data.loan_application.loan_amount ? `₦${kycApiData.data.loan_application.loan_amount.toLocaleString()}` : "N/A"}
+                          readOnly
+                        />
+                      </div>
 
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-1">
-                      Repayment Duration
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        className="w-full border border-gray-300 rounded p-2 pr-8 text-sm"
-                        placeholder="Select Duration"
-                        value={kycData.repaymentDuration}
-                        onChange={(e) =>
-                          setKycData({
-                            ...kycData,
-                            repaymentDuration: e.target.value,
-                          })
-                        }
-                      />
-                      <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M6 9L12 15L18 9"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Repayment Duration
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border border-gray-300 rounded p-2 text-sm"
+                          value={kycApiData.data.loan_application.repayment_duration ? `${kycApiData.data.loan_application.repayment_duration} months` : "N/A"}
+                          readOnly
+                        />
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Application Status
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border border-gray-300 rounded p-2 text-sm"
+                          value={kycApiData.data.loan_application.status || "Pending"}
+                          readOnly
+                        />
+                      </div>
+
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-1">
+                          Created Date
+                        </label>
+                        <input
+                          type="text"
+                          className="w-full border border-gray-300 rounded p-2 text-sm"
+                          value={kycApiData.data.loan_application.created_at ? new Date(kycApiData.data.loan_application.created_at).toLocaleDateString() : "N/A"}
+                          readOnly
+                        />
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <div className="text-gray-500">No loan details available.</div>
+                    </div>
+                  )}
                 </div>
               )}
 

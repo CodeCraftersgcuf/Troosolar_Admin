@@ -371,7 +371,7 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                 </div>
                 <div className="text-3xl font-bold mb-2">
                   {apiWalletInfo.shop_balance !== undefined &&
-                  apiWalletInfo.shop_balance !== null
+                    apiWalletInfo.shop_balance !== null
                     ? `₦${apiWalletInfo.shop_balance}`
                     : "N/A"}
                 </div>
@@ -470,9 +470,8 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                   {apiLoans.map((loan: ApiLoan, idx: number) => (
                     <tr
                       key={loan.loan_application_id}
-                      className={`${
-                        idx % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                      } hover:bg-gray-50`}
+                      className={`${idx % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                        } hover:bg-gray-50`}
                     >
                       <td className="p-4 text-center">
                         <input className="cursor-pointer" type="checkbox" />
@@ -486,16 +485,16 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                       <td className="p-4 text-center">
                         {loan.created_at
                           ? new Date(loan.created_at)
-                              .toLocaleString("en-GB", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "2-digit",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                hour12: true,
-                              })
-                              .replace(/\//g, "-")
-                              .replace(",", "/")
+                            .toLocaleString("en-GB", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true,
+                            })
+                            .replace(/\//g, "-")
+                            .replace(",", "/")
                           : "-"}
                       </td>
                       <td className="p-4 text-center">

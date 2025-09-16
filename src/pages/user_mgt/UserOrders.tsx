@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import Header from "../../component/Header";
 import OrderDetailModal from "../shop_mgt/OrderDetailModal";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
@@ -51,6 +51,10 @@ const UserOrders = () => {
   const [selectedOrder, setSelectedOrder] = useState<OrderForModal | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const statusDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   const token = Cookies.get("token");
   const tabs = ["Activity", "Loans", "Transactions", "Orders"];
 
@@ -115,6 +119,17 @@ const UserOrders = () => {
     return true;
   });
 
+  // Pagination logic
+  const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentOrders = filteredOrders.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedFilter, searchTerm]);
+
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
       <Header
@@ -133,11 +148,10 @@ const UserOrders = () => {
               <button
                 key={tab}
                 onClick={() => handleTabClick(tab)}
-                className={`py-2 px-1 border-b-2 font-medium cursor-pointer text-md ${
-                  activeTab === tab
+                className={`py-2 px-1 border-b-2 font-medium cursor-pointer text-md ${activeTab === tab
                     ? "text-black border-b-4 border-[#273E8E]"
                     : "text-[#00000080] border-transparent "
-                }`}
+                  }`}
               >
                 {tab}
               </button>
@@ -196,11 +210,10 @@ const UserOrders = () => {
                   <button
                     key={filter}
                     onClick={() => setSelectedFilter(filter)}
-                    className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors cursor-pointer  ${
-                      selectedFilter === filter
+                    className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors cursor-pointer  ${selectedFilter === filter
                         ? 'bg-[#273E8E] text-white'
                         : 'text-[#000000B2] '
-                    }`}
+                      }`}
                   >
                     {filter}
                   </button>
@@ -289,8 +302,8 @@ const UserOrders = () => {
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
               <p className="text-gray-500 mb-6">
-                {apiOrders.length === 0 
-                  ? "This user hasn't placed any orders yet." 
+                {apiOrders.length === 0
+                  ? "This user hasn't placed any orders yet."
                   : "No orders match your current filters."}
               </p>
               {apiOrders.length === 0 && (
@@ -321,7 +334,7 @@ const UserOrders = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white">
-                  {filteredOrders.map((order: ApiOrder, index: number) => (
+                  {currentOrders.map((order: ApiOrder, index: number) => (
                     <tr
                       key={order.id}
                       className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"} transition-colors border-b border-gray-100 last:border-b-0`}
@@ -348,12 +361,12 @@ const UserOrders = () => {
                             order.order_status === "ordered"
                               ? { backgroundColor: "#E9F0FF", color: "#273E8E" }
                               : order.order_status === "pending"
-                              ? { backgroundColor: "#FFF3E0", color: "#FF8C00" }
-                              : order.order_status === "delivered"
-                              ? { backgroundColor: "#EEFBEE", color: "#008000" }
-                              : order.order_status === "rejected"
-                              ? { backgroundColor: "#FFEAEA", color: "#FF0000" }
-                              : { backgroundColor: "#F3F4F6", color: "#6B7280" }
+                                ? { backgroundColor: "#FFF3E0", color: "#FF8C00" }
+                                : order.order_status === "delivered"
+                                  ? { backgroundColor: "#EEFBEE", color: "#008000" }
+                                  : order.order_status === "rejected"
+                                    ? { backgroundColor: "#FFEAEA", color: "#FF0000" }
+                                    : { backgroundColor: "#F3F4F6", color: "#6B7280" }
                           }
                         >
                           <span
@@ -363,12 +376,12 @@ const UserOrders = () => {
                                 order.order_status === "ordered"
                                   ? "#273E8E"
                                   : order.order_status === "pending"
-                                  ? "#FF8C00"
-                                  : order.order_status === "delivered"
-                                  ? "#008000"
-                                  : order.order_status === "rejected"
-                                  ? "#FF0000"
-                                  : "#6B7280",
+                                    ? "#FF8C00"
+                                    : order.order_status === "delivered"
+                                      ? "#008000"
+                                      : order.order_status === "rejected"
+                                        ? "#FF0000"
+                                        : "#6B7280",
                             }}
                           ></span>
                           {order.order_status}
@@ -406,6 +419,70 @@ const UserOrders = () => {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white mt-4 rounded-lg shadow-sm">
+            <div className="flex items-center text-sm text-gray-700">
+              <span>
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} results
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {/* Previous Button */}
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                  }`}
+              >
+                Previous
+              </button>
+
+              {/* Page Numbers */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNumber;
+                if (totalPages <= 5) {
+                  pageNumber = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNumber = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNumber = totalPages - 4 + i;
+                } else {
+                  pageNumber = currentPage - 2 + i;
+                }
+
+                return (
+                  <button
+                    key={pageNumber}
+                    onClick={() => setCurrentPage(pageNumber)}
+                    className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === pageNumber
+                      ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                  >
+                    {pageNumber}
+                  </button>
+                );
+              })}
+
+              {/* Next Button */}
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                  }`}
+              >
+                Next
+              </button>
             </div>
           </div>
         )}
