@@ -12,6 +12,7 @@ export type Order = {
 };
 
 export type User = {
+  id: string;
   name: string;
   email: string;
   phone: string;
@@ -100,6 +101,7 @@ export const latestOrders: Order[] = [
 
 export const latestUsers: User[] = [
   {
+    id: "3",
     name: "Anita Becker",
     email: "abcdefg@gmail.com",
     phone: "07021234567",
@@ -107,6 +109,7 @@ export const latestUsers: User[] = [
     date: "05-07-25/07:22AM",
   },
   {
+    id: "4",
     name: "Rasheedat Bello",
     email: "abcdefg@gmail.com",
     phone: "07021234567",
@@ -114,6 +117,7 @@ export const latestUsers: User[] = [
     date: "05-07-25/07:22AM",
   },
   {
+    id: "5",
     name: "Adewale Ade",
     email: "abcdefg@gmail.com",
     phone: "07021234567",

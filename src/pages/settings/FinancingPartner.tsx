@@ -28,6 +28,10 @@ const FinancingPartner = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [partnerToDelete, setPartnerToDelete] = useState<Partner | null>(null);
   const [apiMessage, setApiMessage] = useState<string>("");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   // Fetch partners from API
   const token = Cookies.get("token");
@@ -140,6 +144,12 @@ const FinancingPartner = () => {
     setPartnerToDelete(null);
   };
 
+  // Pagination logic
+  const totalPages = Math.ceil(partners.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentPartners = partners.slice(startIndex, endIndex);
+
   return (
     <div className="w-full">
       {/* Add New Partner Button */}
@@ -207,7 +217,7 @@ const FinancingPartner = () => {
 
             {/* Table Body */}
             <tbody className="divide-y divide-gray-100">
-              {partners.map((partner, index) => (
+              {currentPartners.map((partner, index) => (
                 <tr
                   key={partner.id}
                   className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
@@ -269,6 +279,75 @@ const FinancingPartner = () => {
               ))}
             </tbody>
           </table>
+        )}
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+            <div className="flex items-center text-sm text-gray-700">
+              <span>
+                Showing {startIndex + 1} to {Math.min(endIndex, partners.length)} of {partners.length} results
+              </span>
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              {/* Previous Button */}
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                  currentPage === 1
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                }`}
+              >
+                Previous
+              </button>
+              
+              {/* Page Numbers */}
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNumber;
+                  if (totalPages <= 5) {
+                    pageNumber = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNumber = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNumber = totalPages - 4 + i;
+                  } else {
+                    pageNumber = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNumber}
+                      onClick={() => setCurrentPage(pageNumber)}
+                      className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                        currentPage === pageNumber
+                          ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNumber}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              {/* Next Button */}
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                  currentPage === totalPages
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                }`}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

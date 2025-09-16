@@ -32,6 +32,7 @@ const User_mgt: React.FC = () => {
     email: "",
     phone: "",
     bvn: "",
+    password: "",
   });
 
   // API integration for users
@@ -92,6 +93,10 @@ const User_mgt: React.FC = () => {
   // Filtering and actions
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedMoreAction, setSelectedMoreAction] = useState("More Actions");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   // Use useMemo instead of useEffect + setState to avoid update loops
   const filteredUsers = React.useMemo(() => {
@@ -115,6 +120,17 @@ const User_mgt: React.FC = () => {
 
     return filtered;
   }, [apiUsers, users, searchTerm, selectedMoreAction]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentUsers = filteredUsers.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedMoreAction]);
 
   // Handle search
   const handleSearch = (term: string) => {
@@ -213,13 +229,84 @@ const User_mgt: React.FC = () => {
         ) : isError ? (
           <div className="py-8 text-center text-red-500">Failed to load users.</div>
         ) : (
-          <UserMgtUsersTable
-            users={filteredUsers}
-            dotsDropdownRefs={dotsDropdownRefs}
-            openDropdownIndex={openDropdownIndex}
-            setOpenDropdownIndex={setOpenDropdownIndex}
-            navigate={navigate}
-          />
+          <>
+            <UserMgtUsersTable
+              users={currentUsers}
+              dotsDropdownRefs={dotsDropdownRefs}
+              openDropdownIndex={openDropdownIndex}
+              setOpenDropdownIndex={setOpenDropdownIndex}
+              navigate={navigate}
+            />
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white mt-4 rounded-lg shadow-sm">
+                <div className="flex items-center text-sm text-gray-700">
+                  <span>
+                    Showing {startIndex + 1} to {Math.min(endIndex, filteredUsers.length)} of {filteredUsers.length} results
+                  </span>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  {/* Previous Button */}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                      currentPage === 1
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                    }`}
+                  >
+                    Previous
+                  </button>
+                  
+                  {/* Page Numbers */}
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNumber;
+                      if (totalPages <= 5) {
+                        pageNumber = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNumber = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNumber = totalPages - 4 + i;
+                      } else {
+                        pageNumber = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNumber}
+                          onClick={() => setCurrentPage(pageNumber)}
+                          className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                            currentPage === pageNumber
+                              ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNumber}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Next Button */}
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                      currentPage === totalPages
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
       {showAddModal && (

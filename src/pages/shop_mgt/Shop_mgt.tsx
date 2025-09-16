@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import Header from "../../component/Header";
 import { getOrderStatusColor } from "./shpmgt";
 import type { ShopOrderData } from "./shpmgt";
@@ -73,6 +73,10 @@ const Shop_mgt = () => {
   const [selectedMoreActions, setSelectedMoreActions] =
     useState("More Actions");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   // Get token from cookies
   const token = Cookies.get("token");
@@ -180,6 +184,17 @@ const Shop_mgt = () => {
 
     return statusMatch && searchMatch;
   });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredOrderData.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentOrders = filteredOrderData.slice(startIndex, endIndex);
+
+  // Reset to first page when filters change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, activeFilterTab]);
 
   // Debug: Log filtered data
   console.log("Filtered Order Data:", filteredOrderData);
@@ -476,7 +491,7 @@ const Shop_mgt = () => {
                           </td>
                         </tr>
                       ) : (
-                        filteredOrderData.map(
+                        currentOrders.map(
                           (order: ShopOrderData, index: number) => (
                             <tr
                               key={order.id}
@@ -538,6 +553,75 @@ const Shop_mgt = () => {
                       )}
                     </tbody>
                   </table>
+                </div>
+              )}
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+                  <div className="flex items-center text-sm text-gray-700">
+                    <span>
+                      Showing {startIndex + 1} to {Math.min(endIndex, filteredOrderData.length)} of {filteredOrderData.length} results
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    {/* Previous Button */}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                        currentPage === 1
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                      }`}
+                    >
+                      Previous
+                    </button>
+                    
+                    {/* Page Numbers */}
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNumber;
+                        if (totalPages <= 5) {
+                          pageNumber = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNumber = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNumber = totalPages - 4 + i;
+                        } else {
+                          pageNumber = currentPage - 2 + i;
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNumber}
+                            onClick={() => setCurrentPage(pageNumber)}
+                            className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                              currentPage === pageNumber
+                                ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNumber}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Next Button */}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                        currentPage === totalPages
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                      }`}
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

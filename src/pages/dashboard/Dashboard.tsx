@@ -185,6 +185,7 @@ const Dashboard: React.FC = () => {
   // Map API response to latest users
   const latestUsers = data?.data?.latest_users
     ? data.data.latest_users.slice(0, 3).map((user: any) => ({
+      id: user.user_id,
       name: user.name,
       email: user.email,
       phone: user.phone,
@@ -192,7 +193,7 @@ const Dashboard: React.FC = () => {
       date: user.created_at,
     }))
     : [];
-
+  console.log("latestUsers", latestUsers)
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
       {/* Header at the very top */}

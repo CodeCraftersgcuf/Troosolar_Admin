@@ -1,10 +1,42 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import Header from "../../component/Header";
-import { users } from "../../constants/usermgt";
 import OrderDetailModal from "../shop_mgt/OrderDetailModal";
-import type { ShopOrderData } from "../shop_mgt/shpmgt";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
+
+interface ApiOrder {
+  id: number;
+  order_number?: string;
+  order_status?: string;
+  total_price?: string;
+  created_at?: string;
+  items?: Array<{
+    item?: {
+      title?: string;
+    };
+  }>;
+}
+
+interface OrderForModal {
+  id: number;
+  order_number?: string;
+  order_status?: string;
+  total_price?: string;
+  created_at?: string;
+  items?: Array<{
+    item?: {
+      title?: string;
+    };
+  }>;
+  delivery_address?: {
+    address?: string;
+    phone_number?: string;
+  };
+  user_info?: {
+    name?: string;
+    phone?: string;
+  };
+}
 
 //Code Related to the Integration
 import { useQuery } from "@tanstack/react-query";
@@ -16,8 +48,7 @@ const UserOrders = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("Orders");
   const [selectedFilter, setSelectedFilter] = useState("All");
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<ShopOrderData | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderForModal | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const token = Cookies.get("token");
@@ -38,22 +69,6 @@ const UserOrders = () => {
   const apiSummary = apiData?.summary || {};
   const apiOrders = apiData?.orders || [];
 
-  // Fallback if no orders found
-  if (!isApiLoading && apiOrders.length === 0) {
-    return (
-      <div className="bg-[#F8FAFC] min-h-screen p-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900">No orders found</h1>
-          <button
-            onClick={() => navigate("/user-mgt")}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Back to User Management
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   // Handle tab navigation
   const handleTabClick = (tab: string) => {
@@ -80,7 +95,7 @@ const UserOrders = () => {
   };
 
   // Filters
-  const filteredOrders = apiOrders.filter((order: any) => {
+  const filteredOrders = apiOrders.filter((order: ApiOrder) => {
     // Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -265,7 +280,29 @@ const UserOrders = () => {
         ) : isApiError ? (
           <div className="py-8 text-center text-red-500">Failed to load orders.</div>
         ) : filteredOrders.length === 0 ? (
-          <div className="py-8 text-center text-gray-500">No orders found.</div>
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="py-16 text-center">
+              <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No orders found</h3>
+              <p className="text-gray-500 mb-6">
+                {apiOrders.length === 0 
+                  ? "This user hasn't placed any orders yet." 
+                  : "No orders match your current filters."}
+              </p>
+              {apiOrders.length === 0 && (
+                <button
+                  onClick={() => navigate("/user-mgt")}
+                  className="px-6 py-2 bg-[#273E8E] text-white rounded-full hover:bg-blue-700 transition-colors"
+                >
+                  Back to User Management
+                </button>
+              )}
+            </div>
+          </div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
             <div className="overflow-x-auto">
@@ -284,7 +321,7 @@ const UserOrders = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white">
-                  {filteredOrders.map((order: any, index: number) => (
+                  {filteredOrders.map((order: ApiOrder, index: number) => (
                     <tr
                       key={order.id}
                       className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"} transition-colors border-b border-gray-100 last:border-b-0`}
@@ -341,7 +378,26 @@ const UserOrders = () => {
                         <button
                           className="text-white px-6 py-2 rounded-full cursor-pointer hover:opacity-90 transition-opacity text-sm font-medium"
                           style={{ backgroundColor: "#273E8E" }}
-                          onClick={() => setSelectedOrder(order)}
+                          onClick={() => {
+                            // Convert ApiOrder to the format expected by OrderDetailModal
+                            const orderForModal = {
+                              id: order.id,
+                              order_number: order.order_number,
+                              order_status: order.order_status,
+                              total_price: order.total_price,
+                              created_at: order.created_at,
+                              items: order.items,
+                              delivery_address: {
+                                address: "N/A",
+                                phone_number: "N/A"
+                              },
+                              user_info: {
+                                name: "User",
+                                phone: "N/A"
+                              }
+                            };
+                            setSelectedOrder(orderForModal);
+                          }}
                         >
                           View Details
                         </button>

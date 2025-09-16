@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { User } from "../../constants/dashboard";
 import images from "../../constants/images";
 
@@ -8,7 +9,18 @@ interface DashboardLatestUsersProps {
 
 const DashboardLatestUsers: React.FC<DashboardLatestUsersProps> = ({
   users,
-}) => (
+}) => {
+  const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+
+  // Pagination logic
+  const totalPages = Math.ceil(users.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentUsers = users.slice(startIndex, endIndex);
+
+  return (
   <div>
     <h2 className="text-2xl mt-[-35px] font-bold text-black mb-10">
       Latest Users
@@ -41,16 +53,14 @@ const DashboardLatestUsers: React.FC<DashboardLatestUsersProps> = ({
           </tr>
         </thead>
         <tbody className="bg-white">
-          {users.slice(0, 3).map((user, idx) => (
+          {currentUsers.map((user, idx) => (
             <tr
-              key={idx}
-              className={`${
-                idx !== users.slice(0, 3).length - 1
+              key={user.id}
+              className={`${idx !== currentUsers.length - 1
                   ? "border-b border-gray-100"
                   : ""
-              } ${
-                idx % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-              } `}
+                } ${idx % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                } `}
             >
               <td className="px-6 py-4 whitespace-nowrap flex justify-center items-center">
                 <input type="checkbox" className="rounded cursor-pointer" />
@@ -75,6 +85,18 @@ const DashboardLatestUsers: React.FC<DashboardLatestUsersProps> = ({
                   <button
                     className="text-white px-4 py-2 rounded-full cursor-pointer text-sm font-medium transition hover:opacity-90"
                     style={{ backgroundColor: "#273E8E" }}
+                    onClick={() => {
+                      // Prepare user data with fallback dummy values
+                      const userData = {
+                        id: user.id || "N/A",
+                        name: user.name || "Unknown User",
+                        email: user.email || "unknown@email.com",
+                        phone: user.phone || "0000000000",
+                        bvn: user.bvn || "00000000000",
+                        date: user.date || "01/01/1970",
+                      };
+                      navigate(`/user-activity/${user.id}`, { state: userData });
+                    }}
                   >
                     View Details
                   </button>
@@ -87,8 +109,78 @@ const DashboardLatestUsers: React.FC<DashboardLatestUsersProps> = ({
           ))}
         </tbody>
       </table>
+      
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+          <div className="flex items-center text-sm text-gray-700">
+            <span>
+              Showing {startIndex + 1} to {Math.min(endIndex, users.length)} of {users.length} results
+            </span>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {/* Previous Button */}
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                currentPage === 1
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+              }`}
+            >
+              Previous
+            </button>
+            
+            {/* Page Numbers */}
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNumber;
+                if (totalPages <= 5) {
+                  pageNumber = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNumber = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNumber = totalPages - 4 + i;
+                } else {
+                  pageNumber = currentPage - 2 + i;
+                }
+                
+                return (
+                  <button
+                    key={pageNumber}
+                    onClick={() => setCurrentPage(pageNumber)}
+                    className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                      currentPage === pageNumber
+                        ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                );
+              })}
+            </div>
+            
+            {/* Next Button */}
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                currentPage === totalPages
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+              }`}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   </div>
-);
+  );
+};
 
 export default DashboardLatestUsers;

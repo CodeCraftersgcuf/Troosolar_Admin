@@ -8,6 +8,7 @@ export const addUser = async (
     email?: string;
     phone?: string;
     bvn?: string;
+    password?: string;
   },
   token: string
 ): Promise<any> => {

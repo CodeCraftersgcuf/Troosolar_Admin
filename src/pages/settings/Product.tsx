@@ -14,9 +14,7 @@ import { deleteCategory } from "../../utils/mutations/categories";
 import { useMutation } from "@tanstack/react-query";
 
 import { getAllBrands } from "../../utils/queries/brands";
-import { getBrandsByCategory } from "../../utils/queries/brands";
-import { getBrandById } from "../../utils/queries/brands";
-import { getBrandsForCategory } from "../../utils/queries/brands";
+
 import { deleteBrand } from "../../utils/mutations/brands";
 
 
@@ -39,6 +37,10 @@ const Product = () => {
   const [brandToDelete, setBrandToDelete] = useState<Brand | null>(null);
   const [editBrandModalOpen, setEditBrandModalOpen] = useState(false);
   const [editBrandData, setEditBrandData] = useState<Brand | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   // Enhanced dropdown states
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
@@ -246,13 +248,13 @@ const Product = () => {
           category: b.category_id ? String(b.category_id) : "",
           dateCreated: b.created_at
             ? new Date(b.created_at).toLocaleString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: true,
-              }).replace(/\//g, "-").replace(",", "/")
+              day: "2-digit",
+              month: "2-digit",
+              year: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            }).replace(/\//g, "-").replace(",", "/")
             : "",
           status: "Active", // API doesn't provide status, default to Active
           isSelected: false,
@@ -353,6 +355,18 @@ const Product = () => {
   const allBrandsSelected = brandList.every((brand) => brand.isSelected);
   const someBrandsSelected = brandList.some((brand) => brand.isSelected);
 
+  // Pagination logic
+  const currentData = activeTab === "categories" ? categories : brandList;
+  const totalPages = Math.ceil(currentData.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentItems = currentData.slice(startIndex, endIndex);
+
+  // Reset to first page when tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab]);
+
   return (
     <div className="w-full ">
       {/* Filters and Add New Category Button */}
@@ -363,8 +377,8 @@ const Product = () => {
             <button
               onClick={() => setActiveTab("categories")}
               className={`px-6 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${activeTab === "categories"
-                  ? "bg-[#273E8E] text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-800"
+                ? "bg-[#273E8E] text-white shadow-sm"
+                : "text-gray-600 hover:text-gray-800"
                 }`}
             >
               Categories
@@ -372,8 +386,8 @@ const Product = () => {
             <button
               onClick={() => setActiveTab("brand")}
               className={`px-6 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${activeTab === "brand"
-                  ? "bg-[#273E8E] text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-800"
+                ? "bg-[#273E8E] text-white shadow-sm"
+                : "text-gray-600 hover:text-gray-800"
                 }`}
             >
               Brand
@@ -427,8 +441,8 @@ const Product = () => {
                       key={option.value}
                       onClick={() => handleCategorySelect(option)}
                       className={`w-full px-4 py-3 text-left text-sm hover:bg-gray-50 flex items-center transition-colors rounded-lg mb-2 last:mb-0 ${selectedCategoryFilter === option.value
-                          ? "bg-blue-50 border border-blue-200"
-                          : "bg-gray-50 border border-transparent"
+                        ? "bg-blue-50 border border-blue-200"
+                        : "bg-gray-50 border border-transparent"
                         }`}
                     >
                       {option.icon && (
@@ -520,7 +534,9 @@ const Product = () => {
 
               {/* Table Body */}
               <tbody className="divide-y divide-gray-100">
-                {categories.map((category, index) => (
+                {currentItems.map((item, index) => {
+                  const category = item as ProductCategory;
+                  return (
                   <tr
                     key={category.id}
                     className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
@@ -570,8 +586,8 @@ const Product = () => {
                     <td className="px-6 py-4 text-center">
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${category.status === "Active"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-yellow-100 text-yellow-800"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-yellow-100 text-yellow-800"
                           }`}
                       >
                         {category.status}
@@ -596,10 +612,81 @@ const Product = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
+          
+          {/* Pagination Controls for Categories */}
+          {totalPages > 1 && activeTab === "categories" && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+              <div className="flex items-center text-sm text-gray-700">
+                <span>
+                  Showing {startIndex + 1} to {Math.min(endIndex, categories.length)} of {categories.length} results
+                </span>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                {/* Previous Button */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                    currentPage === 1
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                  }`}
+                >
+                  Previous
+                </button>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNumber;
+                    if (totalPages <= 5) {
+                      pageNumber = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNumber = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNumber = totalPages - 4 + i;
+                    } else {
+                      pageNumber = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNumber}
+                        onClick={() => setCurrentPage(pageNumber)}
+                        className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                          currentPage === pageNumber
+                            ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Next Button */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                    currentPage === totalPages
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                  }`}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+          
           {/* Empty State */}
           {categories.length === 0 && (
             <div className="px-6 py-8 text-center">
@@ -668,7 +755,9 @@ const Product = () => {
 
               {/* Table Body */}
               <tbody className="divide-y divide-gray-100">
-                {brandList.map((brand, index) => (
+                {currentItems.map((item, index) => {
+                  const brand = item as Brand;
+                  return (
                   <tr
                     key={brand.id}
                     className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
@@ -709,12 +798,12 @@ const Product = () => {
                     <td className="px-6 py-4 text-center">
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${brand.status === "Active"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-yellow-100 text-yellow-800"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-yellow-100 text-yellow-800"
                           }`}
-                    >
-                      {brand.status}
-                    </span>
+                      >
+                        {brand.status}
+                      </span>
                     </td>
 
                     {/* Actions */}
@@ -735,10 +824,81 @@ const Product = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
+          
+          {/* Pagination Controls for Brands */}
+          {totalPages > 1 && activeTab === "brand" && (
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+              <div className="flex items-center text-sm text-gray-700">
+                <span>
+                  Showing {startIndex + 1} to {Math.min(endIndex, brandList.length)} of {brandList.length} results
+                </span>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                {/* Previous Button */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                    currentPage === 1
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                  }`}
+                >
+                  Previous
+                </button>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNumber;
+                    if (totalPages <= 5) {
+                      pageNumber = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNumber = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNumber = totalPages - 4 + i;
+                    } else {
+                      pageNumber = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <button
+                        key={pageNumber}
+                        onClick={() => setCurrentPage(pageNumber)}
+                        className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                          currentPage === pageNumber
+                            ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Next Button */}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                    currentPage === totalPages
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                  }`}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+          
           {/* Empty State */}
           {brandList.length === 0 && (
             <div className="px-6 py-8 text-center">

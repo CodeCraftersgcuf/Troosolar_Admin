@@ -7,11 +7,14 @@ import { getAllBanners } from "../../utils/queries/banner";
 import { addBanner, deleteBanner, updateBanner } from "../../utils/mutations/banner";
 import Cookies from "js-cookie";
 
-const IMAGE_BASE_URL = "http://localhost:8000/storage/";
+const IMAGE_BASE_URL = "https://troosolar.hmstech.org";
+// In Laravel, uploaded files are commonly exposed under /storage
+const STORAGE_PREFIX = `${IMAGE_BASE_URL}/storage`;
 
 interface BannerItem {
   id: string;
-  image: string;
+  image: string;      // full URL for rendering
+  rawPath?: string;   // original relative path from API (for reference)
   dateCreated: string;
   isSelected?: boolean;
 }
@@ -20,6 +23,15 @@ interface BannerProps {
   isModalOpen?: boolean;
   setIsModalOpen?: (open: boolean) => void;
 }
+
+const normalizePath = (p: string) =>
+  String(p || "").replace(/^\/+/, ""); // remove leading slashes to avoid double //
+
+const buildImageUrl = (relativePath?: string) => {
+  if (!relativePath) return "/assets/images/banner.png";
+  // API sample: "banners/HCK8Y...png"
+  return `${STORAGE_PREFIX}/${normalizePath(relativePath)}`;
+};
 
 const Banner = ({ isModalOpen = false, setIsModalOpen }: BannerProps = {}) => {
   const [bannerList, setBannerList] = useState<BannerItem[]>([]);
@@ -41,21 +53,33 @@ const Banner = ({ isModalOpen = false, setIsModalOpen }: BannerProps = {}) => {
   useEffect(() => {
     if (apiData?.data) {
       setBannerList(
-        apiData.data.map((b: any) => ({
-          id: String(b.id),
-          image: b.image ? IMAGE_BASE_URL + b.image : "/assets/images/banner.png",
-          dateCreated: b.created_at
-            ? new Date(b.created_at).toLocaleString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: true,
-              }).replace(/\//g, "-").replace(",", "/")
-            : "",
-          isSelected: false,
-        }))
+        apiData.data.map((b: any) => {
+          const relative = String(b.image || "");
+          const fullUrl = buildImageUrl(relative);
+
+          const created =
+            b.created_at
+              ? new Date(b.created_at)
+                  .toLocaleString("en-GB", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })
+                  .replace(/\//g, "-")
+                  .replace(",", "/")
+              : "";
+
+          return {
+            id: String(b.id),
+            image: fullUrl,          // ✅ correct full URL
+            rawPath: relative,       // keep original, just in case
+            dateCreated: created,
+            isSelected: false,
+          };
+        })
       );
     }
   }, [apiData?.data]);
@@ -135,7 +159,7 @@ const Banner = ({ isModalOpen = false, setIsModalOpen }: BannerProps = {}) => {
   const handleEdit = (id: string) => {
     const banner = bannerList.find((b) => b.id === id);
     if (banner) {
-      setEditBanner(banner);
+      setEditBanner(banner); // ✅ keep id around for update
       setIsModalOpen && setIsModalOpen(true);
     }
   };
@@ -143,11 +167,16 @@ const Banner = ({ isModalOpen = false, setIsModalOpen }: BannerProps = {}) => {
   // Save new or updated banner (calls mutation)
   const handleNewBanner = (image: File | null, link: string) => {
     if (editBanner) {
+      // If user selected a new image, send it; if not, just close (no change)
       if (image) {
         const formData = new FormData();
         formData.append("image", image);
         // updateBanner mutation
         updateMutation.mutate({ id: editBanner.id, formData });
+      } else {
+        // no change
+        setEditBanner(null);
+        setIsModalOpen && setIsModalOpen(false);
       }
     } else {
       if (image) {
@@ -159,10 +188,24 @@ const Banner = ({ isModalOpen = false, setIsModalOpen }: BannerProps = {}) => {
     }
   };
 
+  // Delete banner: open confirmation modal
+  const handleDelete = (id: string) => {
+    const banner = bannerList.find((b) => b.id === id);
+    if (banner) {
+      setBannerToDelete(banner);
+      setShowDeleteModal(true);
+    }
+  };
+
+  // Cancel delete action
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setBannerToDelete(null);
+  };
+
   // Delete banner (calls mutation)
   const confirmDelete = () => {
     if (bannerToDelete) {
-      // deleteBanner mutation
       deleteMutation.mutate(bannerToDelete.id);
     }
   };
@@ -187,8 +230,7 @@ const Banner = ({ isModalOpen = false, setIsModalOpen }: BannerProps = {}) => {
                     type="checkbox"
                     checked={allSelected}
                     ref={(input) => {
-                      if (input)
-                        input.indeterminate = someSelected && !allSelected;
+                      if (input) input.indeterminate = someSelected && !allSelected;
                     }}
                     onChange={(e) => handleSelectAll(e.target.checked)}
                     className="w-4 h-4 text-[#273E8E] bg-gray-100 border-gray-300 rounded focus:ring-[#273E8E] focus:ring-2"
@@ -276,14 +318,13 @@ const Banner = ({ isModalOpen = false, setIsModalOpen }: BannerProps = {}) => {
         onSave={handleNewBanner}
         {...(editBanner
           ? {
-              image: editBanner.image,
+              image: editBanner.image, // ✅ preview uses full URL
               modalTitle: "Edit Banner",
             }
           : { modalTitle: "New Banner" })}
       />
 
       {/* Confirm Delete Modal */}
-      {/* You can reuse ConfirmDeleteModal from notifications if you want */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
           <div className="bg-white rounded-xl p-8 max-w-sm w-full shadow-lg relative">

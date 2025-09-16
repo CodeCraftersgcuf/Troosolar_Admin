@@ -43,7 +43,8 @@ const KycProfile: React.FC<KycProfileProps> = ({
     queryFn: () => getUserKycDetail(userId, token || ""),
     enabled: isOpen && !!userId && !!token,
   });
-
+  console.log("KYC API Data:", kycApiData);
+  console.log("The User ID:", userId);
   // Helper functions for user-specific data
   const getUserBankName = (userId: number) => {
     const banks = [
