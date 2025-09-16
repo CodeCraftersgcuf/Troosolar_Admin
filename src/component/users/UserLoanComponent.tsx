@@ -1,8 +1,21 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Header from "../Header";
 import type { User } from "../../constants/usermgt";
 import type { LoanDetail } from "./UserLoanData";
+
+interface ApiLoan {
+  loan_application_id: number;
+  user_name?: string;
+  beneficiary_name?: string;
+  loan_amount: number;
+  created_at: string;
+  loan_status?: {
+    send_status: string;
+    approval_status: string;
+    disbursement_status: string;
+  };
+}
 import KycModal from "./KycModal";
 import FullLoanDetail from "../../pages/loans_disbursement/FullLoanDetail";
 
@@ -18,22 +31,17 @@ type UserLoanComponentProps = {
 
 const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
   user,
-  userLoans,
 }) => {
   const navigate = useNavigate();
   const { id: userIdFromParams } = useParams();
   const token = Cookies.get("token");
 
-  const [showSendDropdown, setShowSendDropdown] = useState(false);
-  const [showApprovalDropdown, setShowApprovalDropdown] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [showKycModal, setShowKycModal] = useState(false);
   const [showSendToPartnerModal, setShowSendToPartnerModal] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState("");
   const [selectedLoanId, setSelectedLoanId] = useState<string>("");
 
-  const sendDropdownRef = useRef<HTMLDivElement>(null);
-  const approvalDropdownRef = useRef<HTMLDivElement>(null);
 
   const {
     data: loanApiData,
@@ -59,27 +67,6 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
     setShowSendToPartnerModal(false);
   };
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        sendDropdownRef.current &&
-        !sendDropdownRef.current.contains(event.target as Node)
-      ) {
-        setShowSendDropdown(false);
-      }
-      if (
-        approvalDropdownRef.current &&
-        !approvalDropdownRef.current.contains(event.target as Node)
-      ) {
-        setShowApprovalDropdown(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
 
   // Function to view loan details
   const viewLoanDetails = (loanId: string) => {
@@ -480,7 +467,7 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {apiLoans.map((loan: any, idx: number) => (
+                  {apiLoans.map((loan: ApiLoan, idx: number) => (
                     <tr
                       key={loan.loan_application_id}
                       className={`${
@@ -515,8 +502,8 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                         <StatusBadge
                           status={
                             loan.loan_status?.send_status
-                              ? loan.loan_status.send_status.charAt(0).toUpperCase() +
-                                loan.loan_status.send_status.slice(1)
+                              ? (loan.loan_status.send_status.charAt(0).toUpperCase() +
+                                loan.loan_status.send_status.slice(1)) as "Pending" | "Completed" | "Rejected"
                               : "Pending"
                           }
                         />
@@ -525,8 +512,8 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                         <StatusBadge
                           status={
                             loan.loan_status?.approval_status
-                              ? loan.loan_status.approval_status.charAt(0).toUpperCase() +
-                                loan.loan_status.approval_status.slice(1)
+                              ? (loan.loan_status.approval_status.charAt(0).toUpperCase() +
+                                loan.loan_status.approval_status.slice(1)) as "Pending" | "Completed" | "Rejected"
                               : "Pending"
                           }
                         />
