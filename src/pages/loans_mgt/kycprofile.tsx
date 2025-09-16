@@ -603,7 +603,7 @@ const KycProfile: React.FC<KycProfileProps> = ({
                                 </div>
                               </div>
                               <a
-                                href={kycApiData.data.loan_application.upload_document}
+                                href={`https://troosolar.hmstech.org/${kycApiData.data.loan_application.upload_document}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:text-blue-800 text-sm font-medium"

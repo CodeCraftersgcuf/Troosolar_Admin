@@ -67,6 +67,7 @@ const Loans_mgt = () => {
     email?: string;
     phone?: string;
     bvn?: string;
+    loan_application_id?: number;
   } | null>(null);
   const [showSendToPartnerModal, setShowSendToPartnerModal] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState("");
@@ -81,15 +82,15 @@ const Loans_mgt = () => {
   };
 
   // Function to view user details
-  const viewUserDetails = (userId: number, userName: string) => {
+  const viewUserDetails = (userId: number, userName: string, loanApplicationId: number) => {
     // Create user-specific data based on userId
-    const userData = getUserDataById(userId, userName);
+    const userData = getUserDataById(userId, userName, loanApplicationId);
     setSelectedUser(userData);
     setShowKycModal(true);
   };
 
   // Function to get user-specific data
-  const getUserDataById = (userId: number, userName: string) => {
+  const getUserDataById = (userId: number, userName: string, loanApplicationId: number) => {
     // This would typically come from an API or database
     // For now, we'll create mock data based on userId
     const userData = {
@@ -98,6 +99,7 @@ const Loans_mgt = () => {
       email: `${userName.toLowerCase().replace(/\s+/g, ".")}@example.com`,
       phone: `+234 80${userId.toString().padStart(2, "0")} 234 567${userId}`,
       bvn: `123456789${userId.toString().padStart(2, "0")}`,
+      loan_application_id: loanApplicationId, // Add the loan_application_id
       // Add more user-specific fields as needed
       address: `${userId} Lagos Street, Victoria Island, Lagos`,
       occupation: getUserOccupation(userId),
@@ -217,9 +219,11 @@ const Loans_mgt = () => {
           date: loan?.date || "N/A",
           sendStatus: loan?.send_status || "Pending", // Use 'send_status' field from your API response
           approval: loan?.approval_status || "Pending", // Use 'approval_status' field from your API response
+          loan_application_id: loan?.loan_application_id || 0,
         };
       })
     : [];
+  console.log("API Loan List:", apiLoanList);
 
   // Filter loan data based on selected filters and search term
   const filteredLoanData = apiLoanList.filter((loan) => {
@@ -249,13 +253,14 @@ const Loans_mgt = () => {
   React.useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, sendStatusFilter, approvalStatusFilter]);
+  console.log("The Selected User:", selectedUser?.loan_application_id);
 
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
       {/* KYC Profile Modal */}
       {selectedUser && (
         <KycProfile
-          userId={selectedUser.id}
+          userId={selectedUser.loan_application_id || 0}
           isOpen={showKycModal}
           onClose={() => setShowKycModal(false)}
           userName={selectedUser.name}
@@ -578,7 +583,7 @@ const Loans_mgt = () => {
                         <button
                           className="text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity text-sm font-medium cursor-pointer"
                           style={{ backgroundColor: "#273E8E" }}
-                          onClick={() => viewUserDetails(loan.id, loan.name)}
+                          onClick={() => viewUserDetails(loan.id, loan.name, loan.loan_application_id)}
                         >
                           View Details
                         </button>
