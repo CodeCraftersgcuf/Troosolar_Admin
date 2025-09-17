@@ -27,6 +27,7 @@ const UserMgtAddUserModal: React.FC<Props> = ({
   handleInputChange,
 }) => {
   const [formError, setFormError] = useState("");
+  const [hasError, setHasError] = useState(false);
   const token = Cookies.get("token");
 
   // Add user mutation
@@ -40,6 +41,7 @@ const UserMgtAddUserModal: React.FC<Props> = ({
     }) => addUser(userData, token || ""),
     onSuccess: () => {
       setFormError("");
+      setHasError(false);
       setShowAddModal(false);
       // Reset form
       handleInputChange({
@@ -57,12 +59,30 @@ const UserMgtAddUserModal: React.FC<Props> = ({
       if (onUserAdded) onUserAdded();
     },
     onError: (error: unknown) => {
+      console.log("Add User Error:", error); // Debug log to see error structure
+      
       let errorMessage = "Failed to add user. Please try again.";
-      if (error && typeof error === "object" && "response" in error) {
-        const apiError = error as { response?: { data?: { message?: string } } };
-        errorMessage = apiError?.response?.data?.message || errorMessage;
+      
+      // Handle ApiError from customApiCall
+      if (error && typeof error === "object" && "message" in error) {
+        const apiError = error as { message?: string; data?: any };
+        errorMessage = apiError.message || errorMessage;
+        
+        // If there's nested error data, try to extract more specific error
+        if (apiError.data && typeof apiError.data === "object") {
+          if (apiError.data.message) {
+            errorMessage = apiError.data.message;
+          } else if (apiError.data.error) {
+            errorMessage = apiError.data.error;
+          } else if (apiError.data.errors && Array.isArray(apiError.data.errors)) {
+            errorMessage = apiError.data.errors.join(", ");
+          }
+        }
       }
+      
+      console.log("Final error message:", errorMessage); // Debug log to see final message
       setFormError(errorMessage);
+      setHasError(true);
     },
   });
 
@@ -70,6 +90,7 @@ const UserMgtAddUserModal: React.FC<Props> = ({
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
+    setHasError(false);
 
     // Basic required fields
     if (
@@ -112,7 +133,11 @@ const UserMgtAddUserModal: React.FC<Props> = ({
     <div className="fixed inset-0 z-50 flex justify-end h-[100vh] ">
       <div
         className="fixed inset-0 backdrop-brightness-50 bg-black/30"
-        onClick={() => setShowAddModal(false)}
+        onClick={() => {
+          setFormError("");
+          setHasError(false);
+          setShowAddModal(false);
+        }}
       ></div>
 
       {/* Made scrollable with overflow-y-auto; kept original sizing */}
@@ -121,7 +146,11 @@ const UserMgtAddUserModal: React.FC<Props> = ({
           <h2 className="text-2xl font-bold text-gray-800">Add New User</h2>
           <button
             className="cursor-pointer transition-colors"
-            onClick={() => setShowAddModal(false)}
+            onClick={() => {
+              setFormError("");
+              setHasError(false);
+              setShowAddModal(false);
+            }}
           >
             <img src={images.cross} alt="" className="w-8 h-8" />
           </button>
