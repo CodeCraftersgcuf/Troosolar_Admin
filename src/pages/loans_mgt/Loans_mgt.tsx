@@ -8,7 +8,10 @@ import images from "../../constants/images";
 import { getAllLoanStatus } from "../../utils/queries/loans";
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
-
+//Code Related to the Integration
+import { sendToPartnerDetail } from "../../utils/mutations/loans";
+import { getAllFinance } from "../../utils/queries/finance";
+import { useMutation } from "@tanstack/react-query";
 
 interface DropdownProps {
   options: string[];
@@ -157,9 +160,23 @@ const Loans_mgt = () => {
 
   // Function to save partner selection
   const savePartnerSelection = () => {
-    console.log("Partner selected:", selectedPartner);
-    setShowSendToPartnerModal(false);
-    setSelectedPartner("");
+    if (!selectedPartner) {
+      alert("Please select a partner");
+      return;
+    }
+    
+    // Find the partner ID from the selected partner name
+    const selectedPartnerData = financePartners?.data?.find((partner: { 
+      id: number; 
+      "Partner name": string; 
+    }) => partner["Partner name"] === selectedPartner);
+    
+    if (selectedPartnerData) {
+      console.log("Partner selected:", selectedPartner, "Partner ID:", selectedPartnerData.id);
+      sendToPartnerMutation.mutate(selectedPartnerData.id);
+    } else {
+      alert("Selected partner not found");
+    }
   };
 
   // API integration for loans
@@ -168,6 +185,33 @@ const Loans_mgt = () => {
     queryKey: ["all-loan-status"],
     queryFn: () => getAllLoanStatus(token || ""),
     enabled: !!token,
+  });
+
+  // Get all financing partners
+  const { data: financePartners, isLoading: isFinanceLoading } = useQuery({
+    queryKey: ["all-finance-partners"],
+    queryFn: () => getAllFinance(token || ""),
+    enabled: !!token,
+  });
+
+  // Send to partner mutation
+  const sendToPartnerMutation = useMutation({
+    mutationFn: async (partnerId: number) => {
+      if (!selectedUser?.user_id) {
+        throw new Error("User ID not available");
+      }
+      return await sendToPartnerDetail(selectedUser.user_id, { partner_id: partnerId }, token || "");
+    },
+    onSuccess: () => {
+      console.log("User sent to partner successfully");
+      setShowSendToPartnerModal(false);
+      setSelectedPartner("");
+      // You can add a success notification here
+    },
+    onError: (error) => {
+      console.error("Failed to send user to partner:", error);
+      alert("Failed to send user to partner. Please try again.");
+    },
   });
 
   console.log("Loan API Data:", loanApiData);
@@ -306,14 +350,23 @@ const Loans_mgt = () => {
                   className="w-full border border-[#CDCDCD] rounded-md p-4 pr-10 appearance-none text-base"
                   value={selectedPartner}
                   onChange={(e) => setSelectedPartner(e.target.value)}
+                  disabled={isFinanceLoading}
                 >
                   <option value="" disabled>
-                    Select Partner
+                    {isFinanceLoading ? "Loading partners..." : "Select Partner"}
                   </option>
-                  <option value="Sterling Bank">Sterling Bank</option>
-                  <option value="Access Bank">Access Bank</option>
-                  <option value="First Bank">First Bank</option>
-                  <option value="GTBank">GTBank</option>
+                  {financePartners?.data?.map((partner: { 
+                    id: number; 
+                    "Partner name": string; 
+                    "No of Loans": number | null; 
+                    "Amount": number; 
+                    "Date Created": string; 
+                    "Status": string; 
+                  }) => (
+                    <option key={partner.id} value={partner["Partner name"]}>
+                      {partner["Partner name"]} ({partner.Status}) - ₦{partner.Amount?.toLocaleString() || 0}
+                    </option>
+                  ))}
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                   <svg
@@ -337,10 +390,22 @@ const Loans_mgt = () => {
 
             {/* Save Button */}
             <button
-              className="w-full bg-[#273E8E] text-white py-4 rounded-full font-semibold text-base hover:bg-[#243c8c] transition-colors cursor-pointer"
+              className={`w-full py-4 rounded-full font-semibold text-base transition-colors flex items-center justify-center ${
+                sendToPartnerMutation.isPending
+                  ? 'bg-gray-400 text-white cursor-not-allowed'
+                  : 'bg-[#273E8E] text-white hover:bg-[#243c8c] cursor-pointer'
+              }`}
               onClick={savePartnerSelection}
+              disabled={sendToPartnerMutation.isPending}
             >
-              Save
+              {sendToPartnerMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Sending...
+                </>
+              ) : (
+                'Save'
+              )}
             </button>
           </div>
         </div>

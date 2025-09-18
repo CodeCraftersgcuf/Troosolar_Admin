@@ -8,6 +8,9 @@ import AdminDetail from "./AdminDetail.tsx";
 import { useQuery } from "@tanstack/react-query";
 import { getAllUsers } from "../../utils/queries/users.ts";
 import Cookies from "js-cookie";
+import { getSingleUser } from "../../utils/queries/users.ts";
+import LoadingSpinner from "../../components/common/LoadingSpinner.tsx";
+
 
 const Admin = () => {
   const [activeTab, setActiveTab] = useState<"activity" | "allAdmins">(
@@ -41,36 +44,57 @@ const Admin = () => {
     enabled: !!token,
   });
 
+  // Get current user data (assuming user ID 1 for now - you may need to get this from token or context)
+  const { data: currentUserData, isLoading: isCurrentUserLoading } = useQuery({
+    queryKey: ["current-user"],
+    queryFn: () => getSingleUser(1, token || ""), // You may need to get the actual user ID
+    enabled: !!token,
+  });
+
   // Map API response to admins table (only role === "Admin")
   const apiAdmins = data?.data?.["all users data"]
     ? data.data["all users data"]
-        .filter((u: any) => u.role === "Admin")
-        .map((u: any) => ({
-          id: String(u.id),
-          firstName: u.first_name,
-          surname: u.sur_name,
-          email: u.email,
-          phone: u.phone || "",
-          bvn: u.bvn || "",
-          password: "**********",
-          image: u.profile_picture || "/assets/layout/profile.png",
-          role: u.role,
-          userCode: u.user_code || "",
-          referralCode: u.refferal_code || "",
-          isActive: u.is_active === 1,
-          isVerified: u.is_verified === 1,
-          dateJoined: u.created_at
-            ? new Date(u.created_at).toLocaleString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: true,
-              }).replace(/\//g, "-").replace(",", "/")
-            : "",
-          activity: [], // You may fill this if API provides
-        }))
+      .filter((u: { role: string }) => u.role === "Admin")
+      .map((u: { 
+        id: number; 
+        first_name: string; 
+        sur_name: string; 
+        email: string; 
+        phone?: string; 
+        bvn?: string; 
+        profile_picture?: string; 
+        role: string; 
+        user_code?: string; 
+        refferal_code?: string; 
+        is_active: number; 
+        is_verified: number; 
+        created_at: string; 
+      }) => ({
+        id: String(u.id),
+        firstName: u.first_name,
+        surname: u.sur_name,
+        email: u.email,
+        phone: u.phone || "",
+        bvn: u.bvn || "",
+        password: "**********",
+        image: u.profile_picture || "/assets/layout/profile.png",
+        role: u.role,
+        userCode: u.user_code || "",
+        referralCode: u.refferal_code || "",
+        isActive: u.is_active === 1,
+        isVerified: u.is_verified === 1,
+        dateJoined: u.created_at
+          ? new Date(u.created_at).toLocaleString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          }).replace(/\//g, "-").replace(",", "/")
+          : "",
+        activity: [], // You may fill this if API provides
+      }))
     : [];
 
   // Use API admins if available, else fallback to dummy
@@ -79,7 +103,7 @@ const Admin = () => {
   // If viewing admin details, show AdminDetail component with correct data
   if (selectedAdminId) {
     // Find the selected admin from the current adminsToShow list
-    const selectedAdmin = adminsToShow.find(a => a.id === selectedAdminId);
+    const selectedAdmin = adminsToShow.find((a: { id: string }) => a.id === selectedAdminId);
     // Pass the full admin object to AdminDetail if found
     return (
       <AdminDetail
@@ -89,6 +113,18 @@ const Admin = () => {
       />
     );
   }
+
+  // Show loading indicator while fetching current user data
+  if (isCurrentUserLoading) {
+    return (
+      <div className="w-full bg-[#F5F7FF]">
+        <LoadingSpinner message="Loading admin profile..." size="lg" />
+      </div>
+    );
+  }
+
+  // Get current user data from API response
+  const currentUser = currentUserData?.data;
 
   return (
     <div className="w-full bg-[#F5F7FF]">
@@ -109,17 +145,28 @@ const Admin = () => {
             style={{ width: "310px", height: "100%" }}
           >
             <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white mb-6">
-              <img
-                src="/assets/images/profile.png"
-                alt="Admin Profile"
-                className="w-full h-full object-cover"
-              />
+              {currentUser?.profile_picture ? (
+                <img
+                  src={`https://troosolar.hmstech.org/users/${currentUser.profile_picture}`}
+                  alt="Admin Profile"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = "/assets/images/profile.png";
+                  }}
+                />
+              ) : (
+                <img
+                  src="/assets/images/profile.png"
+                  alt="Admin Profile"
+                  className="w-full h-full object-cover"
+                />
+              )}
             </div>
             <h2 className="text-[#FFFFFF] text-2xl font-medium mb-2 text-center">
-              {adminData.surname} {adminData.firstName}
+              {currentUser ? `${currentUser.sur_name} ${currentUser.first_name}` : `${adminData.surname} ${adminData.firstName}`}
             </h2>
             <p className="text-[#FFFFFF] text-xs opacity-90 mb-20 text-center">
-              {adminData.email}
+              {currentUser?.email || adminData.email}
             </p>
 
             <button
@@ -136,19 +183,19 @@ const Admin = () => {
             <div className="text-white space-y-8 flex-1">
               <div>
                 <p className="text-sm opacity-75 mb-1">First Name</p>
-                <p className="text-lg font-medium">{adminData.firstName}</p>
+                <p className="text-lg font-medium">{currentUser?.first_name || adminData.firstName}</p>
               </div>
               <div>
                 <p className="text-sm opacity-75 mb-1">Surname</p>
-                <p className="text-lg font-medium">{adminData.surname}</p>
+                <p className="text-lg font-medium">{currentUser?.sur_name || adminData.surname}</p>
               </div>
               <div>
                 <p className="text-sm opacity-75 mb-1">Email Address</p>
-                <p className="text-lg font-medium">{adminData.email}</p>
+                <p className="text-lg font-medium">{currentUser?.email || adminData.email}</p>
               </div>
               <div>
-                <p className="text-sm opacity-75 mb-1">Password</p>
-                <p className="text-lg font-medium">{adminData.password}</p>
+                <p className="text-sm opacity-75 mb-1">Phone</p>
+                <p className="text-lg font-medium">{currentUser?.phone || "N/A"}</p>
               </div>
             </div>
 
@@ -156,7 +203,7 @@ const Admin = () => {
             <div className="text-white text-right flex flex-col justify-between">
               <div>
                 <p className="text-sm opacity-75 mb-1">BVN</p>
-                <p className="text-lg font-medium">{adminData.bvn}</p>
+                <p className="text-lg font-medium">{currentUser?.bvn || adminData.bvn || "N/A"}</p>
               </div>
 
               <button className="bg-white text-[#000000] px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition-colors cursor-pointer">
@@ -177,21 +224,19 @@ const Admin = () => {
           >
             <button
               onClick={() => setActiveTab("activity")}
-              className={`px-5 py-2 text-sm rounded-full font-medium transition-colors flex-1 cursor-pointer ${
-                activeTab === "activity"
-                  ? "bg-[#273E8E] text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
+              className={`px-5 py-2 text-sm rounded-full font-medium transition-colors flex-1 cursor-pointer ${activeTab === "activity"
+                ? "bg-[#273E8E] text-white shadow-sm"
+                : "text-gray-600 hover:text-gray-800"
+                }`}
             >
               Activity
             </button>
             <button
               onClick={() => setActiveTab("allAdmins")}
-              className={`px-5 py-2 text-sm rounded-full font-medium transition-colors flex-1 cursor-pointer ${
-                activeTab === "allAdmins"
-                  ? "bg-[#273E8E] text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
+              className={`px-5 py-2 text-sm rounded-full font-medium transition-colors flex-1 cursor-pointer ${activeTab === "allAdmins"
+                ? "bg-[#273E8E] text-white shadow-sm"
+                : "text-gray-600 hover:text-gray-800"
+                }`}
             >
               All Admins
             </button>
@@ -219,7 +264,7 @@ const Admin = () => {
                   placeholder="Search"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-12 pr-6 py-3.5 border border-[#00000080] rounded-lg text-[15px] w-[320px] focus:outline-none bg-white shadow-[0_2px_6px_rgba(0,0,0,0.05)] placeholder-gray-400"
+                  className="pl-12 pr-6 py-3.5 border border-[#00000080] rounded-lg text-[15px] w-[320px] focus:outline-none bg-white shadow-[0_2px_6px_rgba(0,0,0,0.05)] placeholder-gray-400"
                 />
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg
@@ -263,12 +308,11 @@ const Admin = () => {
               </div>
             </div>
             <div className="divide-y divide-gray-100">
-              {adminData.activity.map((activity, index) => (
+              {adminData.activity.map((activity: { id: string; description: string; date: string }, index: number) => (
                 <div
                   key={activity.id}
-                  className={`px-6 py-4 ${
-                    index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                  } transition-colors border-b border-gray-100 last:border-b-0 hover:bg-gray-50`}
+                  className={`px-6 py-4 ${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                    } transition-colors border-b border-gray-100 last:border-b-0 hover:bg-gray-50`}
                 >
                   <div className="flex justify-between items-center">
                     <div className="flex items-center space-x-4">
@@ -349,12 +393,11 @@ const Admin = () => {
 
                 {/* Table Body */}
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {adminsToShow.map((admin, index) => (
+                  {adminsToShow.map((admin: { id: string; firstName: string; surname: string; email: string; role: string; dateJoined: string; bvn: string }, index: number) => (
                     <tr
                       key={admin.id}
-                      className={`${
-                        index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                      } transition-colors border-b border-gray-100 last:border-b-0`}
+                      className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                        } transition-colors border-b border-gray-100 last:border-b-0`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800 font-medium">
                         <div className="flex items-center space-x-3">
@@ -400,7 +443,14 @@ const Admin = () => {
       <EditProfile
         isOpen={isEditProfileOpen}
         onClose={handleCloseEditProfile}
-        adminData={adminData}
+        adminData={{
+          firstName: currentUser?.first_name || adminData.firstName,
+          surname: currentUser?.sur_name || adminData.surname,
+          email: currentUser?.email || adminData.email,
+          bvn: currentUser?.bvn || adminData.bvn,
+          password: "**********", // Don't show actual password
+          image: currentUser?.profile_picture ? `https://troosolar.hmstech.org/users/${currentUser.profile_picture}` : adminData.image,
+        }}
       />
     </div>
   );

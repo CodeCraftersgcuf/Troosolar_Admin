@@ -9,7 +9,7 @@ import StatsLoadingSkeleton from "../../components/common/StatsLoadingSkeleton";
 
 //Code Related to the Integration
 import { getAllTickets } from "../../utils/queries/tickets";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 
 const Tickets = () => {
@@ -28,11 +28,18 @@ const Tickets = () => {
 
   // Integration: fetch tickets from API
   const token = Cookies.get("token");
+  const queryClient = useQueryClient();
   const { data: apiTickets, isLoading, isError } = useQuery({
     queryKey: ["all-tickets"],
     queryFn: () => getAllTickets(token || ""),
     enabled: !!token,
   });
+
+  // Function to refresh tickets data
+  const handleStatusUpdate = () => {
+    console.log("Invalidating tickets query to refresh data...");
+    queryClient.invalidateQueries({ queryKey: ["all-tickets"] });
+  };
 
   // Extract summary and tickets from API response
   const summary = apiTickets?.data?.summary || {
@@ -45,7 +52,7 @@ const Tickets = () => {
 
   // Map API response to table data
   const apiTicketData: ShopOrderData[] =
-    apiTickets?.data?.tickets?.map((t: any) => ({
+    apiTickets?.data?.tickets?.map((t: { ticket_id: string; user_name: string; subject: string; status: string; date: string }) => ({
       id: String(t.ticket_id),
       name: t.user_name,
       productName: t.subject,
@@ -407,7 +414,7 @@ const Tickets = () => {
                             let ticketToShow = order;
                             if (apiTickets?.data?.tickets) {
                               const apiTicket = apiTickets.data.tickets.find(
-                                (t: any) => String(t.ticket_id) === order.id
+                                (t: { ticket_id: string }) => String(t.ticket_id) === order.id
                               );
                               if (apiTicket) {
                                 ticketToShow = {
@@ -512,6 +519,7 @@ const Tickets = () => {
         isOpen={showTicketModal}
         onClose={() => setShowTicketModal(false)}
         ticket={selectedTicket}
+        onStatusUpdate={handleStatusUpdate}
       />
     </div>
   );

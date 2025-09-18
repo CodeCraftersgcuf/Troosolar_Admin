@@ -2,8 +2,9 @@ import { useState } from 'react';
 import images from "../../constants/images";
 
 //Code Relatead to the Integration
-import { updateUser } from '../../utils/mutations/users';
+import { updateUser } from '../../utils/mutations/user';
 import { useMutation } from '@tanstack/react-query';
+import Cookies from 'js-cookie';
 
 
 interface EditProfileProps {
@@ -28,6 +29,9 @@ const EditProfile = ({ isOpen, onClose, adminData }: EditProfileProps) => {
     password: adminData.password,
     role: 'Admin'
   });
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const token = Cookies.get("token");
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -37,10 +41,61 @@ const EditProfile = ({ isOpen, onClose, adminData }: EditProfileProps) => {
     }));
   };
 
-  const handleSave = () => {
-    // Handle save logic here
-    console.log('Saving profile data:', formData);
-    onClose();
+  // Handle image upload
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Update user mutation
+  const updateUserMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      return await updateUser(formData, token || "");
+    },
+    onSuccess: () => {
+      console.log("Profile updated successfully");
+      onClose();
+    },
+    onError: (error) => {
+      console.error("Failed to update profile:", error);
+      alert("Failed to update profile. Please try again.");
+    },
+  });
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Create FormData for file upload
+    const formDataPayload = new FormData();
+    
+    // Add form fields
+    if (formData.firstName) formDataPayload.append('first_name', formData.firstName);
+    if (formData.surname) formDataPayload.append('sur_name', formData.surname);
+    if (formData.email) formDataPayload.append('email', formData.email);
+    if (formData.bvn) formDataPayload.append('bvn', formData.bvn);
+    if (formData.password) formDataPayload.append('password', formData.password);
+    if (formData.role) formDataPayload.append('role', formData.role);
+    
+    // Add image file if selected
+    if (selectedImage) {
+      console.log('Adding image to FormData:', selectedImage.name, selectedImage.type, selectedImage.size);
+      formDataPayload.append('profile_picture', selectedImage);
+    }
+
+    // Debug: Log FormData contents
+    console.log('FormData contents:');
+    for (const [key, value] of formDataPayload.entries()) {
+      console.log(key, value);
+    }
+
+    updateUserMutation.mutate(formDataPayload);
   };
 
   if (!isOpen) return null;
@@ -70,16 +125,48 @@ const EditProfile = ({ isOpen, onClose, adminData }: EditProfileProps) => {
         <div className="p-6 overflow-y-auto" style={{ height: 'calc(100% - 120px)' }}>
           {/* Profile Image */}
           <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center">
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <path d="M16 16C19.3137 16 22 13.3137 22 10C22 6.68629 19.3137 4 16 4C12.6863 4 10 6.68629 10 10C10 13.3137 12.6863 16 16 16Z" fill="#9CA3AF"/>
-                <path d="M16 18C21.5228 18 26 22.4772 26 28H6C6 22.4772 10.4772 18 16 18Z" fill="#9CA3AF"/>
-              </svg>
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                {imagePreview ? (
+                  <img 
+                    src={imagePreview} 
+                    alt="Profile preview" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : adminData.image ? (
+                  <img 
+                    src={adminData.image} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                    }}
+                  />
+                ) : null}
+                <div className={`w-full h-full flex items-center justify-center ${imagePreview || adminData.image ? 'hidden' : ''}`}>
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                    <path d="M16 16C19.3137 16 22 13.3137 22 10C22 6.68629 19.3137 4 16 4C12.6863 4 10 6.68629 10 10C10 13.3137 12.6863 16 16 16Z" fill="#9CA3AF"/>
+                    <path d="M16 18C21.5228 18 26 22.4772 26 28H6C6 22.4772 10.4772 18 16 18Z" fill="#9CA3AF"/>
+                  </svg>
+                </div>
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              </div>
             </div>
           </div>
 
           {/* Form */}
-          <div className="space-y-4">
+          <form onSubmit={handleSave} className="space-y-4">
             {/* First Name */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -182,13 +269,23 @@ const EditProfile = ({ isOpen, onClose, adminData }: EditProfileProps) => {
             {/* Save Button */}
             <div className="mt-8">
               <button
-                onClick={handleSave}
-                className="w-full bg-[#273E8E] cursor-pointer text-white py-3 rounded-full font-medium hover:bg-[#1f2f7a] transition-colors"
+                type="submit"
+                disabled={updateUserMutation.isPending}
+                className={`w-full bg-[#273E8E] cursor-pointer text-white py-3 rounded-full font-medium hover:bg-[#1f2f7a] transition-colors flex items-center justify-center ${
+                  updateUserMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
-                Save
+                {updateUserMutation.isPending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Updating...
+                  </>
+                ) : (
+                  'Save'
+                )}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       </div>
     </div>

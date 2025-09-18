@@ -7,7 +7,12 @@ export const sendLoanToPartner = async (
   payload: { partner_id: number },
   token: string
 ): Promise<any> => {
-  return await apiCall(API_ENDPOINTS.ADMIN.SendToPartner(loanId), "POST", payload, token);
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.SendToPartner(loanId),
+    "POST",
+    payload,
+    token
+  );
 };
 
 //POST /send to Loan Disburesement
@@ -16,5 +21,24 @@ export const distributeLoan = async (
   payload: { distribute_amount: number; status: string },
   token: string
 ): Promise<any> => {
-  return await apiCall(API_ENDPOINTS.ADMIN.LoanDistribute(calcId), "POST", payload, token);
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.LoanDistribute(calcId),
+    "POST",
+    payload,
+    token
+  );
+};
+
+//POST /admin/send-to-partner/{id}
+export const sendToPartnerDetail = async (
+  id: number | string,
+  payload: { partner_id: number },
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.SendToPartnerDetail(id),
+    "POST",
+    payload,
+    token
+  );
 };

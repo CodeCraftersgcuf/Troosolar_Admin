@@ -4,6 +4,7 @@ const API_ENDPOINTS = {
   ADMIN: {
     // --- Auth ---
     Login: API_DOMAIN + "/login", // POST
+    Logout: API_DOMAIN + "/logout", // POST
 
     // --- Dashboard ---
     Dashboard: API_DOMAIN + "/admin/dashboard", // GET
@@ -12,6 +13,9 @@ const API_ENDPOINTS = {
     UsersList: API_DOMAIN + "/all-users", // GET
     UserUpdate: (id: number | string) => `${API_DOMAIN}/update-user/${id}`, // POST
     UserShow: (id: number | string) => `${API_DOMAIN}/single-user/${id}`, // GET
+
+    //Update User
+    UpdateUser: API_DOMAIN + "/update-user", // POST
 
     // --- Loans (admin tools) ---
     AllLoanStatus: API_DOMAIN + "/all-loan-status", // GET
@@ -118,6 +122,17 @@ const API_ENDPOINTS = {
     //Kyc-Detail
     Get_User_Kyc_Detail: (id: number | string) =>
       `${API_DOMAIN}/loan-kyc-details/${id}`, // GET
+
+    //Ticket Status Update
+    TicketStatusUpdate: (id: number | string) =>
+      `${API_DOMAIN}/admin/tickets/${id}/status`, // POST
+    //Edit User
+    EditUser: (id: number | string) =>
+      `${API_DOMAIN}/admin/user/edit-user/${id}`, // POST
+
+    //Post Send the Partner Detail
+    SendToPartnerDetail: (id: number | string) =>
+      `${API_DOMAIN}/admin/send-to-partner/${id}`, // POST
   },
 };
 

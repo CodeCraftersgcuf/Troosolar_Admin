@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import LinkComp from "./components/Link";
 import { Sidebar_links } from "../constants/siderbar";
 import images from "../constants/images";
+import { useMutation } from "@tanstack/react-query";
+import Cookies from "js-cookie";
+import { adminLogout } from "../utils/mutations/auth";
 
 interface SidebarProps {
     setMobileOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -10,12 +13,34 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ setMobileOpen }) => {
     const location = useLocation();
+    const navigate = useNavigate();
     const [activeLink, setActiveLink] = useState<string>("/dashboard");
     const [menuOpen, setMenuOpen] = useState<boolean>(false);
 
     useEffect(() => {
         setActiveLink(location.pathname);
     }, [location.pathname]);
+
+    // Logout mutation
+    const { mutate: logout, isPending: isLoggingOut } = useMutation({
+        mutationFn: adminLogout,
+        onSuccess: () => {
+            // Remove token from cookies
+            Cookies.remove("token");
+            // Navigate to login page
+            navigate("/login");
+        },
+        onError: (error: Error) => {
+            console.error("Logout failed:", error);
+            // Even if logout API fails, remove token locally and redirect
+            Cookies.remove("token");
+            navigate("/login");
+        }
+    });
+
+    const handleLogout = () => {
+        logout();
+    };
 
     return (
         <div
@@ -75,9 +100,13 @@ const Sidebar: React.FC<SidebarProps> = ({ setMobileOpen }) => {
 
             {/* Logout Button */}
             <div className=" pt-4 border-t-2 border-[#ffffff79] mx-4 mt-4 flex items-center justify-center">
-                <button className="flex items-center p-2 py-4 cursor-pointer gap-2 text-white font-bold rounded-lg w-full hover:border hover:border-white ">
+                <button 
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className={`flex items-center p-2 py-4 cursor-pointer gap-2 text-white font-bold rounded-lg w-full hover:border hover:border-white ${isLoggingOut ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
                     <img src={images.logout} alt="logout" className="w-6 h-6" />
-                    {!menuOpen && <span>Logout</span>}
+                    {!menuOpen && <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>}
                 </button>
             </div>
         </div>

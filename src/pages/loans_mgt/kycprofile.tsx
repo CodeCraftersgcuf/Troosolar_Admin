@@ -6,7 +6,8 @@ import LoadingSpinner from "../../components/common/LoadingSpinner";
 import { getUserKycDetail } from "../../utils/queries/user_kyc";
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
-
+import { sendToPartnerDetail } from "../../utils/mutations/loans";
+import { getAllFinance } from "../../utils/queries/finance";
 
 type KycProfileProps = {
   isOpen: boolean;

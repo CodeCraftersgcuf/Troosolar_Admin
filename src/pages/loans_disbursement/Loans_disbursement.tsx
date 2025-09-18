@@ -73,22 +73,20 @@ const StatusToggle = ({ activeStatus, setActiveStatus }: StatusToggleProps) => {
   return (
     <div className="flex bg-white rounded-full border border-[#CDCDCD] p-2 shadow-sm w-fit">
       <button
-        className={`px-5 py-3 rounded-full text-sm font-medium cursor-pointer transition-colors duration-200 ${
-          activeStatus === "approved"
+        className={`px-5 py-3 rounded-full text-sm font-medium cursor-pointer transition-colors duration-200 ${activeStatus === "approved"
             ? "bg-[#273E8E] text-white"
             : "text-[#000000B2] bg-transparent"
-        }`}
+          }`}
         onClick={() => setActiveStatus("approved")}
       >
         Partner Approved
       </button>
 
       <button
-        className={`px-5 py-3 rounded-full text-sm font-medium cursor-pointer transition-colors duration-200 ${
-          activeStatus === "pending"
+        className={`px-5 py-3 rounded-full text-sm font-medium cursor-pointer transition-colors duration-200 ${activeStatus === "pending"
             ? "bg-[#273E8E] text-white"
             : "text-[#000000B2] bg-transparent"
-        }`}
+          }`}
         onClick={() => setActiveStatus("pending")}
       >
         Pending Approval
@@ -113,7 +111,7 @@ const Loans_disbursement = () => {
   } | null>(null);
   const [activeStatus, setActiveStatus] = useState("approved"); // default to approved
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -167,56 +165,57 @@ const Loans_disbursement = () => {
   // Parse API response to get stats and disbursement list
   const stats = disbursementApiData?.data
     ? [
-        {
-          label: "Total Loans",
-          value: disbursementApiData.data["total loans"] ?? 0,
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "Loans Disbursed",
-          value: disbursementApiData.data["loan distributed"] ?? 0,
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "Amount Disbursed",
-          value: disbursementApiData.data["amount distributed "] ?? 0,
-          icon: "/assets/images/Users.png",
-        },
-      ]
+      {
+        label: "Total Loans",
+        value: disbursementApiData.data["total loans"] ?? 0,
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "Loans Disbursed",
+        value: disbursementApiData.data["loan distributed"] ?? 0,
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "Amount Disbursed",
+        value: disbursementApiData.data["amount distributed "] ?? 0,
+        icon: "/assets/images/Users.png",
+      },
+    ]
     : [
-        {
-          label: "Total Loans",
-          value: 0,
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "Loans Disbursed",
-          value: 0,
-          icon: "/assets/images/Users.png",
-        },
-        {
-          label: "Amount Disbursed",
-          value: 0,
-          icon: "/assets/images/Users.png",
-        },
-      ];
+      {
+        label: "Total Loans",
+        value: 0,
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "Loans Disbursed",
+        value: 0,
+        icon: "/assets/images/Users.png",
+      },
+      {
+        label: "Amount Disbursed",
+        value: 0,
+        icon: "/assets/images/Users.png",
+      },
+    ];
 
   // Convert API disbursement objects to array
   const apiDisbursementList = disbursementApiData?.data
     ? Object.keys(disbursementApiData.data)
-        .filter((key) => !isNaN(Number(key)))
-        .map((key) => {
-          const loan = disbursementApiData.data[key];
-          return {
-            id: loan.id,
-            name: loan.name,
-            amount: loan.Amount || loan.amount,
-            duration: loan.Duration || loan.duration,
-            date: loan.date,
-            disbursement: loan["disbursement status"],
-            loanStatus: loan["approval status"],
-          };
-        })
+      .filter((key) => !isNaN(Number(key)))
+      .map((key) => {
+        const loan = disbursementApiData.data[key];
+        return {
+          id: loan.id,
+          name: loan.name,
+          amount: loan.Amount || loan.amount,
+          duration: loan.Duration || loan.duration,
+          date: loan.date,
+          disbursement: loan["disbursement status"],
+          loanStatus: loan["approval status"],
+          loan_application_id: loan.loan_application_id,
+        };
+      })
     : [];
 
   // Filter disbursement data based on selected filters and search term
@@ -415,9 +414,8 @@ const Loans_disbursement = () => {
                   {currentDisbursements.map((loan, index) => (
                     <tr
                       key={loan.id}
-                      className={`${
-                        index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                      } transition-colors border-b border-gray-100 last:border-b-0`}
+                      className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                        } transition-colors border-b border-gray-100 last:border-b-0`}
                     >
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <input type="checkbox" className="rounded" />
@@ -443,8 +441,8 @@ const Loans_disbursement = () => {
                                 loan.disbursement.toLowerCase() === "completed"
                                   ? "#008000"
                                   : loan.disbursement.toLowerCase() === "pending"
-                                  ? "#FF8C00"
-                                  : "#6B7280",
+                                    ? "#FF8C00"
+                                    : "#6B7280",
                             }}
                           ></span>
                           {loan.disbursement}
@@ -462,12 +460,12 @@ const Loans_disbursement = () => {
                                 loan.loanStatus.toLowerCase() === "active"
                                   ? "#008000"
                                   : loan.loanStatus.toLowerCase() === "repaid"
-                                  ? "#0000FF"
-                                  : loan.loanStatus.toLowerCase() === "overdue"
-                                  ? "#FF0000"
-                                  : loan.loanStatus.toLowerCase() === "pending"
-                                  ? "#FF8C00"
-                                  : "#6B7280",
+                                    ? "#0000FF"
+                                    : loan.loanStatus.toLowerCase() === "overdue"
+                                      ? "#FF0000"
+                                      : loan.loanStatus.toLowerCase() === "pending"
+                                        ? "#FF8C00"
+                                        : "#6B7280",
                             }}
                           ></span>
                           {loan.loanStatus}
@@ -499,7 +497,7 @@ const Loans_disbursement = () => {
                             <button
                               className="text-white px-7 py-3.5 rounded-full cursor-pointer hover:opacity-90 transition-opacity text-xs font-medium"
                               style={{ backgroundColor: "#273E8E" }}
-                              onClick={() => handleViewLoanDetail(loan.id)}
+                              onClick={() => handleViewLoanDetail(loan.loan_application_id)}
                             >
                               View Details
                             </button>
@@ -512,7 +510,7 @@ const Loans_disbursement = () => {
               </table>
             )}
           </div>
-          
+
           {/* Pagination Controls */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
@@ -521,21 +519,20 @@ const Loans_disbursement = () => {
                   Showing {startIndex + 1} to {Math.min(endIndex, filteredDisbursementData.length)} of {filteredDisbursementData.length} results
                 </span>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 {/* Previous Button */}
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                    currentPage === 1
+                  className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === 1
                       ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
-                  }`}
+                    }`}
                 >
                   Previous
                 </button>
-                
+
                 {/* Page Numbers */}
                 <div className="flex items-center space-x-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -549,32 +546,30 @@ const Loans_disbursement = () => {
                     } else {
                       pageNumber = currentPage - 2 + i;
                     }
-                    
+
                     return (
                       <button
                         key={pageNumber}
                         onClick={() => setCurrentPage(pageNumber)}
-                        className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                          currentPage === pageNumber
+                        className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === pageNumber
                             ? 'bg-[#273E8E] text-white border-[#273E8E]'
                             : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                        }`}
+                          }`}
                       >
                         {pageNumber}
                       </button>
                     );
                   })}
                 </div>
-                
+
                 {/* Next Button */}
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                    currentPage === totalPages
+                  className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === totalPages
                       ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
-                  }`}
+                    }`}
                 >
                   Next
                 </button>

@@ -3,15 +3,22 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import Header from "../../component/Header";
 import images from "../../constants/images";
 import { getSingleUser } from "../../utils/queries/users";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
+import { editUser } from "../../utils/mutations/user";
+// Helper function to format date from API
+const formatActivityDate = (dateString: string) => {
+  const date = new Date(dateString);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear().toString().slice(-2);
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  const ampm = date.getHours() >= 12 ? 'PM' : 'AM';
 
-const activities = [
-  { activity: "User Created account", date: "05-07-25/07:22AM" },
-  { activity: "User Created account", date: "05-07-25/07:22AM" },
-  { activity: "User Created account", date: "05-07-25/07:22AM" },
-];
+  return `${day}-${month}-${year}/${hours}:${minutes}${ampm}`;
+};
 
 const UserActivity: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +34,7 @@ const UserActivity: React.FC = () => {
     staleTime: 5 * 60 * 1000, // cache for 5 minutes
   });
 
+  console.log("Single User API Data:", apiData);
   // Memoize user data so it persists across tab changes
   const user = useMemo(() => {
     if (!apiData?.data) return null;
@@ -42,26 +50,108 @@ const UserActivity: React.FC = () => {
     };
   }, [apiData]);
 
+  // Memoize activities data from API
+  const activities = useMemo(() => {
+    if (!apiData?.data?.activitys) return [];
+    return apiData.data.activitys.map((activity: { activity: string; created_at: string }) => ({
+      activity: activity.activity,
+      date: formatActivityDate(activity.created_at)
+    }));
+  }, [apiData]);
+
   // Move hooks above all conditional returns
   const [showEdit, setShowEdit] = useState(false);
   const [form, setForm] = useState({
-    firstName: user?.name?.split(" ")[1] || user?.name || "",
-    surname: user?.name?.split(" ")[0] || "",
-    email: user?.email || "",
-    phone: user?.phone || "",
-    bvn: user?.bvn || "",
+    firstName: "",
+    surname: "",
+    email: "",
+    phone: "",
+    bvn: "",
     password: "",
     referral: "",
   });
   const [success, setSuccess] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  // Populate form when user data is available
+  React.useEffect(() => {
+    if (user && apiData?.data) {
+      setForm({
+        firstName: apiData.data.first_name || "",
+        surname: apiData.data.sur_name || "",
+        email: apiData.data.email || "",
+        phone: apiData.data.phone || "",
+        bvn: apiData.data.bvn || "",
+        password: "",
+        referral: apiData.data.refferal_code || "",
+      });
+    }
+  }, [user, apiData]);
+
+  // Edit user mutation
+  const editUserMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      return await editUser(user?.id || "", formData, token || "");
+    },
+    onSuccess: () => {
+      setSuccess(true);
+      setTimeout(() => {
+        setSuccess(false);
+        setShowEdit(false);
+        // Reset form and image states
+        setSelectedImage(null);
+        setImagePreview(null);
+      }, 1200);
+    },
+    onError: (error) => {
+      console.error("Failed to update user:", error);
+      alert("Failed to update user profile. Please try again.");
+    },
+  });
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    setSuccess(true);
-    setTimeout(() => {
-      setSuccess(false);
-      setShowEdit(false);
-    }, 1200);
+    if (!user?.id) return;
+
+    // Create FormData for file upload
+    const formData = new FormData();
+    
+    // Add form fields
+    if (form.firstName) formData.append('first_name', form.firstName);
+    if (form.surname) formData.append('sur_name', form.surname);
+    if (form.email) formData.append('email', form.email);
+    if (form.phone) formData.append('phone', form.phone);
+    if (form.bvn) formData.append('bvn', form.bvn);
+    if (form.password) formData.append('password', form.password);
+    if (form.referral) formData.append('referral', form.referral);
+    
+    // Add image file if selected
+    if (selectedImage) {
+      console.log('Adding image to FormData:', selectedImage.name, selectedImage.type, selectedImage.size);
+      formData.append('profile_picture', selectedImage);
+    }
+
+    // Debug: Log FormData contents
+    console.log('FormData contents:');
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value);
+    }
+
+    editUserMutation.mutate(formData);
+  };
+
+  // Handle image upload
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Handle notification click
@@ -93,13 +183,12 @@ const UserActivity: React.FC = () => {
         {/* Tabs */}
         <div className="flex gap-8 border-b border-gray-200 text-md mb-6">
           <button
-            className={`pb-2 cursor-pointer relative ${
-              !location.pathname.includes("/loans") &&
+            className={`pb-2 cursor-pointer relative ${!location.pathname.includes("/loans") &&
               !location.pathname.includes("/transactions") &&
               !location.pathname.includes("/orders")
-                ? "text-black font-semibold"
-                : "text-[#00000080]"
-            }`}
+              ? "text-black font-semibold"
+              : "text-[#00000080]"
+              }`}
             onClick={() => navigate(`/user-activity/${user.id}`)}
           >
             Activity
@@ -110,11 +199,10 @@ const UserActivity: React.FC = () => {
               )}
           </button>
           <button
-            className={`pb-2 cursor-pointer relative ${
-              location.pathname.includes("/loans")
-                ? "text-black font-semibold"
-                : "text-[#00000080]"
-            }`}
+            className={`pb-2 cursor-pointer relative ${location.pathname.includes("/loans")
+              ? "text-black font-semibold"
+              : "text-[#00000080]"
+              }`}
             onClick={() => navigate(`/user-activity/${user.id}/loans`)}
           >
             Loans
@@ -123,11 +211,10 @@ const UserActivity: React.FC = () => {
             )}
           </button>
           <button
-            className={`pb-2 cursor-pointer relative ${
-              location.pathname.includes("/transactions")
-                ? "text-black font-semibold"
-                : "text-[#00000080]"
-            }`}
+            className={`pb-2 cursor-pointer relative ${location.pathname.includes("/transactions")
+              ? "text-black font-semibold"
+              : "text-[#00000080]"
+              }`}
             onClick={() => navigate(`/user-activity/${user.id}/transactions`)}
           >
             Transactions
@@ -136,11 +223,10 @@ const UserActivity: React.FC = () => {
             )}
           </button>
           <button
-            className={`pb-2 cursor-pointer relative ${
-              location.pathname.includes("/orders")
-                ? "text-black font-semibold"
-                : "text-[#00000080]"
-            }`}
+            className={`pb-2 cursor-pointer relative ${location.pathname.includes("/orders")
+              ? "text-black font-semibold"
+              : "text-[#00000080]"
+              }`}
             onClick={() => navigate(`/user-activity/${user.id}/orders`)}
           >
             Orders
@@ -164,11 +250,22 @@ const UserActivity: React.FC = () => {
               borderImageSlice: 1,
             }}
           >
-            <img
-              src={"/assets/images/profile.png"}
-              alt={user.name}
-              className="w-32 h-32 rounded-full object-cover border-4 border-white mb-4"
-            />
+            <div className="w-32 h-32 rounded-full object-cover border-4 border-white mb-4 overflow-hidden flex items-center justify-center bg-gray-200">
+              {apiData?.data?.profile_picture ? (
+                <img
+                  src={`https://troosolar.hmstech.org/users/${apiData.data.profile_picture}`}
+                  alt={user.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+              ) : null}
+              <div className={`w-full h-full flex items-center justify-center text-white text-lg font-semibold ${apiData?.data?.profile_picture ? 'hidden' : ''}`}>
+                {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+              </div>
+            </div>
             <div className="text-white text-xl font-semibold mb-1">
               {user.name}
             </div>
@@ -182,6 +279,14 @@ const UserActivity: React.FC = () => {
             {showEdit && (
               <div className="fixed inset-0 z-50 flex justify-end items-stretch backdrop-blur-sm bg-black/30">
                 <div className="bg-white rounded-l-3xl shadow-xl w-full max-w-lg h-screen p-6 relative flex flex-col">
+                  {isApiLoading && (
+                    <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
+                      <div className="text-center">
+                        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                        <p className="text-sm text-gray-600">Loading user data...</p>
+                      </div>
+                    </div>
+                  )}
                   <button
                     className="absolute cursor-pointer top-4 right-4 w-8 h-8 flex items-center justify-center"
                     onClick={() => setShowEdit(false)}
@@ -192,7 +297,41 @@ const UserActivity: React.FC = () => {
                     Edit Profile
                   </h2>
                   <div className="flex justify-center mb-4">
-                    <div className="w-16 h-16 rounded-full bg-gray-300"></div>
+                    <div className="relative">
+                      <div className="w-16 h-16 rounded-full bg-gray-300 overflow-hidden flex items-center justify-center">
+                        {imagePreview ? (
+                          <img 
+                            src={imagePreview} 
+                            alt="Profile preview" 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : apiData?.data?.profile_picture ? (
+                          <img 
+                            src={`https://troosolar.hmstech.org/users/${apiData.data.profile_picture}`} 
+                            alt="Profile" 
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-full h-full flex items-center justify-center text-gray-500 text-xs ${imagePreview || apiData?.data?.profile_picture ? 'hidden' : ''}`}>
+                          No Image
+                        </div>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      </div>
+                    </div>
                   </div>
                   <form
                     className="flex-1 flex flex-col justify-between"
@@ -304,9 +443,19 @@ const UserActivity: React.FC = () => {
                     <div className="mt-4">
                       <button
                         type="submit"
-                        className="w-full bg-[#273E8E] cursor-pointer text-white text-sm py-3 rounded-full font-medium hover:bg-blue-700 transition-colors"
+                        disabled={editUserMutation.isPending}
+                        className={`w-full bg-[#273E8E] cursor-pointer text-white text-sm py-3 rounded-full font-medium hover:bg-blue-700 transition-colors flex items-center justify-center ${
+                          editUserMutation.isPending ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                       >
-                        Save
+                        {editUserMutation.isPending ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Updating...
+                          </>
+                        ) : (
+                          'Save'
+                        )}
                       </button>
                       {success && (
                         <div className="text-green-600 text-center font-semibold mt-2">
@@ -321,7 +470,7 @@ const UserActivity: React.FC = () => {
           </div>
           <div className="flex-1 grid grid-cols-2 gap-x-12 gap-y-4 text-white text-lg">
             <div>
-              <div className="text-sm text-[#FFFFFF80] mb-2">First Name</div>
+              <div className="text-sm text-[#FFFFFF80] mb-2">Surname</div>
               <div>{user.name.split(" ")[1] || user.name}</div>
             </div>
             <div>
@@ -329,7 +478,7 @@ const UserActivity: React.FC = () => {
               <div>**********</div>
             </div>
             <div>
-              <div className="text-sm text-[#FFFFFF80] mb-2">Surname</div>
+              <div className="text-sm text-[#FFFFFF80] mb-2">First Name</div>
               <div>{user.name.split(" ")[0]}</div>
             </div>
             <div>
@@ -370,20 +519,27 @@ const UserActivity: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {activities.map((item, idx) => (
-                  <tr
-                    key={idx}
-                    className={`${
-                      idx % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                    } `}
-                  >
-                    <td className="p-4">
-                      <input className="cursor-pointer" type="checkbox" />
+                {activities.length > 0 ? (
+                  activities.map((item: { activity: string; date: string }, idx: number) => (
+                    <tr
+                      key={idx}
+                      className={`${idx % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                        } `}
+                    >
+                      <td className="p-4">
+                        <input className="cursor-pointer" type="checkbox" />
+                      </td>
+                      <td className="p-4">{item.activity}</td>
+                      <td className="p-4">{item.date}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={3} className="p-8 text-center text-gray-500">
+                      No activities found for this user.
                     </td>
-                    <td className="p-4">{item.activity}</td>
-                    <td className="p-4">{item.date}</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

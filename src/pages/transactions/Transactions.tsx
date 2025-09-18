@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Header from "../../component/Header";
 import { getTransactionStatusColor } from './transaction';
 import TransactionDetail from './TransactionDetail';
@@ -45,7 +45,7 @@ const Transactions = () => {
   });
 
   const summary = apiData?.summary || {};
-  const transactions = apiData?.transactions || [];
+  const transactions = useMemo(() => apiData?.transactions || [], [apiData?.transactions]);
 
   // Filter transaction data based on selected filters and search
   const filteredTransactionData = transactions.filter((transaction: {
@@ -93,6 +93,8 @@ const Transactions = () => {
   };
 
   const handleDropdownToggle = (transactionId: string) => {
+    console.log('Dropdown toggle clicked for transaction:', transactionId);
+    console.log('Current openDropdownId:', openDropdownId);
     setOpenDropdownId(openDropdownId === transactionId ? null : transactionId);
   };
 
@@ -102,6 +104,7 @@ const Transactions = () => {
   };
 
   const handleDropdownAction = (action: string, transactionId: string | number) => {
+    console.log('Dropdown action clicked:', { action, transactionId });
     if (action === 'View Transaction details') {
       const transaction = transactions.find((t: {
         id: number;
@@ -114,9 +117,16 @@ const Transactions = () => {
         tx_id?: string;
         reference?: string;
       }) => String(t.id) === String(transactionId));
+      
+      console.log('Found transaction:', transaction);
+      console.log('All transactions:', transactions);
+      
       if (transaction) {
         setSelectedTransaction(transaction);
         setShowTransactionDetail(true);
+        console.log('Modal should open now');
+      } else {
+        console.log('Transaction not found for ID:', transactionId);
       }
     }
     setOpenDropdownId(null);
@@ -130,12 +140,19 @@ const Transactions = () => {
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (openDropdownId) {
+      const target = event.target as Element;
+      
+      // Check if click is on dropdown button or inside dropdown menu
+      const isDropdownButton = target.closest('[data-dropdown-button]');
+      const isDropdownMenu = target.closest('[data-dropdown-menu]');
+      
+      if (openDropdownId && !isDropdownButton && !isDropdownMenu) {
+        console.log('Clicking outside dropdown, closing it');
         setOpenDropdownId(null);
       }
+      
       // Close status dropdown when clicking outside
       if (isStatusDropdownOpen) {
-        const target = event.target as Element;
         const statusDropdown = document.querySelector('.status-dropdown');
         if (statusDropdown && !statusDropdown.contains(target)) {
           setIsStatusDropdownOpen(false);
@@ -159,6 +176,14 @@ const Transactions = () => {
       selectedTransaction,
     });
   }, [showTransactionDetail, selectedTransaction]);
+
+  // Debug: Track dropdown state changes
+  useEffect(() => {
+    console.log('Dropdown state changed:', {
+      openDropdownId,
+      transactions: transactions.length
+    });
+  }, [openDropdownId, transactions]);
 
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
@@ -195,7 +220,7 @@ const Transactions = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-[#0000FF]">Total Users</p>
-                    <p className="text-2xl font-bold text-[#0000FF]">{summary?.total_users || 0}</p>
+                    <p className="text-2xl font-bold text-[#0000FF]">{summary?.total_users_with_transactions || 0}</p>
                   </div>
                 </div>
               </div>
@@ -231,7 +256,7 @@ const Transactions = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-[#0000FF]">Transactions</p>
-                    <p className="text-2xl font-bold text-[#0000FF]">₦{summary?.total_transaction_amount ? Number(summary.total_transaction_amount).toLocaleString() : 0}</p>
+                    <p className="text-2xl font-bold text-[#0000FF]">₦{summary?.total_amount ? Number(summary.total_amount).toLocaleString() : 0}</p>
                   </div>
                 </div>
               </div>
@@ -413,6 +438,7 @@ const Transactions = () => {
                         <div className="flex items-center space-x-2 relative">
                           <button
                             className="relative p-2 text-gray-600 hover:text-gray-900"
+                            data-dropdown-button
                             onClick={() => handleDropdownToggle(String(transaction.id))}
                           >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -422,12 +448,16 @@ const Transactions = () => {
 
                           {/* Dropdown Menu */}
                           {openDropdownId === String(transaction.id) && (
-                            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50" data-dropdown-menu>
                               <div className="py-2">
                                 <button
                                   className="w-full px-4 py-2 text-left text-sm text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-                                  onClick={() => handleDropdownAction('View Transaction details', transaction.id)}
-
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    console.log('Button clicked for transaction:', transaction.id);
+                                    handleDropdownAction('View Transaction details', transaction.id);
+                                  }}
                                 >
                                   View Transaction details
                                 </button>
@@ -457,8 +487,8 @@ const Transactions = () => {
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
                     className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === 1
-                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
                       }`}
                   >
                     Previous
@@ -483,8 +513,8 @@ const Transactions = () => {
                           key={pageNumber}
                           onClick={() => setCurrentPage(pageNumber)}
                           className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === pageNumber
-                              ? 'bg-[#273E8E] text-white border-[#273E8E]'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                             }`}
                         >
                           {pageNumber}
@@ -498,8 +528,8 @@ const Transactions = () => {
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
                     className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === totalPages
-                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
                       }`}
                   >
                     Next

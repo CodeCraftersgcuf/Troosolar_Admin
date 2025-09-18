@@ -4,6 +4,12 @@ import Header from "../Header";
 import type { User } from "../../constants/usermgt";
 import type { LoanDetail } from "./UserLoanData";
 
+//Code Related to the Integration
+import { sendToPartnerDetail } from "../../utils/mutations/loans";
+import { getAllFinance } from "../../utils/queries/finance";
+import { useMutation } from "@tanstack/react-query";
+
+
 interface ApiLoan {
   loan_application_id: number;
   user_name?: string;
@@ -155,7 +161,7 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
 
             <div className="mb-6">
               <label className="block text-base font-medium mb-2">
-                Select Partner
+                Select Partnerss
               </label>
               <div className="relative">
                 <select
@@ -164,9 +170,9 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                   onChange={(e) => setSelectedPartner(e.target.value)}
                 >
                   <option value="" disabled>
-                    Select Partner
+                    Select Partnerss
                   </option>
-                  <option value="partner1">Sterling Bank</option>
+                  <option value="partner1">Sterling Banssk</option>
                   <option value="partner2">Access Bank</option>
                   <option value="partner3">First Bank</option>
                   <option value="partner4">GTBank</option>

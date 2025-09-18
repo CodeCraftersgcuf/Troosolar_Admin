@@ -7,13 +7,14 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import { getSingleTicketDetail } from "../../utils/queries/tickets";
 import { replyToTicket } from "../../utils/mutations/tickets";
-
+import { updateTicketStatus } from "../../utils/mutations/tickets";
 
 
 interface TicketDetailModalProps {
     isOpen: boolean;
     onClose: () => void;
     ticket: ShopOrderData | null;
+    onStatusUpdate?: () => void; // Callback to refresh parent data
 }
 
 type ChatMsg = {
@@ -23,7 +24,7 @@ type ChatMsg = {
     at: string; // formatted time
 };
 
-const TicketDetailModal = ({ isOpen, onClose, ticket }: TicketDetailModalProps) => {
+const TicketDetailModal = ({ isOpen, onClose, ticket, onStatusUpdate }: TicketDetailModalProps) => {
     const [status, setStatus] = useState<"Change Status" | "Pending" | "Answered" | "Closed">("Change Status");
     const [input, setInput] = useState("");
     const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -47,7 +48,7 @@ const TicketDetailModal = ({ isOpen, onClose, ticket }: TicketDetailModalProps) 
     // Map API messages to ChatMsg[]
     useEffect(() => {
         if (!ticketDetail?.data) return;
-        const apiMsgs: ChatMsg[] = ticketDetail.data.messages.map((m: any, idx: number) => ({
+        const apiMsgs: ChatMsg[] = ticketDetail.data.messages.map((m: { sender: string; message: string; date: string }, idx: number) => ({
             id: idx,
             role: m.sender === "admin" ? "admin" : "user",
             text: m.message,
@@ -96,7 +97,7 @@ const TicketDetailModal = ({ isOpen, onClose, ticket }: TicketDetailModalProps) 
         mutationFn: async (msg: string) => {
             return await replyToTicket(ticketMeta.id, { message: msg }, token || "");
         },
-        onSuccess: (data) => {
+        onSuccess: () => {
             // Refetch ticket detail to get updated messages
             refetch();
             setInput("");
@@ -106,10 +107,35 @@ const TicketDetailModal = ({ isOpen, onClose, ticket }: TicketDetailModalProps) 
         },
     });
 
+    // Update ticket status mutation
+    const statusMutation = useMutation({
+        mutationFn: async (newStatus: string) => {
+            return await updateTicketStatus(ticketMeta.id, { status: newStatus.toLowerCase() }, token || "");
+        },
+        onSuccess: () => {
+            // Refetch ticket detail to get updated status
+            refetch();
+            // Call parent callback to refresh tickets list
+            onStatusUpdate?.();
+            console.log("Ticket status updated successfully");
+        },
+        onError: (error) => {
+            console.error("Failed to update ticket status:", error);
+            alert("Failed to update ticket status.");
+        },
+    });
+
     const handleSend = () => {
         const trimmed = input.trim();
         if (!trimmed || !ticketMeta.id) return;
         sendMutation.mutate(trimmed);
+    };
+
+    const handleStatusChange = (newStatus: string) => {
+        if (newStatus === "Change Status" || !ticketMeta.id) return;
+        
+        console.log("Updating ticket status to:", newStatus);
+        statusMutation.mutate(newStatus);
     };
 
     const onInputKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -136,16 +162,28 @@ const TicketDetailModal = ({ isOpen, onClose, ticket }: TicketDetailModalProps) 
                     </div>
                     <div className="flex items-center gap-3 justify-center">
                         <div className="flex justify-end px-5 pt-3 pb-0">
-                            <select
-                                className="border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white"
-                                value={status}
-                                onChange={(e) => setStatus(e.target.value as any)}
-                            >
-                                <option>Change Status</option>
-                                <option>Pending</option>
-                                <option>Answered</option>
-                                <option>Closed</option>
-                            </select>
+                            <div className="relative">
+                                <select
+                                    className="border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white disabled:opacity-50 disabled:cursor-not-allowed pr-8"
+                                    value={status}
+                                    onChange={(e) => {
+                                        const newStatus = e.target.value as "Change Status" | "Pending" | "Answered" | "Closed";
+                                        setStatus(newStatus);
+                                        handleStatusChange(newStatus);
+                                    }}
+                                    disabled={statusMutation.isPending}
+                                >
+                                    <option>Change Status</option>
+                                    <option>Pending</option>
+                                    <option>Answered</option>
+                                    <option>Closed</option>
+                                </select>
+                                {statusMutation.isPending && (
+                                    <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <button
                             onClick={onClose}
@@ -220,11 +258,11 @@ const TicketDetailModal = ({ isOpen, onClose, ticket }: TicketDetailModalProps) 
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={onInputKey}
-                            disabled={sendMutation.isLoading}
+                            disabled={sendMutation.isPending}
                         />
                         <button
                             onClick={handleSend}
-                            disabled={!input.trim() || sendMutation.isLoading}
+                            disabled={!input.trim() || sendMutation.isPending}
                             className="p-2 rounded-full bg-[#273E8E] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#1e3270] transition"
                             aria-label="Send message"
                         >
