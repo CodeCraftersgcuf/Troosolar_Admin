@@ -73,7 +73,7 @@ const Shop_mgt = () => {
   const [selectedMoreActions, setSelectedMoreActions] =
     useState("More Actions");
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -555,7 +555,7 @@ const Shop_mgt = () => {
                   </table>
                 </div>
               )}
-              
+
               {/* Pagination Controls */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
@@ -564,21 +564,20 @@ const Shop_mgt = () => {
                       Showing {startIndex + 1} to {Math.min(endIndex, filteredOrderData.length)} of {filteredOrderData.length} results
                     </span>
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     {/* Previous Button */}
                     <button
                       onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                       disabled={currentPage === 1}
-                      className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                        currentPage === 1
+                      className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === 1
                           ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                           : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
-                      }`}
+                        }`}
                     >
                       Previous
                     </button>
-                    
+
                     {/* Page Numbers */}
                     <div className="flex items-center space-x-1">
                       {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -592,32 +591,30 @@ const Shop_mgt = () => {
                         } else {
                           pageNumber = currentPage - 2 + i;
                         }
-                        
+
                         return (
                           <button
                             key={pageNumber}
                             onClick={() => setCurrentPage(pageNumber)}
-                            className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                              currentPage === pageNumber
+                            className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === pageNumber
                                 ? 'bg-[#273E8E] text-white border-[#273E8E]'
                                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                            }`}
+                              }`}
                           >
                             {pageNumber}
                           </button>
                         );
                       })}
                     </div>
-                    
+
                     {/* Next Button */}
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                       disabled={currentPage === totalPages}
-                      className={`px-3 py-2 text-sm font-medium rounded-md border ${
-                        currentPage === totalPages
+                      className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === totalPages
                           ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
                           : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
-                      }`}
+                        }`}
                     >
                       Next
                     </button>

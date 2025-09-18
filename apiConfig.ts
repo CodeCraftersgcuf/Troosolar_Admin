@@ -133,6 +133,12 @@ const API_ENDPOINTS = {
     //Post Send the Partner Detail
     SendToPartnerDetail: (id: number | string) =>
       `${API_DOMAIN}/admin/send-to-partner/${id}`, // POST
+
+    //Mono - Loan - Calculation
+    MonoLoanCalculation: API_DOMAIN + "/mono-loan-calculations", // GET
+    MonoLoanCalculationApproval: (id: number | string) =>
+      `${API_DOMAIN}/mono-loan/${id}`, // POST
+
   },
 };
 

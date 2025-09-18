@@ -19,6 +19,7 @@ import Settings from "./pages/settings/Settings";
 import Login from "./pages/auth/Login.tsx";
 import Cookies from "js-cookie";
 import Tickets from "./pages/tickets/Tickets.tsx";
+import User_approval from "./pages/loans_approval/User_approval.tsx";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = Cookies.get("token");
@@ -49,6 +50,7 @@ function App() {
           <Route path="user-mgt" element={<User_mgt />} />
           <Route path="credit-score" element={<Credit_score />} />
           <Route path="loans-mgt" element={<Loans_mgt />} />
+          <Route path="loans-approval" element={<User_approval />} />
           <Route path="loans-disbursement" element={<Loans_disbursement />} />
           <Route path="transactions" element={<Transactions />} />
           <Route path="balances" element={<Balances />} />

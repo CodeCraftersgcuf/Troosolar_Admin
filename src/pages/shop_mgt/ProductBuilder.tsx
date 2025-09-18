@@ -79,8 +79,8 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
   });
 
   // Extract products data from API response
-  const availableProducts: ApiProduct[] = useMemo(() => 
-    (productsResponse as { data?: ApiProduct[] })?.data || [], 
+  const availableProducts: ApiProduct[] = useMemo(() =>
+    (productsResponse as { data?: ApiProduct[] })?.data || [],
     [productsResponse]
   );
 
@@ -233,8 +233,8 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
                     key={product.id}
                     onClick={() => handleProductSelect(product)}
                     className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
                       }`}
                   >
                     <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
@@ -252,8 +252,8 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
                       <p className="text-lg font-semibold text-gray-900">{formatPrice(product.price)}</p>
                     </div>
                     <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isSelected
-                        ? 'border-blue-500 bg-blue-500'
-                        : 'border-gray-300'
+                      ? 'border-blue-500 bg-blue-500'
+                      : 'border-gray-300'
                       }`}>
                       {isSelected && (
                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -311,7 +311,7 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
                 Featured Image *
               </label>
               <p className="text-xs text-gray-500 mb-3">Select the main bundle image</p>
-              
+
               <div className="w-full">
                 {featuredImage ? (
                   <div className="w-32 h-24 border border-gray-300 rounded-lg overflow-hidden relative">
@@ -403,19 +403,18 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
               type="button"
               onClick={handleCreateBundle}
               disabled={isSubmitting}
-              className={`w-full py-3 px-4 font-medium rounded-full transition-colors flex items-center justify-center ${
-                isSubmitting 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-blue-900 cursor-pointer hover:bg-blue-800'
-              }`}
+              className={`w-full py-3 px-4 font-medium rounded-full transition-colors flex items-center justify-center ${isSubmitting
+                ? 'bg-gray-400 cursor-not-allowed text-white '
+                : 'bg-blue-900 cursor-pointer hover:bg-blue-800'
+                }`}
             >
               {isSubmitting ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                <div className="flex items-center justify-center text-white">
+                  <div className="animate-spin text-white rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Creating Bundle...
-                </>
+                </div>
               ) : (
-                'Create Bundle'
+                <span className="text-white"> Create Bundle</span>
               )}
             </button>
 

@@ -42,3 +42,17 @@ export const sendToPartnerDetail = async (
     token
   );
 };
+
+//POST - Mono Loan Calculation Approval
+export const postMonoLoanCalculationApproval = async (
+  id: number | string,
+  payload: { amount: string; duration: string },
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.MonoLoanCalculationApproval(id),
+    "POST",
+    payload,
+    token
+  );
+};
