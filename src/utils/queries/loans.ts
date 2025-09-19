@@ -26,6 +26,7 @@ export const getFullLoanDetail = async (
   id: number | string,
   token: string
 ): Promise<any> => {
+  console.log("The Id coming at the send request", id)
   return await apiCall(
     API_ENDPOINTS.ADMIN.FullLoanDetail(id),
     "GET",

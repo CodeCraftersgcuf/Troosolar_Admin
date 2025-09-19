@@ -336,8 +336,8 @@ const User_approval: React.FC = () => {
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
                     className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === 1
-                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
                       }`}
                   >
                     Previous
@@ -362,8 +362,8 @@ const User_approval: React.FC = () => {
                           key={pageNumber}
                           onClick={() => setCurrentPage(pageNumber)}
                           className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === pageNumber
-                              ? 'bg-[#273E8E] text-white border-[#273E8E]'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                             }`}
                         >
                           {pageNumber}
@@ -377,8 +377,8 @@ const User_approval: React.FC = () => {
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
                     className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === totalPages
-                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
                       }`}
                   >
                     Next
@@ -405,8 +405,8 @@ const User_approval: React.FC = () => {
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">Approve Loan</h2>
-              <button 
-                onClick={handleCloseApprovalModal} 
+              <button
+                onClick={handleCloseApprovalModal}
                 className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -420,7 +420,7 @@ const User_approval: React.FC = () => {
                 {selectedLoan.user_first_name} {selectedLoan.user_sur_name}
               </h3>
               <p className="text-sm text-gray-600 mb-4">{selectedLoan.user_email}</p>
-              
+
               <div className="bg-gray-50 p-4 rounded-lg mb-4">
                 <h4 className="font-medium text-gray-900 mb-2">Current Loan Details:</h4>
                 <div className="space-y-1 text-sm text-gray-600">
@@ -472,11 +472,10 @@ const User_approval: React.FC = () => {
                 <button
                   type="submit"
                   disabled={approvalMutation.isPending}
-                  className={`px-6 py-2 rounded-full font-medium transition-colors flex items-center ${
-                    approvalMutation.isPending
+                  className={`px-6 py-2 rounded-full font-medium transition-colors flex items-center ${approvalMutation.isPending
                       ? 'bg-gray-400 text-white cursor-not-allowed'
                       : 'bg-[#273E8E] text-white hover:bg-[#1f2f7a] cursor-pointer'
-                  }`}
+                    }`}
                 >
                   {approvalMutation.isPending ? (
                     <>

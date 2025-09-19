@@ -11,7 +11,7 @@ interface DisburseModalProps {
 
 //Code Related to the Integration
 import { useMutation } from "@tanstack/react-query";
-import { distributeLoan } from "../../utils/mutations/loans";
+import { loanGrant } from "../../utils/mutations/loans";
 import Cookies from "js-cookie";
 
 const DisburseModal: React.FC<DisburseModalProps> = ({
@@ -39,7 +39,7 @@ const DisburseModal: React.FC<DisburseModalProps> = ({
 
   const mutation = useMutation({
     mutationFn: async () => {
-      return await distributeLoan(
+      return await loanGrant(
         loanId,
         {
           distribute_amount: Number(editableAmount),

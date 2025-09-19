@@ -36,33 +36,34 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
   // Map API response to loan detail object
   const currentLoan = apiLoan?.data
     ? {
-        id: String(apiLoan.data.id ?? loanId),
-        userId: String(apiLoan.data.user_id ?? loanId),
-        name: apiLoan.data.user ? `${apiLoan.data.user.first_name} ${apiLoan.data.user.sur_name}` : "Unknown User",
-        loanLimit: apiLoan.data.mono?.loan_limit !== null ? `₦${apiLoan.data.mono.loan_limit}` : "N/A",
-        loanAmount: apiLoan.data.loan_amount !== null ? `₦${apiLoan.data.loan_amount.toLocaleString()}` : "N/A",
-        loanPeriod: apiLoan.data.repayment_duration !== null ? `${apiLoan.data.repayment_duration} months` : "N/A",
-        repaymentDuration: apiLoan.data.mono?.repayment_duration !== null ? `${apiLoan.data.mono.repayment_duration} months` : "N/A",
-        financingPartner: "Mono",
-        interestRate: apiLoan.data.mono?.interest_rate !== null ? `${apiLoan.data.mono.interest_rate}%` : "N/A",
-        sendStatus: apiLoan.data.loan_status?.send_status || "Pending",
-        sendDate: apiLoan.data.loan_status?.send_date ? new Date(apiLoan.data.loan_status.send_date).toLocaleDateString() : "Not yet sent",
-        approvalStatus: apiLoan.data.loan_status?.approval_status || "Pending",
-        approvalDate: apiLoan.data.loan_status?.approval_date ? new Date(apiLoan.data.loan_status.approval_date).toLocaleDateString() : "Not yet approved",
-        disbursementStatus: apiLoan.data.loan_status?.disbursement_status || "Pending",
-        disbursementDate: apiLoan.data.loan_status?.disbursement_date ? new Date(apiLoan.data.loan_status.disbursement_date).toLocaleDateString() : "Not yet disbursed",
-        // Additional fields from the API response
-        beneficiaryName: apiLoan.data.beneficiary_name || "N/A",
-        beneficiaryEmail: apiLoan.data.beneficiary_email || "N/A",
-        beneficiaryRelationship: apiLoan.data.beneficiary_relationship || "N/A",
-        beneficiaryPhone: apiLoan.data.beneficiary_phone || "N/A",
-        titleDocument: apiLoan.data.title_document || "N/A",
-        uploadDocument: apiLoan.data.upload_document || "N/A",
-        totalAmount: apiLoan.data.mono?.total_amount ? `₦${apiLoan.data.mono.total_amount.toLocaleString()}` : "N/A",
-        downPayment: apiLoan.data.mono?.down_payment ? `₦${apiLoan.data.mono.down_payment.toLocaleString()}` : "N/A",
-        creditScore: apiLoan.data.mono?.credit_score || "N/A",
-        isOverdue: apiLoan.data.mono?.is_overdue || false,
-      }
+      id: String(apiLoan.data.id ?? loanId),
+      userId: String(apiLoan.data.user_id ?? loanId),
+      name: apiLoan.data.user ? `${apiLoan.data.user.first_name} ${apiLoan.data.user.sur_name}` : "Unknown User",
+      loanLimit: apiLoan.data.mono?.loan_limit !== null ? `₦${apiLoan.data.mono.loan_limit}` : "N/A",
+      loanAmount: apiLoan.data.loan_amount !== null ? `₦${apiLoan.data.loan_amount.toLocaleString()}` : "N/A",
+      loanPeriod: apiLoan.data.repayment_duration !== null ? `${apiLoan.data.repayment_duration} months` : "N/A",
+      repaymentDuration: apiLoan.data.mono?.repayment_duration !== null ? `${apiLoan.data.mono.repayment_duration} months` : "N/A",
+      financingPartner: "Mono",
+      interestRate: apiLoan.data.mono?.interest_rate !== null ? `${apiLoan.data.mono.interest_rate}%` : "N/A",
+      sendStatus: apiLoan.data.loan_status?.send_status || "Pending",
+      sendDate: apiLoan.data.loan_status?.send_date ? new Date(apiLoan.data.loan_status.send_date).toLocaleDateString() : "Not yet sent",
+      approvalStatus: apiLoan.data.loan_status?.approval_status || "Pending",
+      approvalDate: apiLoan.data.loan_status?.approval_date ? new Date(apiLoan.data.loan_status.approval_date).toLocaleDateString() : "Not yet approved",
+      disbursementStatus: apiLoan.data.loan_status?.disbursement_status || "Pending",
+      disbursementDate: apiLoan.data.loan_status?.disbursement_date ? new Date(apiLoan.data.loan_status.disbursement_date).toLocaleDateString() : "Not yet disbursed",
+      // Additional fields from the API response
+      beneficiaryName: apiLoan.data.beneficiary_name || "N/A",
+      beneficiaryEmail: apiLoan.data.beneficiary_email || "N/A",
+      beneficiaryRelationship: apiLoan.data.beneficiary_relationship || "N/A",
+      beneficiaryPhone: apiLoan.data.beneficiary_phone || "N/A",
+      titleDocument: apiLoan.data.title_document || "N/A",
+      uploadDocument: apiLoan.data.upload_document || "N/A",
+      totalAmount: apiLoan.data.mono?.total_amount ? `₦${apiLoan.data.mono.total_amount.toLocaleString()}` : "N/A",
+      downPayment: apiLoan.data.mono?.down_payment ? `₦${apiLoan.data.mono.down_payment.toLocaleString()}` : "N/A",
+      creditScore: apiLoan.data.mono?.credit_score || "N/A",
+      isOverdue: apiLoan.data.mono?.is_overdue || false,
+      mono_loan_calculation: apiLoan.data?.mono_loan_calculation || "N/A",
+    }
     : null;
 
   // Show loading indicator while fetching
@@ -106,35 +107,35 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
       alert('Unable to find loan data. Please try again.');
       return;
     }
-    
+
     setIsDownloading(true);
-    
+
     try {
       // Create new PDF document
       const doc = new jsPDF();
-      
+
       // Set font and colors
       doc.setFont("helvetica");
-      
+
       // Header
       doc.setFontSize(20);
       doc.setTextColor(39, 62, 142); // Blue color
       doc.text("TROOSOLAR FINANCIAL SERVICES", 20, 25);
-      
+
       doc.setFontSize(16);
       doc.setTextColor(0, 0, 0);
       doc.text("ACCOUNT STATEMENT", 20, 35);
-      
+
       // Add a line separator
       doc.setLineWidth(0.5);
       doc.line(20, 40, 190, 40);
-      
+
       // Customer Information Section
       let yPosition = 55;
       doc.setFontSize(14);
       doc.setTextColor(39, 62, 142);
       doc.text("Customer Information", 20, yPosition);
-      
+
       yPosition += 10;
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
@@ -143,13 +144,13 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
       doc.text(`Customer ID: ${loan.userId}`, 25, yPosition);
       yPosition += 6;
       doc.text(`Loan ID: ${loan.id}`, 25, yPosition);
-      
+
       // Loan Details Section
       yPosition += 15;
       doc.setFontSize(14);
       doc.setTextColor(39, 62, 142);
       doc.text("Loan Details", 20, yPosition);
-      
+
       yPosition += 10;
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
@@ -164,13 +165,13 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
       doc.text(`Repayment Duration: ${loan.repaymentDuration}`, 25, yPosition);
       yPosition += 6;
       doc.text(`Financing Partner: ${loan.financingPartner}`, 25, yPosition);
-      
+
       // Status Information Section
       yPosition += 15;
       doc.setFontSize(14);
       doc.setTextColor(39, 62, 142);
       doc.text("Status Information", 20, yPosition);
-      
+
       yPosition += 10;
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
@@ -185,13 +186,13 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
       doc.text(`Disbursement Status: ${loan.disbursementStatus}`, 25, yPosition);
       yPosition += 6;
       doc.text(`Disbursement Date: ${loan.disbursementDate}`, 25, yPosition);
-      
+
       // Financial Summary Section
       yPosition += 15;
       doc.setFontSize(14);
       doc.setTextColor(39, 62, 142);
       doc.text("Financial Summary", 20, yPosition);
-      
+
       yPosition += 10;
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
@@ -206,12 +207,12 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
       doc.text(`Credit Score: ${loan.creditScore}`, 25, yPosition);
       yPosition += 6;
       doc.text(`Overdue Status: ${loan.isOverdue ? 'Overdue' : 'Current'}`, 25, yPosition);
-      
+
       // Footer
       yPosition += 20;
       doc.setLineWidth(0.3);
       doc.line(20, yPosition, 190, yPosition);
-      
+
       yPosition += 10;
       doc.setFontSize(8);
       doc.setTextColor(100, 100, 100);
@@ -220,17 +221,17 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
       doc.text("This is an official document from Troosolar Financial Services.", 20, yPosition);
       yPosition += 5;
       doc.text("For inquiries, contact customer support.", 20, yPosition);
-      
+
       // Generate filename and save
       const filename = `Account-Statement-${loan.name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.pdf`;
       doc.save(filename);
-      
+
       // Show success message
       setTimeout(() => {
         alert('PDF account statement downloaded successfully!');
         setIsDownloading(false);
       }, 500);
-      
+
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF account statement. Please try again.');
@@ -288,21 +289,19 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
         {/* Tabs */}
         <div className="flex border-b px-5">
           <button
-            className={`py-2 px-0 mr-6 cursor-pointer ${
-              activeTab === "loan"
+            className={`py-2 px-0 mr-6 cursor-pointer ${activeTab === "loan"
                 ? "border-b-4 border-[#273E8E] font-medium text-black"
                 : "text-[#00000080]"
-            }`}
+              }`}
             onClick={() => setActiveTab("loan")}
           >
             Loan Details
           </button>
           <button
-            className={`py-2 px-0 cursor-pointer ${
-              activeTab === "financial"
+            className={`py-2 px-0 cursor-pointer ${activeTab === "financial"
                 ? "border-b-4 border-[#273E8E] font-medium text-black"
                 : "text-[#00000080]"
-            }`}
+              }`}
             onClick={() => setActiveTab("financial")}
           >
             Financial details
@@ -457,9 +456,9 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
                   <span className="text-[#00000080] text-sm">Uploaded Document</span>
                   <span className="font-medium text-sm text-right">
                     {currentLoan.uploadDocument !== "N/A" ? (
-                      <a 
-                        href={currentLoan.uploadDocument} 
-                        target="_blank" 
+                      <a
+                        href={currentLoan.uploadDocument}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-blue-600 hover:text-blue-800 underline"
                       >
@@ -474,11 +473,10 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
             </div>
 
             <button
-              className={`w-full py-3 rounded-full font-medium my-5 transition-colors cursor-pointer ${
-                currentLoan.disbursementStatus === "Completed"
+              className={`w-full py-3 rounded-full font-medium my-5 transition-colors cursor-pointer ${currentLoan.disbursementStatus === "Completed"
                   ? "bg-[#939FC7] text-white cursor-not-allowed"
                   : "bg-[#273E8E] hover:bg-blue-700 text-white"
-              }`}
+                }`}
               onClick={() =>
                 currentLoan.disbursementStatus !== "Completed" &&
                 setShowDisburseModal(true)
@@ -581,10 +579,9 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
                     </div>
                   </div>
                 </div>
-                <button 
-                  className={`text-blue-600 hover:text-blue-800 transition-colors ${
-                    isDownloading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                  }`}
+                <button
+                  className={`text-blue-600 hover:text-blue-800 transition-colors ${isDownloading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                    }`}
                   onClick={handleDownloadStatement}
                   disabled={isDownloading}
                   title="Download Account Statement"
@@ -613,7 +610,7 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
       <DisburseModal
         isOpen={showDisburseModal}
         onClose={() => setShowDisburseModal(false)}
-        loanId={currentLoan.id}
+        loanId={currentLoan.mono_loan_calculation}
         amount={currentLoan.loanAmount}
         onDisburse={(id, status) => {
           if (onDisbursementUpdate) onDisbursementUpdate(id, status);

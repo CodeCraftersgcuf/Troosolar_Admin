@@ -78,7 +78,7 @@ const UserMgtUsersTable: React.FC<Props> = ({
                     onApproveLoan?.(user);
                   }}
                 >
-                  Approval
+                  Offer
                 </button>
                 {/* Three-dot (vertical ellipsis) menu button */}
                 <div

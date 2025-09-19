@@ -139,6 +139,9 @@ const API_ENDPOINTS = {
     MonoLoanCalculationApproval: (id: number | string) =>
       `${API_DOMAIN}/mono-loan/${id}`, // POST
 
+    //Loan Grant
+    LoanGrant: (id: number | string) =>
+      `${API_DOMAIN}/loan-application-grant/${id}`, // POST
   },
 };
 

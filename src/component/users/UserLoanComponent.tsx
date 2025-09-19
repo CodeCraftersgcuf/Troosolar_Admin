@@ -5,10 +5,16 @@ import type { User } from "../../constants/usermgt";
 import type { LoanDetail } from "./UserLoanData";
 
 //Code Related to the Integration
-import { sendToPartnerDetail } from "../../utils/mutations/loans";
-import { getAllFinance } from "../../utils/queries/finance";
-import { useMutation } from "@tanstack/react-query";
+// import { sendToPartnerDetail } from "../../utils/mutations/loans";
+// import { getAllFinance } from "../../utils/queries/finance";
+// import { useMutation } from "@tanstack/react-query";
 
+import KycModal from "./KycModal";
+import FullLoanDetail from "../../pages/loans_disbursement/FullLoanDetail";
+
+//Code Related to the Integration
+import { useQuery } from "@tanstack/react-query";
+import { getFullLoanDetail } from "../../utils/queries/loans";
 
 interface ApiLoan {
   loan_application_id: number;
@@ -22,25 +28,24 @@ interface ApiLoan {
     disbursement_status: string;
   };
 }
-import KycModal from "./KycModal";
-import FullLoanDetail from "../../pages/loans_disbursement/FullLoanDetail";
 
-//Code Related to the Integration
-import { useQuery } from "@tanstack/react-query";
-import { getFullLoanDetail } from "../../utils/queries/loans";
 import Cookies from "js-cookie";
 
 type UserLoanComponentProps = {
-  user: User;
-  userLoans: LoanDetail[];
+  user?: User;
+  userId: string;
+  userLoans?: LoanDetail[]; // Made optional since we're using API data
 };
 
 const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
-  user,
+  userId,
 }) => {
   const navigate = useNavigate();
   const { id: userIdFromParams } = useParams();
   const token = Cookies.get("token");
+
+  // Use the userId prop if available, otherwise fall back to URL params
+  const currentUserId = userId || userIdFromParams;
 
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [showKycModal, setShowKycModal] = useState(false);
@@ -48,24 +53,27 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
   const [selectedPartner, setSelectedPartner] = useState("");
   const [selectedLoanId, setSelectedLoanId] = useState<string>("");
 
+  console.log("The Id coming", currentUserId)
 
   const {
     data: loanApiData,
     isLoading: isLoanLoading,
     isError: isLoanError,
   } = useQuery({
-    queryKey: ["user-loan-detail", userIdFromParams],
-    queryFn: () => getFullLoanDetail(userIdFromParams || "", token || ""),
-    enabled: !!userIdFromParams && !!token,
+    queryKey: ["user-loan-detail", currentUserId],
+    queryFn: () => getFullLoanDetail(currentUserId || "", token || ""),
+    enabled: !!currentUserId && !!token,
   });
 
+  console.log("User Loan Detail", loanApiData)
   const apiLoans = loanApiData?.data?.loans || [];
   const apiUserInfo = loanApiData?.data?.user_info || {};
   const apiWalletInfo = loanApiData?.data?.wallet_info || {};
 
   console.log("API Loans Data:", loanApiData);
   const savePartnerSelection = () => {
-    const userKey = `user_partner_${user?.name
+    const userName = apiUserInfo.name || apiUserInfo.first_name || `User ${currentUserId}`;
+    const userKey = `user_partner_${userName
       ?.replace(/\s+/g, "_")
       .toLowerCase()}`;
     localStorage.setItem(userKey, JSON.stringify({ selectedPartner }));
@@ -120,7 +128,14 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
       <KycModal
         isOpen={showKycModal}
         onClose={() => setShowKycModal(false)}
-        user={user}
+        user={{
+          id: currentUserId || "",
+          name: apiUserInfo.name || apiUserInfo.first_name || `User ${currentUserId}`,
+          email: apiUserInfo.email || "",
+          phone: apiUserInfo.phone || "",
+          bvn: apiUserInfo.bvn || "",
+          date: apiUserInfo.created_at || ""
+        }}
         onSendToPartner={() => {
           setShowSendToPartnerModal(true);
           setShowKycModal(false);
@@ -220,14 +235,14 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
       {/* Main Content */}
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6">
-          {apiUserInfo.name || user.name}
+          {apiUserInfo.name || apiUserInfo.first_name || `User ${currentUserId}`}
         </h1>
 
         {/* Tabs */}
         <div className="flex gap-8 border-b border-gray-200 mb-6">
           <button
             className="pb-2 cursor-pointer text-[#00000080]"
-            onClick={() => navigate(`/user-activity/${user.id}`)}
+            onClick={() => navigate(`/user-activity/${currentUserId}`)}
           >
             Activity
           </button>
@@ -237,13 +252,13 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
           </button>
           <button
             className="pb-2 cursor-pointer text-[#00000080]"
-            onClick={() => navigate(`/user-activity/${user.id}/transactions`)}
+            onClick={() => navigate(`/user-activity/${currentUserId}/transactions`)}
           >
             Transactions
           </button>
           <button
             className="pb-2 cursor-pointer text-[#00000080]"
-            onClick={() => navigate(`/user-activity/${user.id}/orders`)}
+            onClick={() => navigate(`/user-activity/${currentUserId}/orders`)}
           >
             Orders
           </button>

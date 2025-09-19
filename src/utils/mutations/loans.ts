@@ -15,6 +15,21 @@ export const sendLoanToPartner = async (
   );
 };
 
+//POst / Loan Grant
+
+export const loanGrant = async (
+  id: number | string,
+  payload: { distribute_amount: number; status: string },
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.LoanGrant(id),
+    "POST",
+    payload,
+    token
+  );
+};
+
 //POST /send to Loan Disburesement
 export const distributeLoan = async (
   calcId: number | string,
