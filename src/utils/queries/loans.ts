@@ -57,3 +57,14 @@ export const getMonoLoanCalculation = async (token: string): Promise<any> => {
     token
   );
 };
+
+
+//Get the Repayment History of the user
+export const getRepaymentHistory = async (id: number | string, token: string): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.RepaymentHistory(id),
+    "GET",
+    undefined,
+    token
+  );
+};

@@ -74,8 +74,8 @@ const StatusToggle = ({ activeStatus, setActiveStatus }: StatusToggleProps) => {
     <div className="flex bg-white rounded-full border border-[#CDCDCD] p-2 shadow-sm w-fit">
       <button
         className={`px-5 py-3 rounded-full text-sm font-medium cursor-pointer transition-colors duration-200 ${activeStatus === "approved"
-            ? "bg-[#273E8E] text-white"
-            : "text-[#000000B2] bg-transparent"
+          ? "bg-[#273E8E] text-white"
+          : "text-[#000000B2] bg-transparent"
           }`}
         onClick={() => setActiveStatus("approved")}
       >
@@ -84,8 +84,8 @@ const StatusToggle = ({ activeStatus, setActiveStatus }: StatusToggleProps) => {
 
       <button
         className={`px-5 py-3 rounded-full text-sm font-medium cursor-pointer transition-colors duration-200 ${activeStatus === "pending"
-            ? "bg-[#273E8E] text-white"
-            : "text-[#000000B2] bg-transparent"
+          ? "bg-[#273E8E] text-white"
+          : "text-[#000000B2] bg-transparent"
           }`}
         onClick={() => setActiveStatus("pending")}
       >
@@ -108,6 +108,7 @@ const Loans_disbursement = () => {
   const [selectedLoanForHistory, setSelectedLoanForHistory] = useState<{
     id: string;
     status: "Pending" | "Active" | "Repaid" | "Overdue";
+    user_id: string;
   } | null>(null);
   const [activeStatus, setActiveStatus] = useState("approved"); // default to approved
   const [searchTerm, setSearchTerm] = useState("");
@@ -132,9 +133,10 @@ const Loans_disbursement = () => {
 
   const handleViewRepaymentHistory = (
     loanId: string,
-    loanStatus: "Pending" | "Active" | "Repaid" | "Overdue"
+    loanStatus: "Pending" | "Active" | "Repaid" | "Overdue",
+    userId: string
   ) => {
-    setSelectedLoanForHistory({ id: loanId, status: loanStatus });
+    setSelectedLoanForHistory({ id: loanId, status: loanStatus, user_id: userId });
     setShowRepaymentHistory(true);
   };
 
@@ -207,6 +209,7 @@ const Loans_disbursement = () => {
         const loan = disbursementApiData.data[key];
         return {
           id: loan.id,
+          user_id:loan.user_id,
           name: loan.name,
           amount: loan.Amount || loan.amount,
           duration: loan.Duration || loan.duration,
@@ -217,6 +220,7 @@ const Loans_disbursement = () => {
         };
       })
     : [];
+    console.log("The Loan Data: ", apiDisbursementList)
 
   // Filter disbursement data based on selected filters and search term
   const filteredDisbursementData = apiDisbursementList.filter((loan) => {
@@ -476,7 +480,7 @@ const Loans_disbursement = () => {
                           <button
                             className="cursor-pointer"
                             onClick={() =>
-                              handleViewRepaymentHistory(loan.id, loan.loanStatus)
+                              handleViewRepaymentHistory(loan.id, loan.loanStatus, loan.user_id)
                             }
                           >
                             <img
@@ -526,8 +530,8 @@ const Loans_disbursement = () => {
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
                   className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === 1
-                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
                     }`}
                 >
                   Previous
@@ -552,8 +556,8 @@ const Loans_disbursement = () => {
                         key={pageNumber}
                         onClick={() => setCurrentPage(pageNumber)}
                         className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === pageNumber
-                            ? 'bg-[#273E8E] text-white border-[#273E8E]'
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                           }`}
                       >
                         {pageNumber}
@@ -567,8 +571,8 @@ const Loans_disbursement = () => {
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
                   className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === totalPages
-                      ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
                     }`}
                 >
                   Next
@@ -593,7 +597,7 @@ const Loans_disbursement = () => {
       {showRepaymentHistory && selectedLoanForHistory && (
         <RepaymentHistory
           isOpen={showRepaymentHistory}
-          loanId={selectedLoanForHistory.id}
+          userId={selectedLoanForHistory.user_id}
           loanStatus={selectedLoanForHistory.status}
           onClose={handleCloseRepaymentHistory}
         />

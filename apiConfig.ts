@@ -142,6 +142,10 @@ const API_ENDPOINTS = {
     //Loan Grant
     LoanGrant: (id: number | string) =>
       `${API_DOMAIN}/loan-application-grant/${id}`, // POST
+
+    //Repayment History
+    RepaymentHistory: (id: number | string) =>
+      `${API_DOMAIN}/admin/installments/with-history/${id}`, // GET
   },
 };
 
