@@ -146,6 +146,9 @@ const API_ENDPOINTS = {
     //Repayment History
     RepaymentHistory: (id: number | string) =>
       `${API_DOMAIN}/admin/installments/with-history/${id}`, // GET
+
+    UpdateOrderStatus: (id: number | string) =>
+      `${API_DOMAIN}/admin/order-update-status/${id}`, // POST
   },
 };
 

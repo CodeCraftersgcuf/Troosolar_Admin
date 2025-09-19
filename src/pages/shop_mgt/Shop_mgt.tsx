@@ -15,6 +15,9 @@ import StatsLoadingSkeleton from "../../components/common/StatsLoadingSkeleton";
 import { getAllOrders } from "../../utils/queries/orders";
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
+import { updateOrderStatus } from "../../utils/mutations/orders";
+import { useMutation } from "@tanstack/react-query";
+
 
 // API Response interfaces
 interface OrderItem {
@@ -69,6 +72,11 @@ const Shop_mgt = () => {
   const [selectedOrder, setSelectedOrder] = useState<ApiOrder | null>(null);
   const [isProductBuilderOpen, setIsProductBuilderOpen] = useState(false);
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  
+  // Status update modal state
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedOrderForStatus, setSelectedOrderForStatus] = useState<ApiOrder | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [activeFilterTab, setActiveFilterTab] = useState("All");
   const [selectedMoreActions, setSelectedMoreActions] =
     useState("More Actions");
@@ -95,6 +103,24 @@ const Shop_mgt = () => {
   // Debug: Log the API response to see the structure
   console.log("API Response:", ordersData);
   console.log("Orders Data:", ordersData?.orders);
+
+  // Update order status mutation
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: string; status: string }) => {
+      return await updateOrderStatus(orderId, { order_status: status }, token || "");
+    },
+    onSuccess: () => {
+      // Close modal and reset state
+      setShowStatusModal(false);
+      setSelectedOrderForStatus(null);
+      setSelectedStatus("");
+      console.log("Order status updated successfully");
+    },
+    onError: (error) => {
+      console.error("Failed to update order status:", error);
+      alert("Failed to update order status. Please try again.");
+    },
+  });
 
   // Map API response to ShopOrderData format
   const mappedOrders: ShopOrderData[] = ordersData?.orders?.map((order: ApiOrder) => {
@@ -163,6 +189,34 @@ const Shop_mgt = () => {
     );
     setSelectedOrder(originalOrder || null);
     setShowOrderModal(true);
+  };
+
+  // Handle opening status update modal
+  const handleUpdateStatus = (order: ShopOrderData) => {
+    // Find the original order data from API response
+    const originalOrder = ordersData?.orders?.find((apiOrder: ApiOrder) =>
+      apiOrder.id.toString() === order.id
+    );
+    setSelectedOrderForStatus(originalOrder || null);
+    setSelectedStatus(order.status);
+    setShowStatusModal(true);
+  };
+
+  // Handle closing status update modal
+  const handleCloseStatusModal = () => {
+    setShowStatusModal(false);
+    setSelectedOrderForStatus(null);
+    setSelectedStatus("");
+  };
+
+  // Handle status update submission
+  const handleStatusUpdate = () => {
+    if (selectedOrderForStatus && selectedStatus) {
+      updateStatusMutation.mutate({
+        orderId: selectedOrderForStatus.id.toString(),
+        status: selectedStatus,
+      });
+    }
   };
 
   const closeModal = () => {
@@ -540,12 +594,20 @@ const Shop_mgt = () => {
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-center">
-                                <button
-                                  className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-6 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer"
-                                  onClick={() => handleViewDetails(order)}
-                                >
-                                  View Details
-                                </button>
+                                <div className="flex items-center justify-center space-x-2">
+                                  <button
+                                    className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-6 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer"
+                                    onClick={() => handleViewDetails(order)}
+                                  >
+                                    View Details
+                                  </button>
+                                  <button
+                                    className="bg-[#10B981] hover:bg-[#059669] text-white px-6 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer"
+                                    onClick={() => handleUpdateStatus(order)}
+                                  >
+                                    Update Status
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           )
@@ -571,8 +633,8 @@ const Shop_mgt = () => {
                       onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                       disabled={currentPage === 1}
                       className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === 1
-                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
                         }`}
                     >
                       Previous
@@ -597,8 +659,8 @@ const Shop_mgt = () => {
                             key={pageNumber}
                             onClick={() => setCurrentPage(pageNumber)}
                             className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === pageNumber
-                                ? 'bg-[#273E8E] text-white border-[#273E8E]'
-                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                              ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                               }`}
                           >
                             {pageNumber}
@@ -612,8 +674,8 @@ const Shop_mgt = () => {
                       onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                       disabled={currentPage === totalPages}
                       className={`px-3 py-2 text-sm font-medium rounded-md border ${currentPage === totalPages
-                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
                         }`}
                     >
                       Next
@@ -647,6 +709,86 @@ const Shop_mgt = () => {
         isOpen={isAddProductOpen}
         onClose={() => setIsAddProductOpen(false)}
       />
+
+      {/* Status Update Modal */}
+      {showStatusModal && selectedOrderForStatus && (
+        <div className="fixed inset-0 bg-black/40 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Update Order Status</h2>
+              <button
+                onClick={handleCloseStatusModal}
+                className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-sm text-gray-600 mb-4">
+                Update status for order <strong>#{selectedOrderForStatus.id}</strong>
+              </p>
+
+              {/* <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Current Status
+                </label>
+                <div className="px-3 py-2 bg-gray-100 rounded-md text-sm text-gray-600">
+                  {selectedOrderForStatus.order_status}
+                </div>
+              </div> */}
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Status
+                </label>
+                <select
+                  className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                >
+                  <option value="">Select Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="processing">Processing</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="refunded">Refunded</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={handleCloseStatusModal}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStatusUpdate}
+                disabled={!selectedStatus || updateStatusMutation.isPending}
+                className={`px-6 py-2 rounded-full font-medium transition-colors flex items-center ${
+                  selectedStatus && !updateStatusMutation.isPending
+                    ? 'bg-[#273E8E] text-white hover:bg-[#1f2f7a]'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {updateStatusMutation.isPending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Updating...
+                  </>
+                ) : (
+                  'Update Status'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
