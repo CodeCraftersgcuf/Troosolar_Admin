@@ -227,7 +227,9 @@ const Product = () => {
 
   // Helper function to calculate discount percentage
   const calculateDiscountPercentage = (originalPrice: number, discountPrice: number) => {
-    if (originalPrice <= 0) return 0;
+    if (originalPrice <= 0 || discountPrice <= 0) return 0;
+    // Only calculate discount if discount price is less than original price
+    if (discountPrice >= originalPrice) return 0;
     return Math.round(((originalPrice - discountPrice) / originalPrice) * 100);
   };
 
@@ -652,21 +654,23 @@ const Product = () => {
                         <div className="flex flex-col">
                           <div>
                             <span className="text-[#273E8E] font-bold text-[20px]">
-                              {formatPrice(product.discount_price)}
+                              {formatPrice(product.price)}
                             </span>
                           </div>
                           <div className="flex flex-row gap-1.5">
-                            <div>
-                              <span className="line-through text-[#00000080] text-[13px]">
-                                {formatPrice(product.price)}
-                              </span>
-                            </div>
                             {discountPercentage > 0 && (
-                              <div>
-                                <span className="text-[#FFA500] bg-[#FFA50033] rounded-full p-1">
-                                  -{discountPercentage}%
-                                </span>
-                              </div>
+                              <>
+                                <div>
+                                  <span className="line-through text-[#00000080] text-[13px]">
+                                    {formatPrice(product.discount_price)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[#FFA500] bg-[#FFA50033] rounded-full p-1 text-[10px]">
+                                    -{discountPercentage}%
+                                  </span>
+                                </div>
+                              </>
                             )}
                           </div>
                         </div>
@@ -889,21 +893,23 @@ const Product = () => {
                         <div className="flex flex-col">
                           <div>
                             <span className="text-[#273E8E] font-bold text-[20px]">
-                              {formatPrice(bundle.discount_price)}
+                              {formatPrice(bundle.total_price)}
                             </span>
                           </div>
                           <div className="flex flex-row gap-1.5">
-                            <div>
-                              <span className="line-through text-[#00000080] text-[13px]">
-                                {formatPrice(bundle.total_price)}
-                              </span>
-                            </div>
                             {discountPercentage > 0 && (
-                              <div>
-                                <span className="text-[#FFA500] bg-[#FFA50033] rounded-full p-1">
-                                  -{discountPercentage}%
-                                </span>
-                              </div>
+                              <>
+                                <div>
+                                  <span className="line-through text-[#00000080] text-[13px]">
+                                    {formatPrice(bundle.discount_price)}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[#FFA500] bg-[#FFA50033] rounded-full p-1 text-[10px]">
+                                    -{discountPercentage}%
+                                  </span>
+                                </div>
+                              </>
                             )}
                           </div>
                         </div>

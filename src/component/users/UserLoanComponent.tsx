@@ -372,7 +372,7 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                 </div>
                 <div className="text-3xl font-bold mb-6">
                   {apiWalletInfo.loan_balance !== undefined
-                    ? `₦${apiWalletInfo.loan_balance}`
+                    ? `₦${parseInt(apiWalletInfo.loan_balance).toLocaleString()}`
                     : "NO"}
                 </div>
 
@@ -381,8 +381,14 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                     Loan Eligible for
                   </div>
                   <div className="text-xl font-semibold mt-1">
-                    N500,000
-                    <span className="text-lg font-normal">/12months</span>
+                    {apiWalletInfo.loan_balance !== undefined && parseInt(apiWalletInfo.loan_balance) > 0
+                      ? `N${parseInt(apiWalletInfo.loan_balance).toLocaleString()}`
+                      : "No amount"}
+                    <span className="text-lg font-normal">
+                      {apiWalletInfo.loan_balance !== undefined && parseInt(apiWalletInfo.loan_balance) > 0
+                        ? "/12months"
+                        : ""}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -393,7 +399,7 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                 <div className="text-3xl font-bold mb-2">
                   {apiWalletInfo.shop_balance !== undefined &&
                     apiWalletInfo.shop_balance !== null
-                    ? `₦${apiWalletInfo.shop_balance}`
+                    ? `₦${parseInt(apiWalletInfo.shop_balance).toLocaleString()}`
                     : "N/A"}
                 </div>
                 <button
@@ -406,49 +412,69 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
             </div>
 
             {/* Next Repayment Section */}
-            <div
-              className="bg-white rounded-2xl shadow-lg p-6 border border-red-200"
-              style={{
-                borderColor: "#FFCDD2",
-                borderWidth: "1px",
-                boxShadow: "0px 4px 16px 0px rgba(255,205,210,0.20)",
-              }}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col space-y-2">
-                  <div className="text-gray-400 text-sm">Next Repayment</div>
-                  <div className="text-red-500 text-base font-medium">
-                    2 days overdue
-                  </div>
-                </div>
-
-                <div className="flex items-center">
-                  <div className="bg-gray-100 rounded-xl px-4 py-2 text-center">
-                    <div className="text-2xl font-bold">00</div>
-                    <div className="text-xs text-gray-500">Days</div>
+            {apiLoans.length > 0 && apiLoans.some(loan => loan.loan_status?.disbursement_status === "active") ? (
+              <div
+                className="bg-white rounded-2xl shadow-lg p-6 border border-red-200"
+                style={{
+                  borderColor: "#FFCDD2",
+                  borderWidth: "1px",
+                  boxShadow: "0px 4px 16px 0px rgba(255,205,210,0.20)",
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col space-y-2">
+                    <div className="text-gray-400 text-sm">Next Repayment</div>
+                    <div className="text-gray-500 text-base font-medium">
+                      No overdue payments
+                    </div>
                   </div>
 
-                  <div className="flex flex-col mx-1 text-gray-600">
-                    <div className="h-1 w-1 bg-gray-600 rounded-full mb-1"></div>
-                    <div className="h-1 w-1 bg-gray-600 rounded-full"></div>
+                  <div className="flex items-center">
+                    <div className="bg-gray-100 rounded-xl px-4 py-2 text-center">
+                      <div className="text-2xl font-bold">00</div>
+                      <div className="text-xs text-gray-500">Days</div>
+                    </div>
+
+                    <div className="flex flex-col mx-1 text-gray-600">
+                      <div className="h-1 w-1 bg-gray-600 rounded-full mb-1"></div>
+                      <div className="h-1 w-1 bg-gray-600 rounded-full"></div>
+                    </div>
+
+                    <div className="bg-gray-100 rounded-xl px-4 py-2 text-center">
+                      <div className="text-2xl font-bold">00</div>
+                      <div className="text-xs text-gray-500">Hours</div>
+                    </div>
                   </div>
 
-                  <div className="bg-gray-100 rounded-xl px-4 py-2 text-center">
-                    <div className="text-2xl font-bold">00</div>
-                    <div className="text-xs text-gray-500">Hours</div>
+                  <div className="flex flex-col items-end space-y-2">
+                    <div className="text-blue-900 text-2xl font-bold">
+                      N/A
+                    </div>
+                    <button className="bg-gray-400 text-white text-xs px-6 py-2 rounded-full cursor-not-allowed" disabled>
+                      No Data
+                    </button>
                   </div>
-                </div>
-
-                <div className="flex flex-col items-end space-y-2">
-                  <div className="text-blue-900 text-2xl font-bold">
-                    N50,000
-                  </div>
-                  <button className="bg-blue-900 text-white text-xs px-6 py-2 rounded-full">
-                    View Details
-                  </button>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div
+                className="bg-white rounded-2xl shadow-lg p-6 border border-gray-200"
+                style={{
+                  borderColor: "#E5E7EB",
+                  borderWidth: "1px",
+                  boxShadow: "0px 4px 16px 0px rgba(0,0,0,0.05)",
+                }}
+              >
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <div className="text-gray-400 text-sm mb-2">Next Repayment</div>
+                    <div className="text-gray-500 text-base font-medium">
+                      No active loans found
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -501,7 +527,7 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
                         {loan.user_name || loan.beneficiary_name || "-"}
                       </td>
                       <td className="p-4 text-center">
-                        ₦{loan.loan_amount}
+                        ₦{loan.loan_amount.toLocaleString()}
                       </td>
                       <td className="p-4 text-center">
                         {loan.created_at

@@ -126,7 +126,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       // Set product details
       if (product.details && product.details.length > 0) {
         const details = product.details.map((d) => d.detail);
-        setProductDetails([...details, ...Array(5 - details.length).fill('')]);
+        // Ensure we have at least 5 fields or more if needed
+        const minFields = Math.max(5, details.length);
+        setProductDetails([...details, ...Array(minFields - details.length).fill('')]);
       }
 
       // Set existing images
@@ -169,6 +171,18 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     setProductDetails(newDetails);
   };
 
+  // Add new function to handle adding more fields
+  const addMoreField = () => {
+    setProductDetails(prev => [...prev, '']);
+  };
+
+  // Add new function to remove a specific field
+  const removeField = (index: number) => {
+    if (productDetails.length > 1) { // Keep at least one field
+      setProductDetails(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
   const removeImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
   };
@@ -192,7 +206,25 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     }) => {
       if (editingProduct) {
         const product = editingProduct as { id: number };
-        return updateProduct(product.id, data, token);
+        // For updates, only send changed/filled fields
+        const updateData: any = {};
+        
+        if (data.title) updateData.title = data.title;
+        if (data.category_id) updateData.category_id = data.category_id;
+        if (data.price !== undefined) updateData.price = data.price;
+        if (data.brand_id) updateData.brand_id = data.brand_id;
+        if (data.discount_price !== undefined) updateData.discount_price = data.discount_price;
+        if (data.discount_end_date) updateData.discount_end_date = data.discount_end_date;
+        if (data.stock) updateData.stock = data.stock;
+        if (data.installation_price !== undefined) updateData.installation_price = data.installation_price;
+        if (data.top_deal !== undefined) updateData.top_deal = data.top_deal;
+        if (data.installation_compulsory !== undefined) updateData.installation_compulsory = data.installation_compulsory;
+        if (data.featured_image) updateData.featured_image = data.featured_image;
+        if (data.images && data.images.length > 0) updateData.images = data.images;
+        if (data.product_details && data.product_details.length > 0) updateData.product_details = data.product_details;
+        
+        console.log('Update data being sent:', updateData);
+        return updateProduct(product.id, updateData, token);
       } else {
         return addProduct(data as {
           title: string;
@@ -217,9 +249,16 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       resetForm();
       onClose();
       setIsSubmitting(false);
+      
+      // Show success message
+      if (editingProduct) {
+        alert('Product updated successfully!');
+      } else {
+        alert('Product added successfully!');
+      }
     },
     onError: (error: unknown) => {
-      console.error('Error adding product:', error);
+      console.error('Error with product operation:', error);
       setIsSubmitting(false);
 
       // Show user-friendly error message
@@ -235,7 +274,7 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
           .join('\n');
         alert(`Validation Error:\n${errorMessages}`);
       } else {
-        alert('An error occurred while adding the product. Please try again.');
+        alert(`An error occurred while ${editingProduct ? 'updating' : 'adding'} the product. Please try again.`);
       }
     },
   });
@@ -269,10 +308,10 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       category_id: selectedCategoryData.id,
       price: parseFloat(productPrice) || 0,
       brand_id: selectedBrandData.id,
-      discount_price: discountPrice ? parseFloat(discountPrice) : undefined,
+      discount_price: discountPrice ? parseFloat(discountPrice) : 0,
       discount_end_date: discountEndDate || undefined,
       stock: stockQuantity,
-      installation_price: installationPrice ? parseFloat(installationPrice) : undefined,
+      installation_price: installationPrice ? parseFloat(installationPrice) : 0,
       top_deal: saveAsTemplate,
       installation_compulsory: markAsComplimentary,
       featured_image: featuredImage || undefined,
@@ -284,7 +323,8 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     console.log('Product data being sent:', {
       ...productData,
       featured_image: productData.featured_image ? 'File present' : 'No file',
-      images: productData.images ? `${productData.images.length} files` : 'No files'
+      images: productData.images ? `${productData.images.length} files` : 'No files',
+      isEdit: !!editingProduct
     });
 
     addProductMutation.mutate(productData);
@@ -594,14 +634,27 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
               </label>
               <div className="space-y-2">
                 {productDetails.map((detail, index) => (
-                  <input
-                    key={index}
-                    type="text"
-                    value={detail}
-                    onChange={(e) => handleProductDetailChange(index, e.target.value)}
-                    placeholder={`Enter product detail ${index + 1}`}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  />
+                  <div key={index} className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={detail}
+                      onChange={(e) => handleProductDetailChange(index, e.target.value)}
+                      placeholder={`Enter product detail ${index + 1}`}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                    />
+                    {productDetails.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeField(index)}
+                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove this field"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>
@@ -609,7 +662,11 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
 
           {/* Add More Button */}
           <div className="mt-4 flex justify-center">
-            <button className="text-gray-400 text-sm font-medium hover:text-gray-700 flex items-center">
+            <button 
+              type="button"
+              onClick={addMoreField}
+              className="text-blue-600 text-sm font-medium hover:text-blue-700 flex items-center cursor-pointer transition-colors hover:bg-blue-50 px-3 py-2 rounded-lg"
+            >
               Add More
               <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

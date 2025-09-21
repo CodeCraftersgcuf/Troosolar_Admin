@@ -2,7 +2,7 @@ import { useState } from "react";
 import { adminData, allAdminsData } from "./admin.ts";
 import EditProfile from "./EditProfile.tsx";
 import AdminDetail from "./AdminDetail.tsx";
-
+import AddNewAdminModal from "./AddNewAdminModel.tsx";
 
 //Code Related to the Integration
 import { useQuery } from "@tanstack/react-query";
@@ -19,6 +19,14 @@ const Admin = () => {
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAdminId, setSelectedAdminId] = useState<string | null>(null);
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
+  const [newUser, setNewUser] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    bvn: "",
+    password: "",
+  });
 
   const handleEditProfile = () => {
     setIsEditProfileOpen(true);
@@ -36,9 +44,27 @@ const Admin = () => {
     setSelectedAdminId(null);
   };
 
+  const handleAddNewAdmin = () => {
+    setShowAddAdminModal(true);
+  };
+
+  // Handle form input changes for new admin
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setNewUser((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Handle admin added callback to refresh data
+  const handleAdminAdded = () => {
+    refetch(); // Refresh the admin list
+  };
+
   // API integration for users
   const token = Cookies.get("token");
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["all-users"],
     queryFn: () => getAllUsers(token || ""),
     enabled: !!token,
@@ -206,7 +232,10 @@ const Admin = () => {
                 <p className="text-lg font-medium">{currentUser?.bvn || adminData.bvn || "N/A"}</p>
               </div>
 
-              <button className="bg-white text-[#000000] px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition-colors cursor-pointer">
+              <button 
+                onClick={handleAddNewAdmin}
+                className="bg-white text-[#000000] px-6 py-3 rounded-full font-semibold hover:bg-gray-100 transition-colors cursor-pointer"
+              >
                 Add new Admin
               </button>
             </div>
@@ -451,6 +480,15 @@ const Admin = () => {
           password: "**********", // Don't show actual password
           image: currentUser?.profile_picture ? `https://troosolar.hmstech.org/users/${currentUser.profile_picture}` : adminData.image,
         }}
+      />
+
+      {/* Add New Admin Modal */}
+      <AddNewAdminModal
+        showAddModal={showAddAdminModal}
+        setShowAddModal={setShowAddAdminModal}
+        onUserAdded={handleAdminAdded}
+        newUser={newUser}
+        handleInputChange={handleInputChange}
       />
     </div>
   );
