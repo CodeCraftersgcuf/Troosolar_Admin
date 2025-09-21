@@ -654,7 +654,7 @@ const Product = () => {
                         <div className="flex flex-col">
                           <div>
                             <span className="text-[#273E8E] font-bold text-[20px]">
-                              {formatPrice(product.price)}
+                              {formatPrice(product.discount_price)}
                             </span>
                           </div>
                           <div className="flex flex-row gap-1.5">
@@ -662,7 +662,7 @@ const Product = () => {
                               <>
                                 <div>
                                   <span className="line-through text-[#00000080] text-[13px]">
-                                    {formatPrice(product.discount_price)}
+                                    {formatPrice(product.price)}
                                   </span>
                                 </div>
                                 <div>
