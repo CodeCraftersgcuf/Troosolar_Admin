@@ -3,7 +3,7 @@ const API_DOMAIN = "https://troosolar.hmstech.org/api";
 const API_ENDPOINTS = {
   ADMIN: {
     // --- Auth ---
-    Login: API_DOMAIN + "/login", // POST
+    Login: API_DOMAIN + "/admin-login", // POST
     Logout: API_DOMAIN + "/logout", // POST
 
     // --- Dashboard ---

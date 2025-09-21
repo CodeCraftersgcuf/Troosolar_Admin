@@ -26,7 +26,7 @@ export const Sidebar_links = [
     sublinks: [],
   },
   {
-    name: "Loans Approval",
+    name: "Initiate Loan Applictions",
     link: "/loans-approval",
     icon: images.Loanmgt,
     sublinks: [],
