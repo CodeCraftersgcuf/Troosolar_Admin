@@ -18,6 +18,7 @@ type KycProfileProps = {
   userPhone?: string;
   userBvn?: string;
   onSendToPartner: () => void;
+  loanApplicationStatus: string;
 };
 
 const KycProfile: React.FC<KycProfileProps> = ({
@@ -29,6 +30,7 @@ const KycProfile: React.FC<KycProfileProps> = ({
   userPhone = "",
   userBvn = "",
   onSendToPartner,
+  loanApplicationStatus,
 }) => {
   const [activeKycTab, setActiveKycTab] = useState<
     "personal" | "credit" | "kyc"
@@ -216,6 +218,7 @@ const KycProfile: React.FC<KycProfileProps> = ({
 
   if (!isOpen) return null;
 
+  console.log("The Loan Application Status:", loanApplicationStatus);
   return (
     <>
       {/* KYC Profile Modal */}
@@ -249,12 +252,15 @@ const KycProfile: React.FC<KycProfileProps> = ({
               <div className="flex justify-between items-center px-5 pt-4 pb-2">
                 <h2 className="text-xl font-semibold">User Details</h2>
                 <div className="flex items-center">
-                  <button
-                    className="bg-[#273E8E] text-white text-sm py-3 px-6 rounded-full mr-3 cursor-pointer"
-                    onClick={onSendToPartner}
-                  >
-                    Send to Partner
-                  </button>
+                  {/* Only show Send to Partner button if approval status is not "approved" */}
+                  {loanApplicationStatus !== "approved" && (
+                    <button
+                      className="bg-[#273E8E] text-white text-sm py-3 px-6 rounded-full mr-3 cursor-pointer"
+                      onClick={onSendToPartner}
+                    >
+                      Send to Partner
+                    </button>
+                  )}
                   <button
                     className="text-gray-600 hover:text-gray-900 p-1 cursor-pointer"
                     onClick={onClose}

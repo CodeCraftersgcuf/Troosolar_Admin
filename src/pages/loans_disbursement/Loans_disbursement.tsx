@@ -209,7 +209,7 @@ const Loans_disbursement = () => {
         const loan = disbursementApiData.data[key];
         return {
           id: loan.id,
-          user_id:loan.user_id,
+          user_id: loan.user_id,
           name: loan.name,
           amount: loan.Amount || loan.amount,
           duration: loan.Duration || loan.duration,
@@ -220,7 +220,7 @@ const Loans_disbursement = () => {
         };
       })
     : [];
-    console.log("The Loan Data: ", apiDisbursementList)
+  console.log("The Loan Data: ", apiDisbursementList)
 
   // Filter disbursement data based on selected filters and search term
   const filteredDisbursementData = apiDisbursementList.filter((loan) => {
@@ -444,9 +444,11 @@ const Loans_disbursement = () => {
                               backgroundColor:
                                 loan.disbursement.toLowerCase() === "completed"
                                   ? "#008000"
-                                  : loan.disbursement.toLowerCase() === "pending"
-                                    ? "#FF8C00"
-                                    : "#6B7280",
+                                  : loan.disbursement.toLowerCase() === "disbursed"
+                                    ? "#0000FF"
+                                    : loan.disbursement.toLowerCase() === "pending"
+                                      ? "#FF8C00"
+                                      : "#6B7280",
                             }}
                           ></span>
                           {loan.disbursement}
@@ -463,13 +465,15 @@ const Loans_disbursement = () => {
                               backgroundColor:
                                 loan.loanStatus.toLowerCase() === "active"
                                   ? "#008000"
-                                  : loan.loanStatus.toLowerCase() === "repaid"
-                                    ? "#0000FF"
-                                    : loan.loanStatus.toLowerCase() === "overdue"
-                                      ? "#FF0000"
-                                      : loan.loanStatus.toLowerCase() === "pending"
-                                        ? "#FF8C00"
-                                        : "#6B7280",
+                                  : loan.loanStatus.toLowerCase() === "approved"
+                                    ? "#008000"
+                                    : loan.loanStatus.toLowerCase() === "repaid"
+                                      ? "#0000FF"
+                                      : loan.loanStatus.toLowerCase() === "overdue"
+                                        ? "#FF0000"
+                                        : loan.loanStatus.toLowerCase() === "pending"
+                                          ? "#FF8C00"
+                                          : "#6B7280",
                             }}
                           ></span>
                           {loan.loanStatus}

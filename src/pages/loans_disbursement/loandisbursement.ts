@@ -65,18 +65,20 @@ export const disbursementData: DisbursementData[] = [
 ];
 
 // Helper function to get disbursement status colors
-export const getDisbursementStatusColor = (status: "Pending" | "Completed") => {
+export const getDisbursementStatusColor = (status: "Pending" | "Completed" | "disbursed" | string) => {
   switch (status.toLowerCase()) {
     case "pending":
       return { backgroundColor: "#FFA50033", color: "#FF8C00" };
     case "completed":
       return { backgroundColor: "#00800033", color: "#008000" };
+    case "disbursed":
+      return { backgroundColor: "#0000FF33", color: "#0000FF" };
     default:
       return { backgroundColor: "#FFA50033", color: "#FF8C00" };
   }
 };
 
-// Helper function to get loan status colors
+// Helper function to get loan status colors | "approved" | string
 export const getLoanStatusColor = (
   status: "Active" | "Repaid" | "Overdue" | "Pending"
 ) => {
@@ -92,4 +94,6 @@ export const getLoanStatusColor = (
     default:
       return { backgroundColor: "#FFA50033", color: "#FF8C00" };
   }
+
+
 };

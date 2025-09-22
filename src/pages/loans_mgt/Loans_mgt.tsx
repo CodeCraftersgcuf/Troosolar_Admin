@@ -72,6 +72,7 @@ const Loans_mgt = () => {
     bvn?: string;
     loan_application_id?: number;
     user_id?: number;
+    approval_status?: string;
   } | null>(null);
   const [showSendToPartnerModal, setShowSendToPartnerModal] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState("");
@@ -86,15 +87,15 @@ const Loans_mgt = () => {
   };
 
   // Function to view user details
-  const viewUserDetails = (loanId: number, userName: string, loanApplicationId: number, userId: number) => {
+  const viewUserDetails = (loanId: number, userName: string, loanApplicationId: number, userId: number, approvalStatus: string) => {
     // Create user-specific data based on userId
-    const userData = getUserDataById(loanId, userName, loanApplicationId, userId);
+    const userData = getUserDataById(loanId, userName, loanApplicationId, userId, approvalStatus);
     setSelectedUser(userData);
     setShowKycModal(true);
   };
 
   // Function to get user-specific data
-  const getUserDataById = (loanId: number, userName: string, loanApplicationId: number, userId: number) => {
+  const getUserDataById = (loanId: number, userName: string, loanApplicationId: number, userId: number, approvalStatus?: string) => {
     // This would typically come from an API or database
     // For now, we'll create mock data based on userId
     const userData = {
@@ -105,6 +106,7 @@ const Loans_mgt = () => {
       bvn: `123456789${userId.toString().padStart(2, "0")}`,
       loan_application_id: loanApplicationId, // Add the loan_application_id
       user_id: userId, // Add the user_id from API
+      approval_status: approvalStatus || "Pending", // Add the approval status
       // Add more user-specific fields as needed
       address: `${userId} Lagos Street, Victoria Island, Lagos`,
       occupation: getUserOccupation(userId),
@@ -164,13 +166,13 @@ const Loans_mgt = () => {
       alert("Please select a partner");
       return;
     }
-    
+
     // Find the partner ID from the selected partner name
-    const selectedPartnerData = financePartners?.data?.find((partner: { 
-      id: number; 
-      "Partner name": string; 
+    const selectedPartnerData = financePartners?.data?.find((partner: {
+      id: number;
+      "Partner name": string;
     }) => partner["Partner name"] === selectedPartner);
-    
+
     if (selectedPartnerData) {
       console.log("Partner selected:", selectedPartner, "Partner ID:", selectedPartnerData.id);
       sendToPartnerMutation.mutate(selectedPartnerData.id);
@@ -315,6 +317,7 @@ const Loans_mgt = () => {
           userPhone={selectedUser.phone}
           userBvn={selectedUser.bvn}
           onSendToPartner={handleSendToPartner}
+          loanApplicationStatus={selectedUser.approval_status}
         />
       )}
 
@@ -355,13 +358,13 @@ const Loans_mgt = () => {
                   <option value="" disabled>
                     {isFinanceLoading ? "Loading partners..." : "Select Partner"}
                   </option>
-                  {financePartners?.data?.map((partner: { 
-                    id: number; 
-                    "Partner name": string; 
-                    "No of Loans": number | null; 
-                    "Amount": number; 
-                    "Date Created": string; 
-                    "Status": string; 
+                  {financePartners?.data?.map((partner: {
+                    id: number;
+                    "Partner name": string;
+                    "No of Loans": number | null;
+                    "Amount": number;
+                    "Date Created": string;
+                    "Status": string;
                   }) => (
                     <option key={partner.id} value={partner["Partner name"]}>
                       {partner["Partner name"]} ({partner.Status}) - ₦{partner.Amount?.toLocaleString() || 0}
@@ -390,11 +393,10 @@ const Loans_mgt = () => {
 
             {/* Save Button */}
             <button
-              className={`w-full py-4 rounded-full font-semibold text-base transition-colors flex items-center justify-center ${
-                sendToPartnerMutation.isPending
+              className={`w-full py-4 rounded-full font-semibold text-base transition-colors flex items-center justify-center ${sendToPartnerMutation.isPending
                   ? 'bg-gray-400 text-white cursor-not-allowed'
                   : 'bg-[#273E8E] text-white hover:bg-[#243c8c] cursor-pointer'
-              }`}
+                }`}
               onClick={savePartnerSelection}
               disabled={sendToPartnerMutation.isPending}
             >
@@ -651,7 +653,7 @@ const Loans_mgt = () => {
                         <button
                           className="text-white px-6 py-2 rounded-full hover:opacity-90 transition-opacity text-sm font-medium cursor-pointer"
                           style={{ backgroundColor: "#273E8E" }}
-                          onClick={() => viewUserDetails(loan.id, loan.name, loan.loan_application_id, loan.user_id)}
+                          onClick={() => viewUserDetails(loan.id, loan.name, loan.loan_application_id, loan.user_id, loan.approval)}
                         >
                           View Details
                         </button>

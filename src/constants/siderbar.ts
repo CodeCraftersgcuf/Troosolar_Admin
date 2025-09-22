@@ -20,17 +20,18 @@ export const Sidebar_links = [
     sublinks: [],
   },
   {
-    name: "Loans Mgt",
-    link: "/loans-mgt",
-    icon: images.Loanmgt,
-    sublinks: [],
-  },
-  {
     name: "Initial Loan Applications",
     link: "/loans-approval",
     icon: images.Loanmgt,
     sublinks: [],
   },
+  {
+    name: "Loans Mgt",
+    link: "/loans-mgt",
+    icon: images.Loanmgt,
+    sublinks: [],
+  },
+
   {
     name: "Loans Disbursement",
     link: "/loans-disbursement",

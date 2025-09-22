@@ -8,7 +8,7 @@ interface TransactionDetailProps {
 
 const TransactionDetail = ({ isOpen, transaction, onClose }: TransactionDetailProps) => {
   console.log('TransactionDetail props:', { isOpen, transaction });
-  
+
   if (!isOpen || !transaction) {
     console.log('Modal not showing - isOpen:', isOpen, 'transaction:', transaction);
     return null;
@@ -30,8 +30,8 @@ const TransactionDetail = ({ isOpen, transaction, onClose }: TransactionDetailPr
       <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-gray-900">Transaction Details</h2>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -41,16 +41,19 @@ const TransactionDetail = ({ isOpen, transaction, onClose }: TransactionDetailPr
         </div>
         <div className="text-center mb-6">
           <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-            status.toLowerCase() === 'paid' ? 'bg-green-500' :
+            status.toLowerCase() === 'paid' || status.toLowerCase() === 'completed' ? 'bg-green-500' :
             status.toLowerCase() === 'pending' ? 'bg-yellow-500' :
-            'bg-red-500'
-          }`}>
+            status.toLowerCase() === 'rejected' || status.toLowerCase() === 'failed' ? 'bg-red-500' :
+              'bg-gray-500'
+            }`}>
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            {status === 'Paid' ? 'Deposit Successful' : status === 'Pending' ? 'Pending Transaction' : 'Transaction'}
+            {status.toLowerCase() === 'paid' || status.toLowerCase() === 'completed' ? 'Transaction Successful' : 
+             status.toLowerCase() === 'pending' ? 'Pending Transaction' : 
+             'Transaction'}
           </h3>
           <p className="text-sm text-gray-600">{title}</p>
         </div>
@@ -78,10 +81,11 @@ const TransactionDetail = ({ isOpen, transaction, onClose }: TransactionDetailPr
           <div className="flex justify-between items-center py-2 border-b border-gray-100">
             <span className="text-sm text-gray-500">Status</span>
             <span className={`text-sm font-medium px-2 py-1 rounded-full ${
-              status.toLowerCase() === 'paid' ? 'bg-green-100 text-green-800' :
+              status.toLowerCase() === 'paid' || status.toLowerCase() === 'completed' ? 'bg-green-100 text-green-800' :
               status.toLowerCase() === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-              'bg-red-100 text-red-800'
-            }`}>
+              status.toLowerCase() === 'rejected' || status.toLowerCase() === 'failed' ? 'bg-red-100 text-red-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
               {status}
             </span>
           </div>

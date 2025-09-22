@@ -404,7 +404,7 @@ const User_approval: React.FC = () => {
         <div className="fixed inset-0 bg-black/40 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Approve Loan</h2>
+              <h2 className="text-xl font-bold text-gray-900">Offer Loan</h2>
               <button
                 onClick={handleCloseApprovalModal}
                 className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
@@ -435,7 +435,7 @@ const User_approval: React.FC = () => {
             <form onSubmit={handleApprovalSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Approved Amount
+                  Offer Amount
                 </label>
                 <input
                   type="number"
@@ -449,7 +449,7 @@ const User_approval: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Approved Duration (months)
+                  Offer Duration (months)
                 </label>
                 <input
                   type="number"
@@ -480,10 +480,10 @@ const User_approval: React.FC = () => {
                   {approvalMutation.isPending ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                      Approving...
+                      Offering...
                     </>
                   ) : (
-                    'Approve Loan'
+                    'Offer Loan'
                   )}
                 </button>
               </div>

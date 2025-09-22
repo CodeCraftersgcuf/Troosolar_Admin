@@ -248,12 +248,17 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
     let style = { backgroundColor: "#FFA50033", color: "#FF8C00" }; // Default to pending
     let dotColor = "#FF8C00";
 
-    if (status === "Completed") {
+    const statusLower = status.toLowerCase();
+
+    if (statusLower === "completed" || statusLower === "approved" || statusLower === "active") {
       style = { backgroundColor: "#00800033", color: "#008000" };
       dotColor = "#008000";
-    } else if (status === "Rejected") {
+    } else if (statusLower === "rejected") {
       style = { backgroundColor: "#FF000033", color: "#FF0000" };
       dotColor = "#FF0000";
+    } else if (statusLower === "disbursed") {
+      style = { backgroundColor: "#0000FF33", color: "#0000FF" };
+      dotColor = "#0000FF";
     }
 
     return (
@@ -290,8 +295,8 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
         <div className="flex border-b px-5">
           <button
             className={`py-2 px-0 mr-6 cursor-pointer ${activeTab === "loan"
-                ? "border-b-4 border-[#273E8E] font-medium text-black"
-                : "text-[#00000080]"
+              ? "border-b-4 border-[#273E8E] font-medium text-black"
+              : "text-[#00000080]"
               }`}
             onClick={() => setActiveTab("loan")}
           >
@@ -299,8 +304,8 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
           </button>
           <button
             className={`py-2 px-0 cursor-pointer ${activeTab === "financial"
-                ? "border-b-4 border-[#273E8E] font-medium text-black"
-                : "text-[#00000080]"
+              ? "border-b-4 border-[#273E8E] font-medium text-black"
+              : "text-[#00000080]"
               }`}
             onClick={() => setActiveTab("financial")}
           >
@@ -472,19 +477,22 @@ const FullLoanDetail: React.FC<FullLoanDetailProps> = ({
               </div>
             </div>
 
-            <button
-              className={`w-full py-3 rounded-full font-medium my-5 transition-colors cursor-pointer ${currentLoan.disbursementStatus === "Completed"
+            {/* Only show Disburse Loan button if approval status is not "approved" */}
+            {currentLoan.approvalStatus.toLowerCase() !== "approved" && (
+              <button
+                className={`w-full py-3 rounded-full font-medium my-5 transition-colors cursor-pointer ${currentLoan.disbursementStatus === "Completed"
                   ? "bg-[#939FC7] text-white cursor-not-allowed"
                   : "bg-[#273E8E] hover:bg-blue-700 text-white"
-                }`}
-              onClick={() =>
-                currentLoan.disbursementStatus !== "Completed" &&
-                setShowDisburseModal(true)
-              }
-              disabled={currentLoan.disbursementStatus === "Completed"}
-            >
-              Disburse Loan
-            </button>
+                  }`}
+                onClick={() =>
+                  currentLoan.disbursementStatus !== "Completed" &&
+                  setShowDisburseModal(true)
+                }
+                disabled={currentLoan.disbursementStatus === "Completed"}
+              >
+                Disburse Loan
+              </button>
+            )}
           </div>
         )}
 

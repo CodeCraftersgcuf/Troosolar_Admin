@@ -57,23 +57,16 @@ export const transactionData: TransactionData[] = [
 // Helper functions for styling
 export const getTransactionStatusColor = (status: string) => {
   switch (status.toLowerCase()) {
+    case 'paid':
     case 'completed':
-      return {
-        backgroundColor: '#E6F7FF',
-        color: '#008000',
-        borderColor: '#008000'
-      };
+      return { backgroundColor: '#00800033', color: '#008000' };
     case 'pending':
-      return {
-        backgroundColor: '#FFF4E6',
-        color: '#FF8C00',
-        borderColor: '#FF8C00'
-      };
+      return { backgroundColor: '#FFA50033', color: '#FF8C00' };
+    case 'failed':
+    case 'rejected':
+      return { backgroundColor: '#FF000033', color: '#FF0000' };
     default:
-      return {
-        backgroundColor: '#F5F5F5',
-        color: '#6B7280',
-        borderColor: '#6B7280'
-      };
+      return { backgroundColor: '#6B728033', color: '#6B7280' };
   }
 };
+  

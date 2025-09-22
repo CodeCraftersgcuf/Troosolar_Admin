@@ -117,10 +117,10 @@ const Transactions = () => {
         tx_id?: string;
         reference?: string;
       }) => String(t.id) === String(transactionId));
-      
+
       console.log('Found transaction:', transaction);
       console.log('All transactions:', transactions);
-      
+
       if (transaction) {
         setSelectedTransaction(transaction);
         setShowTransactionDetail(true);
@@ -141,16 +141,16 @@ const Transactions = () => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      
+
       // Check if click is on dropdown button or inside dropdown menu
       const isDropdownButton = target.closest('[data-dropdown-button]');
       const isDropdownMenu = target.closest('[data-dropdown-menu]');
-      
+
       if (openDropdownId && !isDropdownButton && !isDropdownMenu) {
         console.log('Clicking outside dropdown, closing it');
         setOpenDropdownId(null);
       }
-      
+
       // Close status dropdown when clicking outside
       if (isStatusDropdownOpen) {
         const statusDropdown = document.querySelector('.status-dropdown');
@@ -318,7 +318,7 @@ const Transactions = () => {
                 {isStatusDropdownOpen && (
                   <div className="absolute mt-2 w-48 origin-top-right rounded-xl shadow-xl bg-white border border-gray-200 z-50">
                     <ul className="py-2">
-                      {["Status", "paid", "pending", "failed"].map((option: string, index: number) => (
+                      {["Status", "paid", "pending", "failed", "rejected"].map((option: string, index: number) => (
                         <li
                           key={index}
                           onClick={() => handleStatusSelect(option)}
@@ -428,7 +428,11 @@ const Transactions = () => {
                                 ? '#008000'
                                 : transaction.status.toLowerCase() === "pending"
                                   ? '#FF8C00'
-                                  : '#6B7280'
+                                  : transaction.status.toLowerCase() === "rejected"
+                                    ? '#FF0000'
+                                    : transaction.status.toLowerCase() === "failed"
+                                      ? '#FF0000'
+                                      : '#6B7280'
                             }}
                           ></span>
                           {transaction.status}
