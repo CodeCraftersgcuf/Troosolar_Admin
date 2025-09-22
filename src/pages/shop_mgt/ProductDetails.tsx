@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ProductData } from "./shpmgt";
 
 import images from "../../constants/images";
@@ -60,6 +60,7 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
   const [activeTab, setActiveTab] = useState("details");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Get token from cookies
   const token = Cookies.get('token') || '';
@@ -124,6 +125,53 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
     }
   };
 
+  // Helper function to get all product images (featured + gallery)
+  const getAllProductImages = () => {
+    if (!apiProduct) return [];
+    
+    const images = [];
+    
+    // Add featured image first
+    if (apiProduct.featured_image_url) {
+      images.push({
+        id: 'featured',
+        url: getImageUrl(apiProduct.featured_image_url),
+        alt: `${apiProduct.title} - Featured`
+      });
+    }
+    
+    // Add gallery images
+    if (apiProduct.images && apiProduct.images.length > 0) {
+      apiProduct.images.forEach((img, index) => {
+        images.push({
+          id: img.id,
+          url: getImageUrl(img.image),
+          alt: `${apiProduct.title} - Image ${index + 1}`
+        });
+      });
+    }
+    
+    return images;
+  };
+
+  const allImages = getAllProductImages();
+  const totalImages = allImages.length;
+
+  // Navigate to next image
+  const nextImage = () => {
+    setCurrentImageIndex((prev) => (prev + 1) % totalImages);
+  };
+
+  // Navigate to previous image
+  const prevImage = () => {
+    setCurrentImageIndex((prev) => (prev - 1 + totalImages) % totalImages);
+  };
+
+  // Reset image index when product changes
+  useEffect(() => {
+    setCurrentImageIndex(0);
+  }, [apiProduct?.id]);
+
   if (!isOpen || !product) return null;
 
   return (
@@ -180,20 +228,69 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
                   className="relative bg-white rounded-2xl overflow-hidden border border-[#00000080]"
                   style={{ height: "250px" }}
                 >
-                  <img
-                    src={getImageUrl(apiProduct.featured_image_url)}
-                    alt={apiProduct.title}
-                    className="w-full h-full object-contain p-4"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = "/assets/images/newman1.png";
-                    }}
-                  />
+                  {allImages.length > 0 ? (
+                    <>
+                      <img
+                        src={allImages[currentImageIndex]?.url}
+                        alt={allImages[currentImageIndex]?.alt}
+                        className="w-full h-full object-contain p-4"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = "/assets/images/newman1.png";
+                        }}
+                      />
 
-                  {/* Image Counter */}
-                  <div className="absolute bottom-3 right-3 bg-black bg-opacity-60 text-white px-2 py-1 rounded text-xs font-medium">
-                    1/{apiProduct.images.length + 1}
-                  </div>
+                      {/* Navigation arrows - only show if more than 1 image */}
+                      {totalImages > 1 && (
+                        <>
+                          <button
+                            onClick={prevImage}
+                            className="absolute left-2 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-black bg-opacity-50 text-white rounded-full flex items-center justify-center hover:bg-opacity-70 transition-all"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={nextImage}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 bg-black bg-opacity-50 text-white rounded-full flex items-center justify-center hover:bg-opacity-70 transition-all"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
+
+                      {/* Image Counter */}
+                      <div className="absolute bottom-3 right-3 bg-black bg-opacity-60 text-white px-2 py-1 rounded text-xs font-medium">
+                        {currentImageIndex + 1}/{totalImages}
+                      </div>
+
+                      {/* Image dots indicator - only show if more than 1 image */}
+                      {totalImages > 1 && (
+                        <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 flex space-x-1">
+                          {allImages.map((_, index) => (
+                            <button
+                              key={index}
+                              onClick={() => setCurrentImageIndex(index)}
+                              className={`w-2 h-2 rounded-full transition-all ${
+                                index === currentImageIndex
+                                  ? 'bg-white'
+                                  : 'bg-white bg-opacity-50'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <img
+                      src="/assets/images/newman1.png"
+                      alt="No image available"
+                      className="w-full h-full object-contain p-4"
+                    />
+                  )}
                 </div>
               </div>
 

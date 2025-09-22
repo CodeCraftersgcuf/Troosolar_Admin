@@ -5,6 +5,7 @@ import Header from "../../component/Header";
 import { users } from "../../constants/usermgt";
 import images from "../../constants/images";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
+import TransactionDetail from "../transactions/TransactionDetail";
 
 //code related to API call
 import { getSingleTransaction } from "../../utils/queries/transactions";
@@ -244,6 +245,9 @@ const UserTransactions = () => {
   const [selectedFilter, setSelectedFilter] = useState("All");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [showTransactionDetail, setShowTransactionDetail] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const token = Cookies.get("token");
 
@@ -267,6 +271,16 @@ const UserTransactions = () => {
   // Handle click outside to close dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Element;
+
+      // Check if click is on dropdown button or inside dropdown menu
+      const isDropdownButton = target.closest('[data-dropdown-button]');
+      const isDropdownMenu = target.closest('[data-dropdown-menu]');
+
+      if (openDropdownId && !isDropdownButton && !isDropdownMenu) {
+        setOpenDropdownId(null);
+      }
+
       if (
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node)
@@ -279,7 +293,7 @@ const UserTransactions = () => {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [dropdownRef]);
+  }, [dropdownRef, openDropdownId]);
 
   // Use API data if available
   const displayUser = apiUserInfo.name ? apiUserInfo : null;
@@ -362,13 +376,30 @@ const UserTransactions = () => {
     return true;
   });
 
+  const handleDropdownToggle = (transactionId: string) => {
+    setOpenDropdownId(openDropdownId === transactionId ? null : transactionId);
+  };
+
+  const handleDropdownAction = (action: string, transaction: any) => {
+    if (action === 'View Transaction details') {
+      setSelectedTransaction(transaction);
+      setShowTransactionDetail(true);
+    }
+    setOpenDropdownId(null);
+  };
+
+  const handleCloseTransactionDetail = () => {
+    setShowTransactionDetail(false);
+    setSelectedTransaction(null);
+  };
+
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
       {/* Header Component */}
       <Header
         adminName="Hi, Admin"
         adminImage="/assets/layout/admin.png"
-        onNotificationClick={() => {}}
+        onNotificationClick={() => { }}
       />
       {/* Main Content */}
       <div className="p-6">
@@ -383,11 +414,10 @@ const UserTransactions = () => {
           {["Activity", "Loans", "Transactions", "Orders"].map((tab) => (
             <button
               key={tab}
-              className={`px-4 py-3 text-md font-medium border-b-2 transition-colors cursor-pointer ${
-                activeTab === tab
+              className={`px-4 py-3 text-md font-medium border-b-2 transition-colors cursor-pointer ${activeTab === tab
                   ? "text-black border-b-4 border-[#273E8E]"
                   : "text-[#00000080] border-transparent "
-              }`}
+                }`}
               onClick={() => handleTabClick(tab)}
             >
               {tab}
@@ -414,31 +444,28 @@ const UserTransactions = () => {
             <div className="flex space-x-4">
               <div className="border border-[#CDCDCD] bg-white p-2 rounded-full flex items-center">
                 <button
-                  className={`px-5 py-2.5 rounded-full text-sm transition cursor-pointer ${
-                    selectedFilter === "All"
+                  className={`px-5 py-2.5 rounded-full text-sm transition cursor-pointer ${selectedFilter === "All"
                       ? "bg-[#273E8E] text-white"
                       : "bg-white text-[#000000B2]"
-                  }`}
+                    }`}
                   onClick={() => setSelectedFilter("All")}
                 >
                   All
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-full text-sm transition cursor-pointer ${
-                    selectedFilter === "Deposit"
+                  className={`px-4 py-2 rounded-full text-sm transition cursor-pointer ${selectedFilter === "Deposit"
                       ? "bg-[#273E8E] text-white"
                       : "bg-white text-[#000000B2]"
-                  }`}
+                    }`}
                   onClick={() => setSelectedFilter("Deposit")}
                 >
                   Deposit
                 </button>
                 <button
-                  className={`px-4 py-2 rounded-full text-sm transition cursor-pointer ${
-                    selectedFilter === "Withdrawals"
+                  className={`px-4 py-2 rounded-full text-sm transition cursor-pointer ${selectedFilter === "Withdrawals"
                       ? "bg-[#273E8E] text-white"
                       : "bg-white text-[#000000B2]"
-                  }`}
+                    }`}
                   onClick={() => setSelectedFilter("Withdrawals")}
                 >
                   Withdrawals
@@ -626,23 +653,22 @@ const UserTransactions = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         <span
-                          className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${
-                            transaction.status === "Completed" || transaction.status === "paid"
+                          className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${transaction.status === "Completed" || transaction.status === "paid"
                               ? "border border-[#008000]"
                               : transaction.status === "Pending" || transaction.status === "pending"
-                              ? "border border-[#FFA500]"
-                              : transaction.status === "Rejected" || transaction.status === "failed"
-                              ? "border border-[#FF0000]"
-                              : "border border-[#6B7280]"
-                          }`}
+                                ? "border border-[#FFA500]"
+                                : transaction.status === "Rejected" || transaction.status === "failed"
+                                  ? "border border-[#FF0000]"
+                                  : "border border-[#6B7280]"
+                            }`}
                           style={
                             transaction.status === "Completed" || transaction.status === "paid"
                               ? { backgroundColor: "#00800033", color: "#008000" }
                               : transaction.status === "Pending" || transaction.status === "pending"
-                              ? { backgroundColor: "#FFA50033", color: "#FF8C00" }
-                              : transaction.status === "Rejected" || transaction.status === "failed"
-                              ? { backgroundColor: "#FF000033", color: "#FF0000" }
-                              : { backgroundColor: "#6B728033", color: "#6B7280" }
+                                ? { backgroundColor: "#FFA50033", color: "#FF8C00" }
+                                : transaction.status === "Rejected" || transaction.status === "failed"
+                                  ? { backgroundColor: "#FF000033", color: "#FF0000" }
+                                  : { backgroundColor: "#6B728033", color: "#6B7280" }
                           }
                         >
                           <span
@@ -652,19 +678,43 @@ const UserTransactions = () => {
                                 transaction.status === "Completed" || transaction.status === "paid"
                                   ? "#008000"
                                   : transaction.status === "Pending" || transaction.status === "pending"
-                                  ? "#FF8C00"
-                                  : transaction.status === "Rejected" || transaction.status === "failed"
-                                  ? "#FF0000"
-                                  : "#6B7280",
+                                    ? "#FF8C00"
+                                    : transaction.status === "Rejected" || transaction.status === "failed"
+                                      ? "#FF0000"
+                                      : "#6B7280",
                             }}
                           ></span>
                           {transaction.status === "paid" ? "Completed" : transaction.status}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button className="p-1 cursor-pointer">
-                          <img src={images.dots} alt="" />
-                        </button>
+                        <div className="flex items-center space-x-2 relative">
+                          <button
+                            className="relative p-2 text-gray-600 hover:text-gray-900"
+                            data-dropdown-button
+                            onClick={() => handleDropdownToggle(String(transaction.id))}
+                          >
+                            <img src={images.dots} alt="" />
+                          </button>
+
+                          {/* Dropdown Menu */}
+                          {openDropdownId === String(transaction.id) && (
+                            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50" data-dropdown-menu>
+                              <div className="py-2">
+                                <button
+                                  className="w-full px-4 py-2 text-left text-sm text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDropdownAction('View Transaction details', transaction);
+                                  }}
+                                >
+                                  View Transaction details
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -674,6 +724,15 @@ const UserTransactions = () => {
           )}
         </div>
       </div>
+
+      {/* Transaction Detail Modal */}
+      {showTransactionDetail && selectedTransaction && (
+        <TransactionDetail
+          isOpen={showTransactionDetail}
+          transaction={selectedTransaction}
+          onClose={handleCloseTransactionDetail}
+        />
+      )}
     </div>
   );
 };

@@ -14,16 +14,44 @@ const TransactionDetail = ({ isOpen, transaction, onClose }: TransactionDetailPr
     return null;
   }
 
-  // Map API fields to display format
-  const amount = transaction.amount ? `₦${Number(transaction.amount).toLocaleString()}` : "-";
-  const paymentType = transaction.method ? transaction.method.charAt(0).toUpperCase() + transaction.method.slice(1) : "-";
+  // Map API fields to display format - handle both direct transaction object and API response format
+  const amount = transaction.price 
+    ? `₦${Number(transaction.price).toLocaleString()}` 
+    : transaction.amount 
+    ? `₦${Number(transaction.amount).toLocaleString()}` 
+    : "-";
+    
+  const paymentType = transaction.payment_method 
+    ? transaction.payment_method.charAt(0).toUpperCase() + transaction.payment_method.slice(1).replace(/_/g, ' ')
+    : transaction.method 
+    ? transaction.method.charAt(0).toUpperCase() + transaction.method.slice(1)
+    : "-";
+    
   const txId = transaction.tx_id || transaction.reference || transaction.id || "-";
-  const status = transaction.status ? transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1) : "-";
-  const transactedDate = transaction.transacted_at ? new Date(transaction.transacted_at) : null;
-  const date = transactedDate ? transactedDate.toLocaleDateString() : "-";
-  const time = transactedDate ? transactedDate.toLocaleTimeString() : "-";
-  const title = transaction.title || "-";
-  const type = transaction.type ? transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1) : "-";
+  
+  const status = transaction.status 
+    ? transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1) 
+    : "-";
+    
+  // Handle date formatting from API response
+  let date = "-";
+  let time = "-";
+  
+  if (transaction.date && transaction.time) {
+    // API format: separate date and time fields
+    date = transaction.date;
+    time = transaction.time;
+  } else if (transaction.transacted_at) {
+    // Alternative format: combined datetime
+    const transactedDate = new Date(transaction.transacted_at);
+    date = transactedDate.toLocaleDateString();
+    time = transactedDate.toLocaleTimeString();
+  }
+  
+  const title = transaction.title || transaction.name || "-";
+  const type = transaction.type 
+    ? transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1) 
+    : "-";
 
   return (
     <div className="fixed inset-0 bg-black/40 bg-opacity-50 flex items-center justify-center z-50 p-4">

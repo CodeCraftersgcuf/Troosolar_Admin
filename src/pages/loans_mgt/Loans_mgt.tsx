@@ -614,13 +614,15 @@ const Loans_mgt = () => {
                               backgroundColor:
                                 (loan.sendStatus || "").toLowerCase() === "completed"
                                   ? "#008000"
-                                  : (loan.sendStatus || "").toLowerCase() === "pending"
-                                    ? "#FF8C00"
-                                    : (loan.sendStatus || "").toLowerCase() === "delivered"
-                                      ? "#008000"
-                                      : (loan.sendStatus || "").toLowerCase() === "rejected"
-                                        ? "#FF0000"
-                                        : "#6B7280",
+                                  : (loan.sendStatus || "").toLowerCase() === "active"
+                                    ? "#008000"
+                                    : (loan.sendStatus || "").toLowerCase() === "pending"
+                                      ? "#FF8C00"
+                                      : (loan.sendStatus || "").toLowerCase() === "delivered"
+                                        ? "#008000"
+                                        : (loan.sendStatus || "").toLowerCase() === "rejected"
+                                          ? "#FF0000"
+                                          : "#6B7280",
                             }}
                           ></span>
                           {loan.sendStatus || "Pending"}
@@ -637,13 +639,17 @@ const Loans_mgt = () => {
                               backgroundColor:
                                 (loan.approval || "").toLowerCase() === "completed"
                                   ? "#008000"
-                                  : (loan.approval || "").toLowerCase() === "pending"
-                                    ? "#FF8C00"
-                                    : (loan.approval || "").toLowerCase() === "delivered"
+                                  : (loan.approval || "").toLowerCase() === "approved"
+                                    ? "#008000"
+                                    : (loan.approval || "").toLowerCase() === "active"
                                       ? "#008000"
-                                      : (loan.approval || "").toLowerCase() === "rejected"
-                                        ? "#FF0000"
-                                        : "#6B7280",
+                                      : (loan.approval || "").toLowerCase() === "pending"
+                                        ? "#FF8C00"
+                                        : (loan.approval || "").toLowerCase() === "delivered"
+                                          ? "#008000"
+                                          : (loan.approval || "").toLowerCase() === "rejected"
+                                            ? "#FF0000"
+                                            : "#6B7280",
                             }}
                           ></span>
                           {loan.approval || "Pending"}

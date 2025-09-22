@@ -29,6 +29,8 @@ export const getStatusBgColor = (status: string | undefined | null) => {
     case 'pending':
       return { backgroundColor: '#FFA50033', color: '#FF8C00' };
     case 'completed':
+    case 'approved':
+    case 'active':
       return { backgroundColor: '#00800033', color: '#008000' };
     case 'rejected':
       return { backgroundColor: '#FF000033', color: '#FF0000' };

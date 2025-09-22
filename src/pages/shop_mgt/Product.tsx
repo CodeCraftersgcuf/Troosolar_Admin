@@ -705,7 +705,7 @@ const Product = () => {
                       {/* Bottom Section - Orders and Button */}
                       <div className="flex items-center justify-between mt-5">
                         <span className="text-xs font-semibold text-black text-[15px]">
-                          {product.stock} Orders
+                          {product.stock} Stocks
                         </span>
                         <button
                           onClick={() => {
@@ -893,7 +893,7 @@ const Product = () => {
                         <div className="flex flex-col">
                           <div>
                             <span className="text-[#273E8E] font-bold text-[20px]">
-                              {formatPrice(bundle.total_price)}
+                              {formatPrice(bundle.discount_price)}
                             </span>
                           </div>
                           <div className="flex flex-row gap-1.5">
@@ -901,7 +901,7 @@ const Product = () => {
                               <>
                                 <div>
                                   <span className="line-through text-[#00000080] text-[13px]">
-                                    {formatPrice(bundle.discount_price)}
+                                    {formatPrice(bundle.total_price)}
                                   </span>
                                 </div>
                                 <div>
