@@ -103,7 +103,7 @@ const API_ENDPOINTS = {
     CategoriesList: API_DOMAIN + "/categories", // GET
     AddCategory: API_DOMAIN + "/categories", // POST
     DeleteCategory: (id: number | string) => `${API_DOMAIN}/categories/${id}`, // DELETE
-    UpdateCategory: (id: number | string) => `${API_DOMAIN}/categories/${id}`, // POST
+    UpdateCategory: (id: number | string) => `${API_DOMAIN}/categories/${id}/update`, // POST
 
     // === Settings -- Brands
     BrandsList: API_DOMAIN + "/brands", // GET

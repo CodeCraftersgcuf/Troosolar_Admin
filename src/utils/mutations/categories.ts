@@ -25,7 +25,7 @@ export const updateCategory = async (
   token: string
 ): Promise<any> => {
   const formData = buildCategoryFormData(payload);
-  return await apiCall(API_ENDPOINTS.ADMIN.UpdateCategory(id), "PUT", formData, token);
+  return await apiCall(API_ENDPOINTS.ADMIN.UpdateCategory(id), "POST", formData, token);
 };
 
 // DELETE remains unchanged
