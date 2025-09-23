@@ -2,10 +2,13 @@ import { apiCall } from "../customApiCall";
 import { API_ENDPOINTS } from "../../../apiConfig";
 
 // Helper to create FormData from payload
-const buildCategoryFormData = (payload: { title: string; icon: File | Blob }) => {
+const buildCategoryFormData = (payload: {
+  title: string;
+  icon: File | Blob;
+}) => {
   const formData = new FormData();
-  formData.append('title', payload.title);
-  formData.append('icon', payload.icon);
+  formData.append("title", payload.title);
+  formData.append("icon", payload.icon);
   return formData;
 };
 
@@ -15,7 +18,12 @@ export const addCategory = async (
   token: string
 ): Promise<any> => {
   const formData = buildCategoryFormData(payload);
-  return await apiCall(API_ENDPOINTS.ADMIN.AddCategory, "POST", formData, token);
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.AddCategory,
+    "POST",
+    formData,
+    token
+  );
 };
 
 // POST /update_category/{id}
@@ -25,7 +33,14 @@ export const updateCategory = async (
   token: string
 ): Promise<any> => {
   const formData = buildCategoryFormData(payload);
-  return await apiCall(API_ENDPOINTS.ADMIN.UpdateCategory(id), "POST", formData, token);
+  console.log("🚀 updateCategory FormData:", [...formData.entries()]);
+
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.UpdateCategory(id),
+    "POST",
+    formData,
+    token
+  );
 };
 
 // DELETE remains unchanged
@@ -33,5 +48,10 @@ export const deleteCategory = async (
   id: number | string,
   token: string
 ): Promise<any> => {
-  return await apiCall(API_ENDPOINTS.ADMIN.DeleteCategory(id), "DELETE", undefined, token);
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.DeleteCategory(id),
+    "DELETE",
+    undefined,
+    token
+  );
 };
