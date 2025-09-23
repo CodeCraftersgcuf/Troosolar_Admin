@@ -71,76 +71,14 @@ export const addProduct = async (
 // Update Product (mutation)
 export const updateProduct = async (
   id: number | string,
-  payload: {
-    brand_id?: number;
-    discount_price?: number;
-    discount_end_date?: string;
-    stock?: string;
-    installation_price?: number;
-    top_deal?: boolean;
-    installation_compulsory?: boolean;
-    featured_image?: File;
-    images?: File[];
-    product_details?: string[];
-  },
+  payload: FormData,
   token: string
 ): Promise<unknown> => {
-  const formData = new FormData();
-
-  if (payload.brand_id !== undefined) {
-    formData.append("brand_id", payload.brand_id.toString());
-  }
-
-  if (payload.discount_price !== undefined) {
-    formData.append("discount_price", payload.discount_price.toString());
-  }
-
-  if (payload.discount_end_date) {
-    formData.append("discount_end_date", payload.discount_end_date);
-  }
-
-  if (payload.stock) {
-    formData.append("stock", payload.stock);
-  }
-
-  if (payload.installation_price !== undefined) {
-    formData.append(
-      "installation_price",
-      payload.installation_price.toString()
-    );
-  }
-
-  if (payload.top_deal !== undefined) {
-    formData.append("top_deal", payload.top_deal ? "1" : "0");
-  }
-
-  if (payload.installation_compulsory !== undefined) {
-    formData.append(
-      "installation_compulsory",
-      payload.installation_compulsory ? "1" : "0"
-    );
-  }
-
-  if (payload.featured_image) {
-    formData.append("featured_image", payload.featured_image);
-  }
-
-  if (payload.images && payload.images.length > 0) {
-    payload.images.forEach((image, index) => {
-      formData.append(`images[${index}]`, image);
-    });
-  }
-
-  if (payload.product_details && payload.product_details.length > 0) {
-    payload.product_details.forEach((detail, index) => {
-      formData.append(`product_details[${index}]`, detail);
-    });
-  }
-
+  // payload is now always FormData
   return await apiCall(
     API_ENDPOINTS.ADMIN.ProductUpdate(id),
     "POST",
-    formData,
+    payload,
     token
   );
 };
@@ -157,3 +95,5 @@ export const deleteProduct = async (
     token
   );
 };
+ 
+

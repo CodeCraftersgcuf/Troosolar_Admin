@@ -1,8 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import images from "../../constants/images";
 
-
-//Code Related to the Integration
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Cookies from "js-cookie";
 import { addProduct, updateProduct } from '../../utils/mutations/products';
@@ -28,7 +26,6 @@ interface ApiBrand {
   updated_at: string;
 }
 
-
 interface AddProductProps {
   isOpen: boolean;
   onClose: () => void;
@@ -53,35 +50,32 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
   const [markAsComplimentary, setMarkAsComplimentary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Get token from cookies
   const token = Cookies.get('token') || '';
   const queryClient = useQueryClient();
 
-  // Fetch categories data
-  const {
-    data: categoriesResponse,
-    isLoading: categoriesLoading
-  } = useQuery({
+  // Fetch categories
+  const { data: categoriesResponse, isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories'],
     queryFn: () => getAllCategories(token),
     enabled: !!token && isOpen,
   });
 
-  // Fetch brands data
-  const {
-    data: brandsResponse,
-    isLoading: brandsLoading
-  } = useQuery({
+  // Fetch brands
+  const { data: brandsResponse, isLoading: brandsLoading } = useQuery({
     queryKey: ['brands'],
     queryFn: () => getAllBrands(token),
     enabled: !!token && isOpen,
   });
 
-  // Extract data from API responses
-  const apiCategories: ApiCategory[] = useMemo(() => (categoriesResponse as { data?: ApiCategory[] })?.data || [], [categoriesResponse]);
-  const apiBrands: ApiBrand[] = useMemo(() => (brandsResponse as { data?: ApiBrand[] })?.data || [], [brandsResponse]);
+  const apiCategories: ApiCategory[] = useMemo(
+    () => (categoriesResponse as { data?: ApiCategory[] })?.data || [],
+    [categoriesResponse]
+  );
+  const apiBrands: ApiBrand[] = useMemo(
+    () => (brandsResponse as { data?: ApiBrand[] })?.data || [],
+    [brandsResponse]
+  );
 
-  // Helper function to get full image URL
   const getImageUrl = (imagePath: string | null) => {
     if (!imagePath) return null;
     if (imagePath.startsWith('http')) return imagePath;
@@ -91,6 +85,24 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
   // Populate form when editing
   useEffect(() => {
     if (editingProduct) {
+      // Log the raw editingProduct object for debugging
+      console.log("➡️ Raw editingProduct from previous screen:", editingProduct);
+
+      // Show a deep inspection of the object
+      try {
+        console.log("➡️ JSON.stringify(editingProduct):", JSON.stringify(editingProduct, null, 2));
+      } catch (e) {
+        // If circular structure, fallback
+        console.log("➡️ Could not stringify editingProduct:", e);
+      }
+
+      // Show all keys and values
+      if (typeof editingProduct === "object" && editingProduct !== null) {
+        Object.entries(editingProduct as Record<string, any>).forEach(([key, value]) => {
+          console.log(`➡️ editingProduct[${key}]:`, value);
+        });
+      }
+
       const product = editingProduct as {
         id: number;
         title: string;
@@ -108,43 +120,54 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
         images?: Array<{ image: string }>;
       };
 
-      setProductName(product.title || '');
-      setProductPrice(product.price?.toString() || '');
-      setDiscountPrice(product.discount_price?.toString() || '');
-      setDiscountEndDate(product.discount_end_date ? product.discount_end_date.split('T')[0] : '');
-      setInstallationPrice(product.installation_price?.toString() || '');
-      setStockQuantity(product.stock || '');
+      console.log("➡️ Parsed product for form state:", product);
+
+      setProductName(product.title || "");
+      setProductPrice(product.price?.toString() || "");
+      setDiscountPrice(product.discount_price?.toString() || "");
+      setDiscountEndDate(
+        product.discount_end_date ? product.discount_end_date.split("T")[0] : ""
+      );
+      setInstallationPrice(product.installation_price?.toString() || "");
+      setStockQuantity(product.stock || "");
       setSaveAsTemplate(product.top_deal || false);
       setMarkAsComplimentary(product.installation_compulsory || false);
 
-      // Set category and brand names
-      const category = apiCategories.find(cat => cat.id === product.category_id);
-      const brand = apiBrands.find(brand => brand.id === product.brand_id);
-      setProductCategory(category?.title || '');
-      setProductBrand(brand?.title || '');
+      const category = apiCategories.find((cat) => cat.id === product.category_id);
+      const brand = apiBrands.find((brand) => brand.id === product.brand_id);
 
-      // Set product details
+      console.log("➡️ Matched category:", category);
+      console.log("➡️ Matched brand:", brand);
+
+      setProductCategory(category?.title || "");
+      setProductBrand(brand?.title || "");
+
       if (product.details && product.details.length > 0) {
         const details = product.details.map((d) => d.detail);
-        // Ensure we have at least 5 fields or more if needed
         const minFields = Math.max(5, details.length);
-        setProductDetails([...details, ...Array(minFields - details.length).fill('')]);
+        setProductDetails([
+          ...details,
+          ...Array(minFields - details.length).fill(""),
+        ]);
+
+        console.log("➡️ Loaded product details:", details);
       }
 
-      // Set existing images
       setExistingFeaturedImage(getImageUrl(product.featured_image_url || null));
       if (product.images && product.images.length > 0) {
-        const imageUrls = product.images.map(img => getImageUrl(img.image)).filter(Boolean) as string[];
+        const imageUrls = product.images
+          .map((img) => getImageUrl(img.image))
+          .filter(Boolean) as string[];
         setExistingImages(imageUrls);
+
+        console.log("➡️ Existing images:", imageUrls);
       } else {
         setExistingImages([]);
       }
 
-      // Reset new image uploads
       setFeaturedImage(null);
       setSelectedImages([]);
     } else {
-      // Reset form for new product
       resetForm();
     }
   }, [editingProduct, apiCategories, apiBrands]);
@@ -153,7 +176,7 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files) {
-      const newImages = Array.from(files).slice(0, 6); // Limit to 6 images
+      const newImages = Array.from(files).slice(0, 6);
       setSelectedImages(prev => [...prev, ...newImages].slice(0, 6));
     }
   };
@@ -171,138 +194,114 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     setProductDetails(newDetails);
   };
 
-  // Add new function to handle adding more fields
-  const addMoreField = () => {
-    setProductDetails(prev => [...prev, '']);
-  };
-
-  // Add new function to remove a specific field
+  const addMoreField = () => setProductDetails(prev => [...prev, '']);
   const removeField = (index: number) => {
-    if (productDetails.length > 1) { // Keep at least one field
+    if (productDetails.length > 1) {
       setProductDetails(prev => prev.filter((_, i) => i !== index));
     }
   };
-
   const removeImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Add/Update product mutation
+  // ✅ Unified Add / Update mutation
   const addProductMutation = useMutation({
-    mutationFn: (data: {
-      title?: string;
-      category_id?: number;
-      price?: number;
-      brand_id?: number;
-      discount_price?: number;
-      discount_end_date?: string;
-      stock?: string;
-      installation_price?: number;
-      top_deal?: boolean;
-      installation_compulsory?: boolean;
-      featured_image?: File;
-      images?: File[];
-      product_details?: string[];
-    }) => {
+    mutationFn: (data: any) => {
       if (editingProduct) {
         const product = editingProduct as { id: number };
-        // For updates, only send changed/filled fields
-        const updateData: any = {};
-        
-        if (data.title) updateData.title = data.title;
-        if (data.category_id) updateData.category_id = data.category_id;
-        if (data.price !== undefined) updateData.price = data.price;
-        if (data.brand_id) updateData.brand_id = data.brand_id;
-        if (data.discount_price !== undefined) updateData.discount_price = data.discount_price;
-        if (data.discount_end_date) updateData.discount_end_date = data.discount_end_date;
-        if (data.stock) updateData.stock = data.stock;
-        if (data.installation_price !== undefined) updateData.installation_price = data.installation_price;
-        if (data.top_deal !== undefined) updateData.top_deal = data.top_deal;
-        if (data.installation_compulsory !== undefined) updateData.installation_compulsory = data.installation_compulsory;
-        if (data.featured_image) updateData.featured_image = data.featured_image;
-        if (data.images && data.images.length > 0) updateData.images = data.images;
-        if (data.product_details && data.product_details.length > 0) updateData.product_details = data.product_details;
-        
-        console.log('Update data being sent:', updateData);
-        return updateProduct(product.id, updateData, token);
+        // Build FormData for update, but ensure all values are strings and not undefined/null
+        const updatePayload = new FormData();
+        updatePayload.append("title", productName ?? "");
+        updatePayload.append("category_id", String(apiCategories.find(cat => cat.title === productCategory)?.id ?? ""));
+        updatePayload.append("price", productPrice ?? "0");
+        updatePayload.append("brand_id", String(apiBrands.find(brand => brand.title === productBrand)?.id ?? ""));
+        updatePayload.append("discount_price", discountPrice ? discountPrice : "0");
+        if (discountEndDate) updatePayload.append("discount_end_date", discountEndDate);
+        updatePayload.append("stock", stockQuantity ?? "0");
+        updatePayload.append("installation_price", installationPrice ? installationPrice : "0");
+        updatePayload.append("top_deal", saveAsTemplate ? "1" : "0");
+        updatePayload.append("installation_compulsory", markAsComplimentary ? "1" : "0");
+        // Only append featured_image if a new one is selected
+        if (featuredImage) updatePayload.append("featured_image", featuredImage);
+        // Only append images if new ones are selected
+        if (selectedImages.length > 0) {
+          selectedImages.forEach((img, idx) => {
+            updatePayload.append(`images[${idx}]`, img);
+          });
+        }
+        // Always append product_details, even if empty
+        productDetails.filter(detail => detail.trim() !== '').forEach((detail, idx) => {
+          updatePayload.append(`product_details[${idx}]`, detail);
+        });
+
+        // Debug: log all FormData entries
+        for (const pair of updatePayload.entries()) {
+          console.log(`[FormData] ${pair[0]}:`, pair[1]);
+        }
+
+        // Fix: Set the method to POST if the backend expects POST for update with FormData
+        // If your backend expects PUT, ensure it can handle FormData with PUT requests.
+        // Add _method=PUT for Laravel-style APIs (if needed)
+        updatePayload.append("_method", "POST");
+        // Pass FormData as the second argument
+        return updateProduct(product.id, updatePayload, token);
       } else {
-        return addProduct(data as {
-          title: string;
-          category_id: number;
-          price: number;
-          brand_id?: number;
-          discount_price?: number;
-          discount_end_date?: string;
-          stock?: string;
-          installation_price?: number;
-          top_deal?: boolean;
-          installation_compulsory?: boolean;
-          featured_image?: File;
-          images?: File[];
-          product_details?: string[];
-        }, token);
+        return addProduct(data, token);
       }
     },
     onSuccess: () => {
-      // Invalidate and refetch products
       queryClient.invalidateQueries({ queryKey: ['products'] });
       resetForm();
       onClose();
       setIsSubmitting(false);
-      
-      // Show success message
-      if (editingProduct) {
-        alert('Product updated successfully!');
-      } else {
-        alert('Product added successfully!');
-      }
+      alert(editingProduct ? 'Product updated successfully!' : 'Product added successfully!');
     },
     onError: (error: unknown) => {
       console.error('Error with product operation:', error);
       setIsSubmitting(false);
 
-      // Show user-friendly error message
-      const errorObj = error as { response?: { data?: { message?: string; data?: Record<string, unknown> } } };
+      const errorObj = error as {
+        response?: { data?: { message?: string; data?: Record<string, unknown> } };
+      };
 
       if (errorObj?.response?.data?.message) {
         alert(`Error: ${errorObj.response.data.message}`);
       } else if (errorObj?.response?.data?.data) {
-        // Handle validation errors
         const validationErrors = errorObj.response.data.data;
         const errorMessages = Object.entries(validationErrors)
-          .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+          .map(([field, messages]) =>
+            `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`
+          )
           .join('\n');
         alert(`Validation Error:\n${errorMessages}`);
       } else {
-        alert(`An error occurred while ${editingProduct ? 'updating' : 'adding'} the product. Please try again.`);
+        alert(
+          `An error occurred while ${editingProduct ? 'updating' : 'adding'} the product. Please try again.`
+        );
       }
     },
   });
+
 
   const handleSubmit = async () => {
     if (!productName || !productCategory || !productBrand || !productPrice || !stockQuantity) {
       alert('Please fill in all required fields');
       return;
     }
-
     if (!editingProduct && !featuredImage) {
       alert('Please select a featured image');
       return;
     }
-
     setIsSubmitting(true);
 
-    // Find selected category and brand IDs
     const selectedCategoryData = apiCategories.find(cat => cat.title === productCategory);
     const selectedBrandData = apiBrands.find(brand => brand.title === productBrand);
-
     if (!selectedCategoryData || !selectedBrandData) {
       alert('Please select valid category and brand');
       setIsSubmitting(false);
       return;
     }
 
-    // Prepare product data according to API requirements
     const productData = {
       title: productName,
       category_id: selectedCategoryData.id,
@@ -319,7 +318,6 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       product_details: productDetails.filter(detail => detail.trim() !== '')
     };
 
-    // Debug log to check the data being sent
     console.log('Product data being sent:', {
       ...productData,
       featured_image: productData.featured_image ? 'File present' : 'No file',
@@ -662,7 +660,7 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
 
           {/* Add More Button */}
           <div className="mt-4 flex justify-center">
-            <button 
+            <button
               type="button"
               onClick={addMoreField}
               className="text-blue-600 text-sm font-medium hover:text-blue-700 flex items-center cursor-pointer transition-colors hover:bg-blue-50 px-3 py-2 rounded-lg"
@@ -703,8 +701,8 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
               onClick={handleSubmit}
               disabled={isSubmitting}
               className={`w-full py-3 px-4 text-white font-medium rounded-full transition-colors flex items-center justify-center ${isSubmitting
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-900 cursor-pointer hover:bg-blue-800'
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-blue-900 cursor-pointer hover:bg-blue-800'
                 }`}
             >
               {isSubmitting ? (

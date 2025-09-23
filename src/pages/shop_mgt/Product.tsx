@@ -4,7 +4,9 @@ import type { ProductData } from "./shpmgt";
 import ProductDetails from "./ProductDetails";
 import AddProduct from "./AddProduct";
 import images from "../../constants/images";
-
+import ProductBuilder from "./ProductBuilder";
+import { useMutation } from "@tanstack/react-query";
+import { deleteBundle } from "../../utils/mutations/bundle";
 
 //Code Related to the Integration
 import { getAllProducts } from "../../utils/queries/product";
@@ -164,6 +166,10 @@ const Product = () => {
   const brandDropdownRef = useRef<HTMLDivElement>(null);
   const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
   const [bundleImageLoadingStates, setBundleImageLoadingStates] = useState<{ [key: string]: boolean }>({});
+  const [showBundleActionsModal, setShowBundleActionsModal] = useState(false);
+  const [selectedBundle, setSelectedBundle] = useState<any>(null);
+  const [editBundleData, setEditBundleData] = useState<any>(null);
+  const [isProductBuilderOpen, setIsProductBuilderOpen] = useState(false);
 
   // Get token from cookies
   const token = Cookies.get('token') || '';
@@ -367,6 +373,44 @@ const Product = () => {
   const handleCloseAddProduct = () => {
     setIsAddProductOpen(false);
     setEditingProduct(null);
+  };
+
+  // Delete bundle mutation
+  const deleteBundleMutation = useMutation({
+    mutationFn: async (bundleId: number | string) => {
+      return await deleteBundle(bundleId, token || "");
+    },
+    onSuccess: () => {
+      setShowBundleActionsModal(false);
+      setSelectedBundle(null);
+      // Optionally refetch bundles/orders here if needed
+      window.location.reload(); // Or use queryClient.invalidateQueries if using react-query for bundles
+    },
+    onError: (error) => {
+      alert("Failed to delete bundle. Please try again.");
+      setShowBundleActionsModal(false);
+      setSelectedBundle(null);
+    },
+  });
+
+  // Handler to open bundle actions modal
+  const handleBundleActions = (bundle: any) => {
+    setSelectedBundle(bundle);
+    setShowBundleActionsModal(true);
+  };
+
+  // Handler for edit bundle
+  const handleEditBundle = () => {
+    setEditBundleData(selectedBundle);
+    setIsProductBuilderOpen(true);
+    setShowBundleActionsModal(false);
+  };
+
+  // Handler for delete bundle
+  const handleDeleteBundle = () => {
+    if (selectedBundle) {
+      deleteBundleMutation.mutate(selectedBundle.id);
+    }
   };
 
   // Close dropdown when clicking outside
@@ -859,8 +903,9 @@ const Product = () => {
                 return (
                   <div
                     key={bundle.id}
-                    className="bg-white rounded-lg border shadow-sm relative"
+                    className="bg-white rounded-lg border shadow-sm relative cursor-pointer"
                     style={{ borderColor }}
+                    onClick={() => handleBundleActions(bundle)}
                   >
                     <div className="aspect-[4/3] bg-white rounded-lg overflow-hidden p-1.5 relative">
                       {bundleImageLoadingStates[`bundle-${bundle.id}`] && (
@@ -883,12 +928,10 @@ const Product = () => {
                         style={{ display: bundleImageLoadingStates[`bundle-${bundle.id}`] ? 'none' : 'block' }}
                       />
                     </div>
-
                     <div className="p-2.5">
                       <h3 className="font-medium text-gray-900 text-md mb-2">
                         {bundle.title}
                       </h3>
-
                       <div className="border-t pt-3 pb-3 border-[#CDCDCD] flex flex-row justify-between">
                         <div className="flex flex-col">
                           <div>
@@ -966,6 +1009,48 @@ const Product = () => {
         isOpen={isAddProductOpen}
         onClose={handleCloseAddProduct}
         editingProduct={editingProduct}
+      />
+
+      {/* Bundle Actions Modal */}
+      {showBundleActionsModal && selectedBundle && (
+        <div className="fixed inset-0 bg-black/40 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
+            <div className="flex flex-col items-center">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Bundle Actions</h2>
+              <div className="flex flex-col gap-4 w-full">
+                <button
+                  className="w-full py-3 px-4 bg-[#E8A91D] text-white rounded-full font-semibold text-base hover:bg-[#d89a1a] transition-colors"
+                  onClick={handleEditBundle}
+                >
+                  Edit Bundle
+                </button>
+                <button
+                  className="w-full py-3 px-4 bg-red-600 text-white rounded-full font-semibold text-base hover:bg-red-700 transition-colors"
+                  onClick={handleDeleteBundle}
+                  disabled={deleteBundleMutation.isPending}
+                >
+                  {deleteBundleMutation.isPending ? "Deleting..." : "Delete Bundle"}
+                </button>
+                <button
+                  className="w-full py-3 px-4 bg-gray-200 text-gray-700 rounded-full font-semibold text-base hover:bg-gray-300 transition-colors"
+                  onClick={() => setShowBundleActionsModal(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Product Builder Modal (for create or edit) */}
+      <ProductBuilder
+        isOpen={isProductBuilderOpen}
+        onClose={() => {
+          setIsProductBuilderOpen(false);
+          setEditBundleData(null);
+        }}
+        editingBundle={editBundleData}
       />
     </>
   );

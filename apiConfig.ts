@@ -47,14 +47,14 @@ const API_ENDPOINTS = {
     ProductsList: API_DOMAIN + "/products", // GET
     ProductCreate: API_DOMAIN + "/products", // POST
     ProductShow: (id: number | string) => `${API_DOMAIN}/products/${id}`, // GET
-    ProductUpdate: (id: number | string) => `${API_DOMAIN}/products/${id}`, // POST
+    ProductUpdate: (id: number | string) => `${API_DOMAIN}/products/${id}/update`, // POST
     ProductDelete: (id: number | string) => `${API_DOMAIN}/products/${id}`, // DELETE
 
     // --- Bundles (admin/shop) ---
     BundleCreate: API_DOMAIN + "/bundles", // POST
     BundleList: API_DOMAIN + "/bundles", // GET
     BundleShow: (id: number | string) => `${API_DOMAIN}/bundles/${id}`, // GET
-    BundleUpdate: (id: number | string) => `${API_DOMAIN}/bundles/${id}`, // POST
+    BundleUpdate: (id: number | string) => `${API_DOMAIN}/bundles/${id}/update`, // POST
     DeleteBundle: (id: number | string) => `${API_DOMAIN}/bundles/${id}`, // DELETE
     // (If you later expose list/show, add them here to match backend routes)
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import AddCustomService from './AddCustomService';
 import images from '../../constants/images';
 
@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Cookies from "js-cookie";
 import { getAllProducts } from '../../utils/queries/product';
 
+import { updateBundle } from '../../utils/mutations/bundle';
 
 // API Response Interfaces
 interface ApiProduct {
@@ -53,9 +54,10 @@ interface CustomService {
 interface ProductBuilderProps {
   isOpen: boolean;
   onClose: () => void;
+  editingBundle?: any; // <-- add this prop
 }
 
-const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
+const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps) => {
   const [selectedProducts, setSelectedProducts] = useState<ApiProduct[]>([]);
   const [bundleName, setBundleName] = useState('');
   const [bundleType, setBundleType] = useState('');
@@ -100,18 +102,9 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
     }
   };
 
-  // Add bundle mutation
+  // Add bundle mutation (for create)
   const addBundleMutation = useMutation({
-    mutationFn: (data: {
-      title: string;
-      bundle_type: string;
-      total_price: number;
-      discount_price?: number;
-      discount_end_date?: string;
-      featured_image?: File;
-      items: number[];
-      custom_services?: CustomService[];
-    }) => addBundle(data, token),
+    mutationFn: (data: any) => addBundle(data, token),
     onSuccess: () => {
       // Invalidate and refetch bundles
       queryClient.invalidateQueries({ queryKey: ['bundles'] });
@@ -125,17 +118,52 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
     },
   });
 
-  const handleCreateBundle = () => {
+  // Add update bundle mutation (for edit)
+  const updateBundleMutation = useMutation({
+    mutationFn: (data: { id: number; payload: any }) => updateBundle(data.id, data.payload, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bundles'] });
+      resetForm();
+      onClose();
+    },
+    onError: (error: unknown) => {
+      setIsSubmitting(false);
+      alert('Error updating bundle. Please try again.');
+    },
+  });
+
+  // Populate form when editing a bundle
+  useEffect(() => {
+    if (editingBundle) {
+      setBundleName(editingBundle.title || "");
+      setBundleType(editingBundle.bundle_type || "");
+      setTotalPrice(editingBundle.total_price ? String(editingBundle.total_price) : "");
+      setDiscountPrice(editingBundle.discount_price ? String(editingBundle.discount_price) : "");
+      setDiscountEndDate(editingBundle.discount_end_date || "");
+      // Don't prefill file input
+      // Preselect products from bundle_items
+      if (editingBundle.bundle_items && Array.isArray(editingBundle.bundle_items)) {
+        const productIds = editingBundle.bundle_items.map((item: any) => item.product_id);
+        const selected = availableProducts.filter(p => productIds.includes(p.id));
+        setSelectedProducts(selected);
+      }
+      // Preselect custom services
+      setCustomServices(editingBundle.custom_services || []);
+    } else {
+      resetForm();
+    }
+    // eslint-disable-next-line
+  }, [editingBundle, isOpen, availableProducts]);
+
+  const handleCreateOrUpdateBundle = () => {
     if (!bundleName || !bundleType || !totalPrice || selectedProducts.length === 0) {
       alert('Please fill in all required fields and select at least one product');
       return;
     }
-
-    if (!featuredImage) {
+    if (!featuredImage && !editingBundle) {
       alert('Please select a featured image');
       return;
     }
-
     setIsSubmitting(true);
 
     const bundleData = {
@@ -144,12 +172,16 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
       total_price: parseFloat(totalPrice),
       discount_price: discountPrice ? parseFloat(discountPrice) : undefined,
       discount_end_date: discountEndDate || undefined,
-      featured_image: featuredImage,
+      featured_image: featuredImage || undefined,
       items: selectedProducts.map(product => product.id),
       custom_services: customServices.length > 0 ? customServices : undefined
     };
 
-    addBundleMutation.mutate(bundleData);
+    if (editingBundle) {
+      updateBundleMutation.mutate({ id: editingBundle.id, payload: bundleData });
+    } else {
+      addBundleMutation.mutate(bundleData);
+    }
   };
 
   const resetForm = () => {
@@ -193,7 +225,9 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
       <div className="bg-white rounded-lg w-full max-w-md max-h-[100vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold text-gray-900">Product Builder</h2>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {editingBundle ? "Edit Bundle" : "Product Builder"}
+          </h2>
           <button
             onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-full  cursor-pointer"
@@ -397,24 +431,26 @@ const ProductBuilder = ({ isOpen, onClose }: ProductBuilderProps) => {
               Add Custom Service
             </button>
 
-
-
             <button
               type="button"
-              onClick={handleCreateBundle}
+              onClick={handleCreateOrUpdateBundle}
               disabled={isSubmitting}
               className={`w-full py-3 px-4 font-medium rounded-full transition-colors flex items-center justify-center ${isSubmitting
                 ? 'bg-gray-400 cursor-not-allowed text-white '
-                : 'bg-blue-900 cursor-pointer hover:bg-blue-800'
+                : editingBundle
+                  ? 'bg-[#E8A91D] cursor-pointer hover:bg-[#d89a1a]'
+                  : 'bg-blue-900 cursor-pointer hover:bg-blue-800'
                 }`}
             >
               {isSubmitting ? (
                 <div className="flex items-center justify-center text-white">
                   <div className="animate-spin text-white rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Creating Bundle...
+                  {editingBundle ? "Updating Bundle..." : "Creating Bundle..."}
                 </div>
               ) : (
-                <span className="text-white"> Create Bundle</span>
+                <span className="text-white">
+                  {editingBundle ? "Update Bundle" : "Create Bundle"}
+                </span>
               )}
             </button>
 

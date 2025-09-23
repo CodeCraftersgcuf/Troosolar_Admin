@@ -102,7 +102,7 @@ export const updateBundle = async (
 
   return await apiCall(
     API_ENDPOINTS.ADMIN.BundleUpdate(id),
-    "PUT",
+    "POST",
     formData,
     token
   );
