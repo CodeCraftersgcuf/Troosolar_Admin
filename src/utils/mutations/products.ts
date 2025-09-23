@@ -104,7 +104,10 @@ export const updateProduct = async (
   }
 
   if (payload.installation_price !== undefined) {
-    formData.append("installation_price", payload.installation_price.toString());
+    formData.append(
+      "installation_price",
+      payload.installation_price.toString()
+    );
   }
 
   if (payload.top_deal !== undefined) {
@@ -112,7 +115,10 @@ export const updateProduct = async (
   }
 
   if (payload.installation_compulsory !== undefined) {
-    formData.append("installation_compulsory", payload.installation_compulsory ? "1" : "0");
+    formData.append(
+      "installation_compulsory",
+      payload.installation_compulsory ? "1" : "0"
+    );
   }
 
   if (payload.featured_image) {
@@ -133,12 +139,11 @@ export const updateProduct = async (
 
   return await apiCall(
     API_ENDPOINTS.ADMIN.ProductUpdate(id),
-    "PUT",
+    "POST",
     formData,
     token
   );
 };
-
 
 //Delete Product (mutation)
 export const deleteProduct = async (
