@@ -32,21 +32,16 @@ export const updateBrand = async (
     payload,
     token: token ? "present" : "missing",
   });
-  const formData = buildCategoryFormData(payload);
 
-  // Debug: Log FormData contents
-  console.log("FormData contents:");
-  for (const [key, value] of formData.entries()) {
-    console.log(`${key}:`, value);
-  }
-
+  // No FormData → just send JSON body
   return await apiCall(
     API_ENDPOINTS.ADMIN.UpdateBrand(id),
     "PUT",
-    formData,
+    payload, // plain JSON
     token
   );
 };
+
 
 // DELETE remains unchanged
 export const deleteBrand = async (
