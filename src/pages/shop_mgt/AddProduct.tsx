@@ -382,9 +382,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
                   />
                   <button
                     onClick={() => setFeaturedImage(null)}
-                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                    className="absolute top-0 -right-0 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
                   >
-                    ×
+                    <span className='mb-1'>×</span>
                   </button>
                 </div>
               ) : existingFeaturedImage ? (
@@ -444,9 +444,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
                       />
                       <button
                         onClick={() => removeImage(index)}
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                        className="absolute top-0 -right-0 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
                       >
-                        ×
+                        <span className='mb-1'>×</span>
                       </button>
                     </div>
                   ) : existingImages[index] ? (

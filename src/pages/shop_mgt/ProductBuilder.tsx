@@ -356,9 +356,9 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
                     />
                     <button
                       onClick={() => setFeaturedImage(null)}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                      className="absolute top-0 -right-0 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
                     >
-                      ×
+                      <span className='mb-1'>×</span>
                     </button>
                   </div>
                 ) : (
