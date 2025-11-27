@@ -57,6 +57,12 @@ export const Sidebar_links = [
     sublinks: [],
   },
   {
+    name: "BNPL & Buy Now",
+    link: "/bnpl-buynow",
+    icon: images.ShopMgt,
+    sublinks: [],
+  },
+  {
     name: "Referral Mgt",
     link: "/referral-mgt",
     icon: images.referral,

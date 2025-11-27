@@ -1,4 +1,8 @@
-const API_DOMAIN = "https://troosolar.hmstech.org/api";
+// const API_DOMAIN = "https://troosolar.hmstech.org/api";
+
+
+const API_DOMAIN = "http://localhost:8000/api";
+
 
 const API_ENDPOINTS = {
   ADMIN: {
@@ -149,6 +153,26 @@ const API_ENDPOINTS = {
 
     UpdateOrderStatus: (id: number | string) =>
       `${API_DOMAIN}/admin/order-update-status/${id}`, // POST
+
+    // --- BNPL Admin Endpoints ---
+    BNPLApplicationsList: API_DOMAIN + "/admin/bnpl/applications", // GET
+    BNPLApplicationShow: (id: number | string) =>
+      `${API_DOMAIN}/admin/bnpl/applications/${id}`, // GET
+    BNPLApplicationUpdateStatus: (id: number | string) =>
+      `${API_DOMAIN}/admin/bnpl/applications/${id}/status`, // PUT
+    BNPLGuarantorsList: API_DOMAIN + "/admin/bnpl/guarantors", // GET
+    BNPLGuarantorUpdateStatus: (id: number | string) =>
+      `${API_DOMAIN}/admin/bnpl/guarantors/${id}/status`, // PUT
+
+    // --- Buy Now Admin Endpoints ---
+    BuyNowOrdersList: API_DOMAIN + "/admin/orders/buy-now", // GET
+    BuyNowOrderShow: (id: number | string) =>
+      `${API_DOMAIN}/admin/orders/buy-now/${id}`, // GET
+    BuyNowOrderUpdateStatus: (id: number | string) =>
+      `${API_DOMAIN}/admin/orders/buy-now/${id}/status`, // PUT
+    BNPLOrdersList: API_DOMAIN + "/admin/orders/bnpl", // GET
+    BNPLOrderShow: (id: number | string) =>
+      `${API_DOMAIN}/admin/orders/bnpl/${id}`, // GET
   },
 };
 
