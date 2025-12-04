@@ -103,7 +103,7 @@ const AddNewCategory = ({
           });
 
           await addCategory(
-            { title: categoryName, icon: selectedImage, status },
+            { title: categoryName, icon: selectedImage },
             token || ""
           );
         }

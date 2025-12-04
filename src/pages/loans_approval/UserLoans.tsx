@@ -36,7 +36,7 @@ function UserLoans() {
   return (
     <div>
       {/* Render the UserLoanComponent for the selected user */}
-      <UserLoanComponent user={user} userLoans={userLoans} />
+      <UserLoanComponent user={user} userLoans={userLoans} userId={user.id} />
     </div>
   );
 }

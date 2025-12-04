@@ -62,16 +62,7 @@ const UserMgtUsersTable: React.FC<Props> = ({
                 <button
                   className="bg-[#273E8E] text-white px-5 py-2 cursor-pointer rounded-full font-normal transition hover:bg-blue-800"
                   onClick={() => {
-                    // Prepare user data with fallback dummy values
-                    const userData = {
-                      id: user.id || "N/A",
-                      name: user.name || "Unknown User",
-                      email: user.email || "unknown@email.com",
-                      phone: user.phone || "0000000000",
-                      bvn: user.bvn || "00000000000",
-                      date: user.date || "01/01/1970",
-                    };
-                    navigate(`/user-activity/${user.id}`, { state: userData });
+                    navigate(`/user-activity/${user.id}`);
                   }}
                 >
                   View Details

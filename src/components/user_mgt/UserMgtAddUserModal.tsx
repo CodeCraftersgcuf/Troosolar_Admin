@@ -27,7 +27,7 @@ const UserMgtAddUserModal: React.FC<Props> = ({
   handleInputChange,
 }) => {
   const [formError, setFormError] = useState("");
-  const [hasError, setHasError] = useState(false);
+  const [_hasError, setHasError] = useState(false);
   const token = Cookies.get("token");
 
   // Add user mutation

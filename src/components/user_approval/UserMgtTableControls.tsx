@@ -28,7 +28,7 @@ const UserMgtTableControls: React.FC<Props> = ({
   setSelectedMoreAction,
   selectedSortBy,
   setSelectedSortBy,
-  setShowAddModal,
+  setShowAddModal: _setShowAddModal,
   onSearch,
   onAction,
   searchTerm = "",

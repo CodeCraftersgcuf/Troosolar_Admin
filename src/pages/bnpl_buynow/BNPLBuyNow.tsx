@@ -13,6 +13,8 @@ import {
   getBNPLApplication,
   getBuyNowOrder,
   getBNPLOrder,
+  getOrderSummary,
+  getOrderInvoiceDetails,
 } from "../../utils/queries/bnpl";
 import {
   updateBNPLApplicationStatus,
@@ -29,6 +31,11 @@ const BNPLBuyNow: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [detailModalTab, setDetailModalTab] = useState("Details");
+  const [orderSummary, setOrderSummary] = useState<any>(null);
+  const [orderInvoice, setOrderInvoice] = useState<any>(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
   const [statusForm, setStatusForm] = useState({
     status: "",
     admin_notes: "",
@@ -148,14 +155,41 @@ const BNPLBuyNow: React.FC = () => {
 
   const handleViewDetails = async (item: any) => {
     setSelectedItem(item);
+    setDetailModalTab("Details");
+    setOrderSummary(null);
+    setOrderInvoice(null);
     try {
       let detailData;
       if (activeTab === "BNPL Applications") {
         detailData = await getBNPLApplication(item.id, token);
       } else if (activeTab === "Buy Now Orders") {
         detailData = await getBuyNowOrder(item.id, token);
+        // Fetch order summary and invoice for orders
+        if (detailData.data?.id) {
+          try {
+            setLoadingSummary(true);
+            const summary = await getOrderSummary(detailData.data.id, token);
+            setOrderSummary(summary.data);
+          } catch (err) {
+            console.error("Failed to fetch order summary:", err);
+          } finally {
+            setLoadingSummary(false);
+          }
+        }
       } else if (activeTab === "BNPL Orders") {
         detailData = await getBNPLOrder(item.id, token);
+        // Fetch order summary and invoice for orders
+        if (detailData.data?.id) {
+          try {
+            setLoadingSummary(true);
+            const summary = await getOrderSummary(detailData.data.id, token);
+            setOrderSummary(summary.data);
+          } catch (err) {
+            console.error("Failed to fetch order summary:", err);
+          } finally {
+            setLoadingSummary(false);
+          }
+        }
       } else {
         detailData = { data: item };
       }
@@ -164,6 +198,20 @@ const BNPLBuyNow: React.FC = () => {
     } catch (error) {
       console.error("Failed to fetch details:", error);
       alert("Failed to load details. Please try again.");
+    }
+  };
+
+  const handleLoadInvoice = async () => {
+    if (!selectedItem?.id || loadingInvoice) return;
+    try {
+      setLoadingInvoice(true);
+      const invoice = await getOrderInvoiceDetails(selectedItem.id, token);
+      setOrderInvoice(invoice.data);
+    } catch (error) {
+      console.error("Failed to fetch invoice:", error);
+      alert("Failed to load invoice details.");
+    } finally {
+      setLoadingInvoice(false);
     }
   };
 
@@ -721,13 +769,20 @@ const BNPLBuyNow: React.FC = () => {
       {/* Detail Modal */}
       {showDetailModal && selectedItem && (
         <div className="fixed inset-0 bg-black/40 bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Details</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                {activeTab === "BNPL Applications" ? "BNPL Application Details" :
+                 activeTab === "BNPL Guarantors" ? "Guarantor Details" :
+                 "Order Details"}
+              </h2>
               <button
                 onClick={() => {
                   setShowDetailModal(false);
                   setSelectedItem(null);
+                  setOrderSummary(null);
+                  setOrderInvoice(null);
+                  setDetailModalTab("Details");
                 }}
                 className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
               >
@@ -746,41 +801,325 @@ const BNPLBuyNow: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="space-y-4">
-              {Object.entries(selectedItem).map(([key, value]: [string, any]) => {
-                if (typeof value === "object" && value !== null) {
+
+            {/* Tabs for Orders */}
+            {(activeTab === "Buy Now Orders" || activeTab === "BNPL Orders") && (
+              <div className="border-b border-gray-200 mb-4">
+                <nav className="-mb-px flex space-x-8">
+                  {["Details", "Summary", "Invoice"].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => {
+                        setDetailModalTab(tab);
+                        if (tab === "Invoice" && !orderInvoice) {
+                          handleLoadInvoice();
+                        }
+                      }}
+                      className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                        detailModalTab === tab
+                          ? "border-[#273E8E] text-[#273E8E]"
+                          : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            )}
+
+            {/* Tab Content */}
+            {detailModalTab === "Details" && (
+              <div className="space-y-4">
+                {Object.entries(selectedItem).map(([key, value]: [string, any]) => {
+                  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+                    return (
+                      <div key={key} className="border-b pb-2">
+                        <h3 className="font-semibold text-gray-700 capitalize mb-2">
+                          {key.replace(/_/g, " ")}
+                        </h3>
+                        <div className="pl-4 space-y-1">
+                          {Object.entries(value).map(([subKey, subValue]: [string, any]) => (
+                            <div key={subKey} className="text-sm text-gray-600">
+                              <span className="font-medium capitalize">
+                                {subKey.replace(/_/g, " ")}:
+                              </span>{" "}
+                              {typeof subValue === "object" && subValue !== null
+                                ? JSON.stringify(subValue)
+                                : String(subValue)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (Array.isArray(value)) {
+                    return (
+                      <div key={key} className="border-b pb-2">
+                        <h3 className="font-semibold text-gray-700 capitalize mb-2">
+                          {key.replace(/_/g, " ")} ({value.length})
+                        </h3>
+                        <div className="pl-4 space-y-2">
+                          {value.map((item: any, idx: number) => (
+                            <div key={idx} className="text-sm text-gray-600 border-l-2 pl-2">
+                              {typeof item === "object" ? (
+                                <div className="space-y-1">
+                                  {Object.entries(item).map(([k, v]: [string, any]) => (
+                                    <div key={k}>
+                                      <span className="font-medium capitalize">
+                                        {k.replace(/_/g, " ")}:
+                                      </span>{" "}
+                                      {typeof v === "object" ? JSON.stringify(v) : String(v)}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                String(item)
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={key} className="border-b pb-2">
-                      <h3 className="font-semibold text-gray-700 capitalize mb-2">
-                        {key.replace(/_/g, " ")}
-                      </h3>
-                      <div className="pl-4 space-y-1">
-                        {Object.entries(value).map(([subKey, subValue]: [string, any]) => (
-                          <div key={subKey} className="text-sm text-gray-600">
-                            <span className="font-medium capitalize">
-                              {subKey.replace(/_/g, " ")}:
-                            </span>{" "}
-                            {typeof subValue === "object" ? JSON.stringify(subValue) : String(subValue)}
-                          </div>
-                        ))}
-                      </div>
+                      <span className="font-semibold text-gray-700 capitalize">
+                        {key.replace(/_/g, " ")}:
+                      </span>{" "}
+                      <span className="text-gray-600">
+                        {key.includes("amount") || key.includes("price") || key.includes("fee")
+                          ? formatCurrency(value)
+                          : String(value)}
+                      </span>
                     </div>
                   );
-                }
-                return (
-                  <div key={key} className="border-b pb-2">
-                    <span className="font-semibold text-gray-700 capitalize">
-                      {key.replace(/_/g, " ")}:
-                    </span>{" "}
-                    <span className="text-gray-600">
-                      {key.includes("amount") || key.includes("price")
-                        ? formatCurrency(value)
-                        : String(value)}
-                    </span>
+                })}
+              </div>
+            )}
+
+            {detailModalTab === "Summary" && (
+              <div className="space-y-4">
+                {loadingSummary ? (
+                  <LoadingSpinner message="Loading order summary..." />
+                ) : orderSummary ? (
+                  <>
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Order Information</h3>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Order Number:</span>
+                          <span className="ml-2 font-medium">{orderSummary.order_number || selectedItem.id}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Total Price:</span>
+                          <span className="ml-2 font-medium text-[#273E8E]">
+                            {formatCurrency(orderSummary.total_price || selectedItem.total_price)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {orderSummary.items && orderSummary.items.length > 0 && (
+                      <div className="mb-4">
+                        <h3 className="font-semibold text-gray-900 mb-3">Order Items</h3>
+                        <div className="space-y-3">
+                          {orderSummary.items.map((item: any, idx: number) => (
+                            <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <h4 className="font-medium text-gray-900">{item.name}</h4>
+                                  {item.description && (
+                                    <p className="text-sm text-gray-600 mt-1">{item.description}</p>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <div className="font-semibold text-[#273E8E]">
+                                    {formatCurrency(item.price)}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    Qty: {item.quantity}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {orderSummary.appliances && (
+                      <div className="mb-4">
+                        <h3 className="font-semibold text-gray-900 mb-2">Appliances</h3>
+                        <p className="text-gray-600">{orderSummary.appliances}</p>
+                      </div>
+                    )}
+
+                    {orderSummary.backup_time && (
+                      <div className="mb-4">
+                        <h3 className="font-semibold text-gray-900 mb-2">Backup Time</h3>
+                        <p className="text-gray-600">{orderSummary.backup_time}</p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    No summary data available
                   </div>
-                );
-              })}
-            </div>
+                )}
+              </div>
+            )}
+
+            {detailModalTab === "Invoice" && (
+              <div className="space-y-4">
+                {loadingInvoice ? (
+                  <LoadingSpinner message="Loading invoice details..." />
+                ) : orderInvoice ? (
+                  <>
+                    <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Invoice Information</h3>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-600">Order Number:</span>
+                          <span className="ml-2 font-medium">{orderInvoice.order_number || selectedItem.id}</span>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">Total:</span>
+                          <span className="ml-2 font-medium text-[#273E8E]">
+                            {formatCurrency(orderInvoice.invoice?.total || orderInvoice.total || selectedItem.total_price)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {orderInvoice.invoice && (
+                      <div className="space-y-4">
+                        {/* Product Breakdown */}
+                        {(orderInvoice.invoice.solar_inverter || orderInvoice.invoice.solar_panels || orderInvoice.invoice.batteries) && (
+                          <div className="mb-4">
+                            <h3 className="font-semibold text-gray-900 mb-3">Product Breakdown</h3>
+                            <div className="space-y-3">
+                              {orderInvoice.invoice.solar_inverter && (
+                                <div className="border border-gray-200 rounded-lg p-4">
+                                  <div className="flex justify-between items-center">
+                                    <div>
+                                      <h4 className="font-medium text-gray-900">
+                                        {orderInvoice.invoice.solar_inverter.description || "Solar Inverter"}
+                                      </h4>
+                                      <p className="text-sm text-gray-600 mt-1">
+                                        Quantity: {orderInvoice.invoice.solar_inverter.quantity}
+                                      </p>
+                                    </div>
+                                    <div className="font-semibold text-[#273E8E]">
+                                      {formatCurrency(orderInvoice.invoice.solar_inverter.price)}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {orderInvoice.invoice.solar_panels && (
+                                <div className="border border-gray-200 rounded-lg p-4">
+                                  <div className="flex justify-between items-center">
+                                    <div>
+                                      <h4 className="font-medium text-gray-900">
+                                        {orderInvoice.invoice.solar_panels.description || "Solar Panels"}
+                                      </h4>
+                                      <p className="text-sm text-gray-600 mt-1">
+                                        Quantity: {orderInvoice.invoice.solar_panels.quantity}
+                                      </p>
+                                    </div>
+                                    <div className="font-semibold text-[#273E8E]">
+                                      {formatCurrency(orderInvoice.invoice.solar_panels.price)}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {orderInvoice.invoice.batteries && (
+                                <div className="border border-gray-200 rounded-lg p-4">
+                                  <div className="flex justify-between items-center">
+                                    <div>
+                                      <h4 className="font-medium text-gray-900">
+                                        {orderInvoice.invoice.batteries.description || "Batteries"}
+                                      </h4>
+                                      <p className="text-sm text-gray-600 mt-1">
+                                        Quantity: {orderInvoice.invoice.batteries.quantity}
+                                      </p>
+                                    </div>
+                                    <div className="font-semibold text-[#273E8E]">
+                                      {formatCurrency(orderInvoice.invoice.batteries.price)}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Fees Breakdown */}
+                        <div className="mb-4">
+                          <h3 className="font-semibold text-gray-900 mb-3">Fees Breakdown</h3>
+                          <div className="space-y-2 border border-gray-200 rounded-lg p-4">
+                            {orderInvoice.invoice.material_cost && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Material Cost:</span>
+                                <span className="font-medium">{formatCurrency(orderInvoice.invoice.material_cost)}</span>
+                              </div>
+                            )}
+                            {orderInvoice.invoice.installation_fee && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Installation Fee:</span>
+                                <span className="font-medium">{formatCurrency(orderInvoice.invoice.installation_fee)}</span>
+                              </div>
+                            )}
+                            {orderInvoice.invoice.delivery_fee && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Delivery Fee:</span>
+                                <span className="font-medium">{formatCurrency(orderInvoice.invoice.delivery_fee)}</span>
+                              </div>
+                            )}
+                            {orderInvoice.invoice.inspection_fee && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Inspection Fee:</span>
+                                <span className="font-medium">{formatCurrency(orderInvoice.invoice.inspection_fee)}</span>
+                              </div>
+                            )}
+                            {orderInvoice.invoice.insurance_fee && (
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600">Insurance Fee:</span>
+                                <span className="font-medium">{formatCurrency(orderInvoice.invoice.insurance_fee)}</span>
+                              </div>
+                            )}
+                            {orderInvoice.invoice.subtotal && (
+                              <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
+                                <span className="text-gray-600 font-medium">Subtotal:</span>
+                                <span className="font-semibold">{formatCurrency(orderInvoice.invoice.subtotal)}</span>
+                              </div>
+                            )}
+                            {orderInvoice.invoice.total && (
+                              <div className="flex justify-between text-sm border-t-2 border-[#273E8E] pt-2 mt-2">
+                                <span className="text-gray-900 font-bold">Total:</span>
+                                <span className="font-bold text-[#273E8E] text-lg">
+                                  {formatCurrency(orderInvoice.invoice.total)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <p className="mb-4">Invoice details not loaded</p>
+                    <button
+                      onClick={handleLoadInvoice}
+                      className="bg-[#273E8E] text-white px-4 py-2 rounded-lg hover:bg-[#1e3270] transition-colors"
+                    >
+                      Load Invoice
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

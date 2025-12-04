@@ -165,7 +165,7 @@ const Banner = ({ isModalOpen = false, setIsModalOpen }: BannerProps = {}) => {
   };
 
   // Save new or updated banner (calls mutation)
-  const handleNewBanner = (image: File | null, link: string) => {
+  const handleNewBanner = (image: File | null, _link: string) => {
     if (editBanner) {
       // If user selected a new image, send it; if not, just close (no change)
       if (image) {

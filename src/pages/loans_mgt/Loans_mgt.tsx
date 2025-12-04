@@ -317,7 +317,7 @@ const Loans_mgt = () => {
           userPhone={selectedUser.phone}
           userBvn={selectedUser.bvn}
           onSendToPartner={handleSendToPartner}
-          loanApplicationStatus={selectedUser.approval_status}
+          loanApplicationStatus={selectedUser.approval_status || ""}
         />
       )}
 

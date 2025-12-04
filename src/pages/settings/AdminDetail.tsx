@@ -205,7 +205,7 @@ const AdminDetail = ({ adminId, adminData, onGoBack }: AdminDetailProps) => {
 
             {/* Table Body */}
             <tbody className="bg-white divide-y divide-gray-100">
-              {admin.activity.map((activity, index) => (
+              {admin.activity.map((activity: any, index: number) => (
                 <tr
                   key={activity.id}
                   className={`${

@@ -173,6 +173,27 @@ const API_ENDPOINTS = {
     BNPLOrdersList: API_DOMAIN + "/admin/orders/bnpl", // GET
     BNPLOrderShow: (id: number | string) =>
       `${API_DOMAIN}/admin/orders/bnpl/${id}`, // GET
+
+    // --- Order Details Endpoints ---
+    OrderSummary: (id: number | string) =>
+      `${API_DOMAIN}/orders/${id}/summary`, // GET
+    OrderInvoiceDetails: (id: number | string) =>
+      `${API_DOMAIN}/orders/${id}/invoice-details`, // GET
+
+    // --- Configuration Endpoints ---
+    LoanConfiguration: API_DOMAIN + "/config/loan-configuration", // GET
+    AddOns: API_DOMAIN + "/config/add-ons", // GET
+    DeliveryLocations: (stateId?: number | string) =>
+      stateId
+        ? `${API_DOMAIN}/config/delivery-locations?state_id=${stateId}`
+        : `${API_DOMAIN}/config/delivery-locations`, // GET
+
+    // --- Audit Request Admin Endpoints ---
+    AuditRequestsList: API_DOMAIN + "/admin/audit/requests", // GET
+    AuditRequestShow: (id: number | string) =>
+      `${API_DOMAIN}/admin/audit/requests/${id}`, // GET
+    AuditRequestUpdateStatus: (id: number | string) =>
+      `${API_DOMAIN}/admin/audit/requests/${id}/status`, // PUT
   },
 };
 

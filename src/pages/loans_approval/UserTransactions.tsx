@@ -2,7 +2,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import TransactionSummaryCards from "../../component/TransactionSummaryCards";
 import Header from "../../component/Header";
-import { users } from "../../constants/usermgt";
 import images from "../../constants/images";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 
@@ -11,8 +10,8 @@ import { getSingleTransaction } from "../../utils/queries/transactions";
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 
-// User-specific transaction data
-const userTransactionsData = {
+// User-specific transaction data (unused - kept for reference)
+/* const userTransactionsData = {
   "1": {
     user: {
       name: "Germandon Abudu",
@@ -235,7 +234,7 @@ const userTransactionsData = {
       },
     ],
   },
-};
+}; */
 
 const UserTransactions = () => {
   const { id } = useParams();
@@ -260,7 +259,6 @@ const UserTransactions = () => {
 
   // Map API response
   const apiUserInfo = apiData?.user_info || {};
-  const apiWalletInfo = apiData?.wallet_info || {};
   const apiSummary = apiData?.summary || {};
   const apiTransactions = apiData?.transactions || [];
 
@@ -334,10 +332,6 @@ const UserTransactions = () => {
     }
   };
 
-  const handleNotificationClick = () => {
-    // Handle notification click functionality
-    console.log("Notification clicked");
-  };
 
   // Filters
   const filteredTransactions = displayTransactions.filter((transaction: any) => {

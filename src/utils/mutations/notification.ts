@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from "../../../apiConfig";
 
 // POST / New notification
 export const addNotification = async (
-  payload: { message: string;},
+  payload: { subject?: string; message: string;},
   token: string
 ): Promise<any> => {
   return await apiCall(API_ENDPOINTS.ADMIN.AddNotification, "POST", payload, token);

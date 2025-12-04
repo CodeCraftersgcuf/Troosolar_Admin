@@ -10,7 +10,7 @@ const Analytics = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("alltime");
   const [revenueProduct, setRevenueProduct] = useState("all");
 
-  const StatCard = ({ title, value, className = "" }) => {
+  const StatCard = ({ title, value, className = "" }: { title: string; value: string | number; className?: string }) => {
     return (
       <div className={`bg-white p-4 shadow-sm ${className}`}>
         <h3

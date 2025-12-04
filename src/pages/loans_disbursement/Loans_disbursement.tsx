@@ -103,7 +103,7 @@ const Loans_disbursement = () => {
   );
   const [showLoanDetail, setShowLoanDetail] = useState(false);
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
-  const [disbursementList, setDisbursementList] = useState(disbursementData);
+  const [_disbursementList, setDisbursementList] = useState(disbursementData);
   const [showRepaymentHistory, setShowRepaymentHistory] = useState(false);
   const [selectedLoanForHistory, setSelectedLoanForHistory] = useState<{
     id: string;
@@ -147,8 +147,8 @@ const Loans_disbursement = () => {
 
   // Handle disbursement status update
   const handleDisbursementUpdate = (loanId: string, status: string) => {
-    setDisbursementList((prevList) =>
-      prevList.map((loan) =>
+    setDisbursementList((prevList: typeof disbursementData) =>
+      prevList.map((loan: any) =>
         loan.id === loanId
           ? { ...loan, disbursement: status as "Pending" | "Completed" }
           : loan

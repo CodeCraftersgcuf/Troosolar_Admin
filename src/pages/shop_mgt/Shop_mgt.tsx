@@ -136,7 +136,7 @@ const Shop_mgt = () => {
       // Optionally refetch bundles/orders here if needed
       window.location.reload(); // Or use queryClient.invalidateQueries if using react-query for bundles
     },
-    onError: (error) => {
+    onError: (_error) => {
       alert("Failed to delete bundle. Please try again.");
       setShowBundleActionsModal(false);
       setSelectedBundle(null);
@@ -245,11 +245,11 @@ const Shop_mgt = () => {
     setSelectedOrder(null);
   };
 
-  // Handler to open bundle actions modal
-  const handleBundleActions = (bundle: any) => {
-    setSelectedBundle(bundle);
-    setShowBundleActionsModal(true);
-  };
+  // Handler to open bundle actions modal (currently unused)
+  // const _handleBundleActions = (bundle: any) => {
+  //   setSelectedBundle(bundle);
+  //   setShowBundleActionsModal(true);
+  // };
 
   // Handler for edit bundle
   const handleEditBundle = () => {
@@ -735,7 +735,10 @@ const Shop_mgt = () => {
       {/* Order Detail Modal */}
       <OrderDetailModal
         isOpen={showOrderModal}
-        order={selectedOrder}
+        order={selectedOrder ? {
+          ...selectedOrder,
+          include_user_info: selectedOrder.include_user_info ? { first_name: "", phone: "" } : undefined
+        } : null}
         onClose={closeModal}
       />
 

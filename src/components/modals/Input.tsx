@@ -1,4 +1,4 @@
-import React, { ChangeEvent } from "react";
+import React, { type ChangeEvent } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 interface InputProps {

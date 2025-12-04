@@ -111,8 +111,8 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
       resetForm();
       onClose();
     },
-    onError: (error: unknown) => {
-      console.error('Error creating bundle:', error);
+    onError: (_error: unknown) => {
+      console.error('Error creating bundle:', _error);
       setIsSubmitting(false);
       alert('Error creating bundle. Please try again.');
     },
@@ -126,7 +126,7 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
       resetForm();
       onClose();
     },
-    onError: (error: unknown) => {
+    onError: (_error: unknown) => {
       setIsSubmitting(false);
       alert('Error updating bundle. Please try again.');
     },

@@ -1,4 +1,3 @@
-import type { TransactionData } from './transaction';
 
 interface TransactionDetailProps {
   isOpen: boolean;

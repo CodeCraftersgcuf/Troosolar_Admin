@@ -386,7 +386,7 @@ const Product = () => {
       // Optionally refetch bundles/orders here if needed
       window.location.reload(); // Or use queryClient.invalidateQueries if using react-query for bundles
     },
-    onError: (error) => {
+    onError: (_error) => {
       alert("Failed to delete bundle. Please try again.");
       setShowBundleActionsModal(false);
       setSelectedBundle(null);

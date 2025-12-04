@@ -87,7 +87,7 @@ const Notifications = () => {
   // Update notification mutation
   const updateMutation = useMutation({
     mutationFn: async ({ id, message }: { id: string; message: string }) => {
-      return await updateNotification(id, { message }, token || "");
+      return await updateNotification(id, { title: "", message, type: "" }, token || "");
     },
     onSuccess: () => {
       refetch();

@@ -9,6 +9,7 @@ export type Order = {
   name: string;
   price: string;
   user: string;
+  image?: string;
 };
 
 export type User = {

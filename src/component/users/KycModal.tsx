@@ -77,7 +77,7 @@ const KycModal: React.FC<KycModalProps> = ({
   };
 
   // Form data states with user-specific defaults
-  const [personalData, setPersonalData] = useState({
+  const [_personalData, setPersonalData] = useState({
     firstName: user?.name?.split(" ")[0] || "",
     surname: user?.name?.split(" ")[1] || "",
     email: user?.email || "",
@@ -133,13 +133,13 @@ const KycModal: React.FC<KycModalProps> = ({
   }, [isOpen, user]);
 
   // Save functions
-  const savePersonalDetails = () => {
-    const userKey = `user_personal_${user?.name
-      ?.replace(/\s+/g, "_")
-      .toLowerCase()}`;
-    localStorage.setItem(userKey, JSON.stringify(personalData));
-    alert("Personal details saved successfully!");
-  };
+  // const savePersonalDetails = () => {
+  //   const userKey = `user_personal_${user?.name
+  //     ?.replace(/\s+/g, "_")
+  //     .toLowerCase()}`;
+  //   localStorage.setItem(userKey, JSON.stringify(personalData));
+  //   alert("Personal details saved successfully!");
+  // };
 
   const saveCreditCheck = () => {
     const userKey = `user_credit_${user?.name

@@ -151,9 +151,9 @@ const Product = () => {
 
   // Map API response to categories
   useEffect(() => {
-    if (apiCategories?.status === "success" && Array.isArray(apiCategories.data)) {
+    if (apiCategories && (apiCategories as any)?.status === "success" && Array.isArray((apiCategories as any).data)) {
       setCategories(
-        apiCategories.data.map((cat: any) => ({
+        (apiCategories as any).data.map((cat: any) => ({
           id: String(cat.id),
           categoryName: cat.title,
           image: cat.icon ? `${IMAGE_BASE_URL}${cat.icon}` : "/assets/images/category.png",
@@ -210,7 +210,7 @@ const Product = () => {
   };
 
   // Save edited category
-  const handleEditCategorySave = async (categoryName: string, image: File | null, status: string) => {
+  const handleEditCategorySave = async (_categoryName: string, _image: File | null, _status: string) => {
     // Only close modal and refetch, mutation is now handled in AddNewCategory
     setEditCategoryModalOpen(false);
     setEditCategoryData(null);
@@ -240,9 +240,9 @@ const Product = () => {
 
   // Map API response to brandList
   useEffect(() => {
-    if (apiBrands?.status === "success" && Array.isArray(apiBrands.data)) {
+    if (apiBrands && (apiBrands as any)?.status === "success" && Array.isArray((apiBrands as any).data)) {
       setBrandList(
-        apiBrands.data.map((b: any) => ({
+        (apiBrands as any).data.map((b: any) => ({
           id: String(b.id),
           brandName: b.title,
           category: b.category_id ? String(b.category_id) : "",
@@ -337,13 +337,13 @@ const Product = () => {
   };
 
   // Save new brand (just closes modal, mutation handled in AddNewBrand)
-  const handleAddNewBrand = async (categoryName: string, brandName: string, status: string) => {
+  const handleAddNewBrand = async (_categoryName: string, _brandName: string, _status: string) => {
     setIsAddBrandModalOpen(false);
     refetchBrands();
   };
 
   // Save edited brand (just closes modal, mutation handled in AddNewBrand)
-  const handleEditBrandSave = async (categoryName: string, brandName: string, status: string) => {
+  const handleEditBrandSave = async (_categoryName: string, _brandName: string, _status: string) => {
     setEditBrandModalOpen(false);
     setEditBrandData(null);
     refetchBrands();
@@ -949,7 +949,7 @@ const Product = () => {
         }}
         onSave={handleEditBrandSave}
         editMode={true}
-        editData={editBrandData}
+        editData={editBrandData || undefined}
       />
     </div>
   );

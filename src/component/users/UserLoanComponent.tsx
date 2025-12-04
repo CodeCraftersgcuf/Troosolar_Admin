@@ -412,7 +412,7 @@ const UserLoanComponent: React.FC<UserLoanComponentProps> = ({
             </div>
 
             {/* Next Repayment Section */}
-            {apiLoans.length > 0 && apiLoans.some(loan => loan.loan_status?.disbursement_status === "active") ? (
+            {apiLoans.length > 0 && apiLoans.some((loan: any) => loan.loan_status?.disbursement_status === "active") ? (
               <div
                 className="bg-white rounded-2xl shadow-lg p-6 border border-red-200"
                 style={{

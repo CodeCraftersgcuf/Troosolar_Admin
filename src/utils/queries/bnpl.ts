@@ -132,3 +132,29 @@ export const getBNPLOrder = async (
   );
 };
 
+// GET /api/orders/{id}/summary
+export const getOrderSummary = async (
+  id: number | string,
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.OrderSummary(id),
+    "GET",
+    undefined,
+    token
+  );
+};
+
+// GET /api/orders/{id}/invoice-details
+export const getOrderInvoiceDetails = async (
+  id: number | string,
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.OrderInvoiceDetails(id),
+    "GET",
+    undefined,
+    token
+  );
+};
+

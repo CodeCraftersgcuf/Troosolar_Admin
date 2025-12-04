@@ -1,5 +1,5 @@
 import React from "react";
-import { users as initialUsers, stats as initialStats } from "../../constants/usermgt";
+import { stats as initialStats } from "../../constants/usermgt";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import UserMgtHeader from "../../components/user_approval/UserMgtHeader";
@@ -16,8 +16,7 @@ import { postMonoLoanCalculationApproval } from "../../utils/mutations/loans";
 const User_approval: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [users] = useState(initialUsers);
+  const [_showAddModal, setShowAddModal] = useState(false);
   const [showMoreActionsDropdown, setShowMoreActionsDropdown] = useState(false);
   const [showSortByDropdown, setShowSortByDropdown] = useState(false);
   const [selectedSortBy, setSelectedSortBy] = useState("Sort By");
@@ -27,7 +26,7 @@ const User_approval: React.FC = () => {
   const moreActionsRef = useRef<HTMLDivElement>(null!);
   const sortByRef = useRef<HTMLDivElement>(null!);
   const dotsDropdownRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const [newUser, setNewUser] = useState({
+  const [_newUser, _setNewUser] = useState({
     name: "",
     email: "",
     phone: "",
@@ -253,25 +252,9 @@ const User_approval: React.FC = () => {
     };
   }, []);
 
-  // Handle form input changes
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setNewUser((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-
-
   // Handle notification click
   const handleNotificationClick = () => {
     console.log("Notification clicked in User Management");
-  };
-
-  // Handle user added callback to refresh data
-  const handleUserAdded = () => {
-    queryClient.invalidateQueries({ queryKey: ["all-users"] });
   };
 
   return (
