@@ -31,7 +31,6 @@ import {
   resendCartEmail,
   updateAuditRequestStatus,
 } from "../../utils/mutations/bnpl";
-import { getAllUsers } from "../../utils/queries/users";
 
 const BNPLBuyNow: React.FC = () => {
   const [activeTab, setActiveTab] = useState("BNPL Applications");
@@ -62,7 +61,6 @@ const BNPLBuyNow: React.FC = () => {
   const [showUserDetailModal, setShowUserDetailModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [userCartData, setUserCartData] = useState<any>(null);
   const [createOrderForm, setCreateOrderForm] = useState({
     user_id: "",
     order_type: "buy_now" as "buy_now" | "bnpl",
@@ -72,6 +70,19 @@ const BNPLBuyNow: React.FC = () => {
   });
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
   const [productTypeFilter, setProductTypeFilter] = useState<"all" | "products" | "bundles">("all");
+  const [customProducts, setCustomProducts] = useState<Array<{
+    name: string;
+    description: string;
+    price: number;
+    quantity: number;
+  }>>([]);
+  const [showAddCustomProduct, setShowAddCustomProduct] = useState(false);
+  const [newCustomProduct, setNewCustomProduct] = useState({
+    name: "",
+    description: "",
+    price: "",
+    quantity: "1",
+  });
 
   const token = Cookies.get("token") || "";
   const queryClient = useQueryClient();
@@ -181,14 +192,6 @@ const BNPLBuyNow: React.FC = () => {
     queryKey: ["user-cart", selectedUserId],
     queryFn: () => getUserCart(selectedUserId!, token),
     enabled: activeTab === "Custom Orders" && !!selectedUserId && !!token,
-    onSuccess: (data) => {
-      if (data?.data) {
-        setUserCartData(data.data);
-      }
-    },
-    onError: () => {
-      setUserCartData(null);
-    },
   });
 
 
@@ -249,7 +252,7 @@ const BNPLBuyNow: React.FC = () => {
     mutationFn: async (payload: any) => {
       return await createCustomOrder(payload, token);
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-cart"] });
       setShowCreateOrderModal(false);
       setCreateOrderForm({
@@ -260,6 +263,14 @@ const BNPLBuyNow: React.FC = () => {
         email_message: "",
       });
       setSelectedProducts([]);
+      setCustomProducts([]);
+      setShowAddCustomProduct(false);
+      setNewCustomProduct({
+        name: "",
+        description: "",
+        price: "",
+        quantity: "1",
+      });
       
       // Invalidate audit users query to refresh the list
       queryClient.invalidateQueries({ queryKey: ["audit-users-with-requests"] });
@@ -275,7 +286,7 @@ const BNPLBuyNow: React.FC = () => {
     mutationFn: async ({ userId, itemId }: { userId: number; itemId: number }) => {
       return await removeCartItem(userId, itemId, token);
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-cart"] });
       refetchUserCart();
       // Invalidate audit users query to refresh the list
@@ -288,7 +299,7 @@ const BNPLBuyNow: React.FC = () => {
     mutationFn: async (userId: number) => {
       return await clearUserCart(userId, token);
     },
-    onSuccess: (_, userId) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-cart"] });
       refetchUserCart();
       // Invalidate audit users query to refresh the list
@@ -525,7 +536,9 @@ const BNPLBuyNow: React.FC = () => {
 
   const currentData = getCurrentData();
   const items = activeTab !== "Custom Orders" ? (currentData?.data || []) : [];
-  const total = activeTab !== "Custom Orders" ? (currentData?.total || 0) : 0;
+  const total = activeTab !== "Custom Orders" 
+    ? (currentData?.total || 0) 
+    : (auditUsersData?.data?.pagination?.total || 0);
   const totalPages = Math.ceil(total / itemsPerPage);
 
   useEffect(() => {
@@ -784,15 +797,7 @@ const BNPLBuyNow: React.FC = () => {
                                 setSelectedUserId(user.id);
                                 setShowUserDetailModal(true);
                                 // Refetch cart data for the selected user
-                                try {
-                                  const cartResponse = await getUserCart(user.id, token);
-                                  if (cartResponse?.data) {
-                                    setUserCartData(cartResponse.data);
-                                  }
-                                } catch (error) {
-                                  console.error("Failed to fetch cart:", error);
-                                  setUserCartData(null);
-                                }
+                                refetchUserCart();
                               }}
                             >
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -857,15 +862,7 @@ const BNPLBuyNow: React.FC = () => {
                                     setSelectedUserId(user.id);
                                     setShowUserDetailModal(true);
                                     // Refetch cart data for the selected user
-                                    try {
-                                      const cartResponse = await getUserCart(user.id, token);
-                                      if (cartResponse?.data) {
-                                        setUserCartData(cartResponse.data);
-                                      }
-                                    } catch (error) {
-                                      console.error("Failed to fetch cart:", error);
-                                      setUserCartData(null);
-                                    }
+                                    refetchUserCart();
                                   }}
                                 >
                                   View Details
@@ -1888,6 +1885,202 @@ const BNPLBuyNow: React.FC = () => {
                       </div>
                     </div>
                   </>
+                ) : activeTab === "Audit Requests" ? (
+                  <>
+                    {/* Audit Request Overview */}
+                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-6 border border-purple-100">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-bold text-gray-900">Audit Request Overview</h3>
+                        <span
+                          className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-full"
+                          style={getStatusColor(selectedItem.status)}
+                        >
+                          {selectedItem.status || "N/A"}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Request ID</p>
+                          <p className="text-sm font-semibold text-gray-900">#{selectedItem.id || "N/A"}</p>
+                        </div>
+                        {selectedItem.audit_type && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Audit Type</p>
+                            <p className="text-sm font-semibold text-gray-900 capitalize">
+                              {selectedItem.audit_type.replace("-", "/")}
+                            </p>
+                          </div>
+                        )}
+                        {selectedItem.customer_type && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Customer Type</p>
+                            <p className="text-sm font-semibold text-gray-900 capitalize">
+                              {selectedItem.customer_type}
+                            </p>
+                          </div>
+                        )}
+                        {selectedItem.created_at && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Request Date</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {formatDate(selectedItem.created_at)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* User Information */}
+                    {selectedItem.user && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          Customer Information
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Full Name</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {selectedItem.user.first_name} {selectedItem.user.sur_name}
+                            </p>
+                          </div>
+                          {selectedItem.user.email && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Email</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.user.email}</p>
+                            </div>
+                          )}
+                          {selectedItem.user.phone && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Phone</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.user.phone}</p>
+                            </div>
+                          )}
+                          {selectedItem.user.id && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">User ID</p>
+                              <p className="text-sm font-medium text-gray-900">#{selectedItem.user.id}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Property Details */}
+                    {(selectedItem.property_address || selectedItem.property_state || selectedItem.property_floors || selectedItem.property_rooms !== undefined || selectedItem.is_gated_estate !== undefined) && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                          </svg>
+                          Property Details
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {selectedItem.property_address && (
+                            <div className="md:col-span-2">
+                              <p className="text-xs text-gray-500 mb-1">Property Address</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {selectedItem.property_address}
+                              </p>
+                            </div>
+                          )}
+                          {selectedItem.property_state && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">State</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {selectedItem.property_state}
+                              </p>
+                            </div>
+                          )}
+                          {selectedItem.property_floors !== undefined && selectedItem.property_floors !== null && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Number of Floors</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {selectedItem.property_floors}
+                              </p>
+                            </div>
+                          )}
+                          {selectedItem.property_rooms !== undefined && selectedItem.property_rooms !== null && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Number of Rooms</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {selectedItem.property_rooms}
+                              </p>
+                            </div>
+                          )}
+                          {selectedItem.is_gated_estate !== undefined && selectedItem.is_gated_estate !== null && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Gated Estate</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {selectedItem.is_gated_estate ? "Yes" : "No"}
+                              </p>
+                            </div>
+                          )}
+                          {selectedItem.has_property_details !== undefined && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Property Details Status</p>
+                              <span className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${
+                                selectedItem.has_property_details 
+                                  ? "bg-green-100 text-green-800 border border-green-300" 
+                                  : "bg-yellow-100 text-yellow-800 border border-yellow-300"
+                              }`}>
+                                {selectedItem.has_property_details ? "✓ Details Shared" : "⚠️ Needs Details"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Order Information (if linked) */}
+                    {selectedItem.order_id && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                          </svg>
+                          Linked Order
+                        </h3>
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Order ID</p>
+                          <p className="text-sm font-medium text-gray-900">#{selectedItem.order_id}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Additional Information */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h3>
+                      <div className="space-y-3">
+                        {Object.entries(selectedItem).map(([key, value]: [string, any]) => {
+                          // Skip already displayed fields
+                          const skipKeys = [
+                            "id", "status", "audit_type", "customer_type", "user", "property_address",
+                            "property_state", "property_floors", "property_rooms", "is_gated_estate",
+                            "has_property_details", "order_id", "created_at", "updated_at"
+                          ];
+                          if (skipKeys.includes(key) || !value || value === null || value === "null") {
+                            return null;
+                          }
+                          if (typeof value === "object" || Array.isArray(value)) {
+                            return null;
+                          }
+                          return (
+                            <div key={key} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
+                              <span className="text-sm font-medium text-gray-700 capitalize">
+                                {key.replace(/_/g, " ")}:
+                              </span>
+                              <span className="text-sm text-gray-900">
+                                {String(value)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   // Generic display for other tabs
                   <div className="space-y-4">
@@ -2419,6 +2612,14 @@ const BNPLBuyNow: React.FC = () => {
                     email_message: "",
                   });
                   setSelectedProducts([]);
+                  setCustomProducts([]);
+                  setShowAddCustomProduct(false);
+                  setNewCustomProduct({
+                    name: "",
+                    description: "",
+                    price: "",
+                    quantity: "1",
+                  });
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -2502,10 +2703,244 @@ const BNPLBuyNow: React.FC = () => {
                 </div>
               </div>
 
+              {/* Custom Products/Services Section */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Custom Products/Services
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      These will be automatically included in the email message sent to the user
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCustomProduct(true)}
+                    className="text-sm text-[#273E8E] hover:text-[#1e3270] font-medium flex items-center gap-1"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Custom Product/Service
+                  </button>
+                </div>
+                
+                {/* Add Custom Product Form */}
+                {showAddCustomProduct && (
+                  <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Add Custom Product/Service</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomProduct.name}
+                          onChange={(e) => setNewCustomProduct({ ...newCustomProduct, name: e.target.value })}
+                          className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white"
+                          placeholder="Enter product/service name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Description *
+                        </label>
+                        <textarea
+                          value={newCustomProduct.description}
+                          onChange={(e) => setNewCustomProduct({ ...newCustomProduct, description: e.target.value })}
+                          className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white"
+                          rows={2}
+                          placeholder="Enter description"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Price (₦) *
+                          </label>
+                          <input
+                            type="number"
+                            value={newCustomProduct.price}
+                            onChange={(e) => setNewCustomProduct({ ...newCustomProduct, price: e.target.value })}
+                            className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white"
+                            placeholder="0.00"
+                            min="0"
+                            step="0.01"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Quantity *
+                          </label>
+                          <input
+                            type="number"
+                            value={newCustomProduct.quantity}
+                            onChange={(e) => setNewCustomProduct({ ...newCustomProduct, quantity: e.target.value })}
+                            className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white"
+                            placeholder="1"
+                            min="1"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAddCustomProduct(false);
+                            setNewCustomProduct({
+                              name: "",
+                              description: "",
+                              price: "",
+                              quantity: "1",
+                            });
+                          }}
+                          className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newCustomProduct.name.trim()) {
+                              alert("Please enter a name");
+                              return;
+                            }
+                            if (!newCustomProduct.description.trim()) {
+                              alert("Please enter a description");
+                              return;
+                            }
+                            if (!newCustomProduct.price || parseFloat(newCustomProduct.price) <= 0) {
+                              alert("Please enter a valid price");
+                              return;
+                            }
+                            if (!newCustomProduct.quantity || parseInt(newCustomProduct.quantity) < 1) {
+                              alert("Please enter a valid quantity");
+                              return;
+                            }
+                            
+                            // Format custom product for email message
+                            const customProduct = {
+                              name: newCustomProduct.name.trim(),
+                              description: newCustomProduct.description.trim(),
+                              price: parseFloat(newCustomProduct.price),
+                              quantity: parseInt(newCustomProduct.quantity),
+                            };
+                            
+                            // Add to custom products list for display
+                            setCustomProducts([...customProducts, customProduct]);
+                            
+                            // Automatically format and append to email message
+                            const total = customProduct.price * customProduct.quantity;
+                            const customProductText = `\n\n--- Custom Product/Service ---\n${customProduct.name}\nDescription: ${customProduct.description}\nPrice: ${formatCurrency(customProduct.price)} x ${customProduct.quantity} = ${formatCurrency(total)}`;
+                            
+                            const currentEmailMessage = createOrderForm.email_message || "";
+                            setCreateOrderForm({
+                              ...createOrderForm,
+                              email_message: currentEmailMessage + customProductText,
+                            });
+                            
+                            setNewCustomProduct({
+                              name: "",
+                              description: "",
+                              price: "",
+                              quantity: "1",
+                            });
+                            setShowAddCustomProduct(false);
+                          }}
+                          className="px-4 py-2 text-sm bg-[#273E8E] text-white rounded-lg hover:bg-[#1e3270]"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* List of Custom Products */}
+                {customProducts.length > 0 && (
+                  <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-white">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-medium text-gray-700">Custom Products/Services (Will be included in email):</h4>
+                      <span className="text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded">
+                        {customProducts.length} item{customProducts.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {customProducts.map((custom, index) => (
+                        <div
+                          key={index}
+                          className="flex items-start justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                        >
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-gray-900">{custom.name}</p>
+                            <p className="text-xs text-gray-600 mt-1">{custom.description}</p>
+                            <div className="flex items-center gap-4 mt-2">
+                              <span className="text-sm font-semibold text-[#273E8E]">
+                                {formatCurrency(custom.price)}
+                              </span>
+                              <span className="text-xs text-gray-500">Qty: {custom.quantity}</span>
+                              <span className="text-xs text-gray-500">
+                                Total: {formatCurrency(custom.price * custom.quantity)}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Remove from custom products list
+                              const updatedCustomProducts = customProducts.filter((_, i) => i !== index);
+                              setCustomProducts(updatedCustomProducts);
+                              
+                              // Rebuild email message without the removed custom product
+                              let emailMessage = createOrderForm.email_message || "";
+                              
+                              // Remove the custom product section from email message
+                              const customProduct = customProducts[index];
+                              const total = customProduct.price * customProduct.quantity;
+                              const customProductText = `\n\n--- Custom Product/Service ---\n${customProduct.name}\nDescription: ${customProduct.description}\nPrice: ${formatCurrency(customProduct.price)} x ${customProduct.quantity} = ${formatCurrency(total)}`;
+                              
+                              // Remove this specific custom product text from email message
+                              emailMessage = emailMessage.replace(customProductText, '');
+                              
+                              // Rebuild email message with remaining custom products
+                              if (updatedCustomProducts.length > 0) {
+                                const remainingCustomProductsText = updatedCustomProducts.map((custom) => {
+                                  const customTotal = custom.price * custom.quantity;
+                                  return `\n\n--- Custom Product/Service ---\n${custom.name}\nDescription: ${custom.description}\nPrice: ${formatCurrency(custom.price)} x ${custom.quantity} = ${formatCurrency(customTotal)}`;
+                                }).join('');
+                                
+                                // Get the base message (before any custom products)
+                                const baseMessage = emailMessage.split('--- Custom Product/Service ---')[0].trim();
+                                emailMessage = baseMessage + remainingCustomProductsText;
+                              } else {
+                                // No custom products left, remove all custom product sections
+                                emailMessage = emailMessage.split('--- Custom Product/Service ---')[0].trim();
+                              }
+                              
+                              setCreateOrderForm({
+                                ...createOrderForm,
+                                email_message: emailMessage,
+                              });
+                            }}
+                            className="ml-3 text-red-500 hover:text-red-700"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Products/Bundles Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Products/Bundles *
+                  Select Products/Bundles
                 </label>
                 {cartProductsLoading ? (
                   <LoadingSpinner message="Loading products..." />
@@ -2664,8 +3099,8 @@ const BNPLBuyNow: React.FC = () => {
               </div>
 
               {/* Email Options */}
-              <div>
-                <label className="flex items-center space-x-2">
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <label className="flex items-center space-x-2 mb-4">
                   <input
                     type="checkbox"
                     checked={createOrderForm.send_email}
@@ -2675,43 +3110,78 @@ const BNPLBuyNow: React.FC = () => {
                         send_email: e.target.checked,
                       })
                     }
-                    className="rounded"
+                    className="rounded w-4 h-4 text-[#273E8E] focus:ring-[#273E8E] border-gray-300"
                   />
-                  <span className="text-sm font-medium text-gray-700">
-                    Send email link to user
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-700">
+                      Send email link to user
+                    </span>
+                  </div>
                 </label>
-              </div>
 
-              {createOrderForm.send_email && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Message (Optional)
-                  </label>
-                  <textarea
-                    value={createOrderForm.email_message}
-                    onChange={(e) =>
-                      setCreateOrderForm({
-                        ...createOrderForm,
-                        email_message: e.target.value,
-                      })
-                    }
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm"
-                    rows={3}
-                    placeholder="Custom message for the user..."
-                    maxLength={1000}
-                  />
-                </div>
-              )}
+                {createOrderForm.send_email && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Email Message (Optional)
+                      </label>
+                      <span className="text-xs text-gray-500">
+                        {createOrderForm.email_message.length}/1000
+                      </span>
+                    </div>
+                    <textarea
+                      value={createOrderForm.email_message}
+                      onChange={(e) =>
+                        setCreateOrderForm({
+                          ...createOrderForm,
+                          email_message: e.target.value,
+                        })
+                      }
+                      className="w-full border border-[#CDCDCD] rounded-lg px-4 py-3 text-sm bg-white focus:ring-2 focus:ring-[#273E8E] focus:border-transparent outline-none transition-all resize-none"
+                      rows={4}
+                      placeholder="Enter a custom message to include in the email sent to the user. This message will be sent along with the order link..."
+                      maxLength={1000}
+                    />
+                    <p className="mt-2 text-xs text-gray-500">
+                      This message will be included in the email notification sent to the user when the order is created.
+                    </p>
+                  </div>
+                )}
+              </div>
 
               {/* Selected Items Summary */}
               {selectedProducts.length > 0 && (
                 <div className="border-t pt-4">
-                  <h3 className="font-medium mb-2">Selected Items:</h3>
+                  <h3 className="font-medium mb-2">Selected Order Items:</h3>
                   <ul className="space-y-1">
                     {selectedProducts.map((item, idx) => (
                       <li key={idx} className="text-sm text-gray-600">
                         {item.type === "product" ? "Product" : "Bundle"} ID {item.id} - Qty: {item.quantity}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {/* Custom Products Summary (Email Only) */}
+              {customProducts.length > 0 && (
+                <div className="border-t pt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <h3 className="font-medium text-blue-600">Custom Products/Services (Included in Email):</h3>
+                  </div>
+                  <ul className="space-y-1">
+                    {customProducts.map((custom, idx) => (
+                      <li key={`custom-${idx}`} className="text-sm text-gray-600">
+                        {custom.name} - {formatCurrency(custom.price)} x {custom.quantity} = {formatCurrency(custom.price * custom.quantity)}
                       </li>
                     ))}
                   </ul>
@@ -2731,6 +3201,14 @@ const BNPLBuyNow: React.FC = () => {
                       email_message: "",
                     });
                     setSelectedProducts([]);
+                    setCustomProducts([]);
+                    setShowAddCustomProduct(false);
+                    setNewCustomProduct({
+                      name: "",
+                      description: "",
+                      price: "",
+                      quantity: "1",
+                    });
                   }}
                   className="px-6 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
@@ -2742,14 +3220,17 @@ const BNPLBuyNow: React.FC = () => {
                       alert("Please select a user");
                       return;
                     }
-                    if (selectedProducts.length === 0) {
-                      alert("Please select at least one product or bundle");
+                    if (selectedProducts.length === 0 && customProducts.length === 0) {
+                      alert("Please select at least one product, bundle, or add a custom product/service");
                       return;
                     }
+                    
+                    // Custom products are already included in email_message automatically when added
+                    // Only send regular products/bundles as items, custom products are in the email message
                     createCustomOrderMutation.mutate({
                       ...createOrderForm,
                       user_id: parseInt(createOrderForm.user_id),
-                      items: selectedProducts,
+                      items: selectedProducts, // Only send regular products/bundles, not custom products
                     });
                   }}
                   disabled={createCustomOrderMutation.isPending}
@@ -2774,7 +3255,6 @@ const BNPLBuyNow: React.FC = () => {
                   setShowUserDetailModal(false);
                   setSelectedUser(null);
                   setSelectedUserId(null);
-                  setUserCartData(null);
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -2845,7 +3325,7 @@ const BNPLBuyNow: React.FC = () => {
                     </div>
                     <div className="mt-3 space-y-2">
                       <h4 className="font-medium text-gray-700 text-sm">Audit Requests:</h4>
-                      {selectedUser.audit_requests.map((request: any, idx: number) => (
+                      {selectedUser.audit_requests.map((request: any) => (
                         <div
                           key={request.id}
                           className="bg-white rounded p-3 border border-gray-200 text-xs"
@@ -2911,12 +3391,12 @@ const BNPLBuyNow: React.FC = () => {
                 )}
 
                 {/* Cart/Request Details */}
-                {userCartResponse?.data ? (
+                {(userCartResponse as any)?.data ? (
                   <div className="space-y-4">
                     <h3 className="font-semibold text-gray-900 mb-3">Custom Order Request Details</h3>
                     
                     {/* Cart Items */}
-                    {userCartResponse.data.cart_items?.length > 0 ? (
+                    {(userCartResponse as any).data.cart_items?.length > 0 ? (
                       <>
                         <div className="border rounded-lg overflow-hidden">
                           <table className="w-full">
@@ -2943,7 +3423,7 @@ const BNPLBuyNow: React.FC = () => {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                              {userCartResponse.data.cart_items.map((item: any) => (
+                              {(userCartResponse as any).data.cart_items.map((item: any) => (
                                 <tr key={item.id}>
                                   <td className="px-4 py-3 text-sm">
                                     {item.itemable?.title || `Item ${item.id}`}
@@ -2989,7 +3469,7 @@ const BNPLBuyNow: React.FC = () => {
                         <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
                           <span className="text-lg font-semibold">Total Amount:</span>
                           <span className="text-lg font-bold text-[#273E8E]">
-                            {formatCurrency(userCartResponse.data.total_amount || 0)}
+                            {formatCurrency((userCartResponse as any).data.total_amount || 0)}
                           </span>
                         </div>
 
@@ -3129,20 +3609,20 @@ const BNPLBuyNow: React.FC = () => {
 
             {userCartLoading ? (
               <LoadingSpinner message="Loading cart..." />
-            ) : userCartResponse?.data ? (
+            ) : (userCartResponse as any)?.data ? (
               <div className="space-y-4">
                 {/* User Info */}
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h3 className="font-semibold">
-                    {userCartResponse.data.user?.name || "User"}
+                    {(userCartResponse as any).data.user?.name || "User"}
                   </h3>
                   <p className="text-sm text-gray-600">
-                    {userCartResponse.data.user?.email}
+                    {(userCartResponse as any).data.user?.email}
                   </p>
                 </div>
 
                 {/* Cart Items */}
-                {userCartResponse.data.cart_items?.length > 0 ? (
+                {(userCartResponse as any).data.cart_items?.length > 0 ? (
                   <>
                     <div className="border rounded-lg overflow-hidden">
                       <table className="w-full">
@@ -3166,7 +3646,7 @@ const BNPLBuyNow: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {userCartResponse.data.cart_items.map((item: any) => (
+                          {(userCartResponse as any).data.cart_items.map((item: any) => (
                             <tr key={item.id}>
                               <td className="px-4 py-3 text-sm">
                                 {item.itemable?.title || `Item ${item.id}`}
@@ -3207,7 +3687,7 @@ const BNPLBuyNow: React.FC = () => {
                     <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
                       <span className="text-lg font-semibold">Total:</span>
                       <span className="text-lg font-bold text-[#273E8E]">
-                        {formatCurrency(userCartResponse.data.total_amount || 0)}
+                        {formatCurrency((userCartResponse as any).data.total_amount || 0)}
                       </span>
                     </div>
 

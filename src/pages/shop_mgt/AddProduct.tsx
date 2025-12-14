@@ -8,6 +8,7 @@ import { addProduct, updateProduct } from '../../utils/mutations/products';
 import { getAllCategories } from '../../utils/queries/categories';
 import { useQuery } from '@tanstack/react-query';
 import { getAllBrands } from '../../utils/queries/brands';
+import { API_DOMAIN } from '../../../apiConfig';
 
 // API Response Interfaces
 interface ApiCategory {

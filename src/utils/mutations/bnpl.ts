@@ -60,8 +60,11 @@ export const createCustomOrder = async (
     user_id: number;
     order_type: "buy_now" | "bnpl";
     items: Array<{
-      type: "product" | "bundle";
-      id: number;
+      type: "product" | "bundle" | "custom";
+      id?: number;
+      name?: string;
+      description?: string;
+      price?: number;
       quantity?: number;
     }>;
     send_email?: boolean;

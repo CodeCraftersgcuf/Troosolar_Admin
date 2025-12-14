@@ -21,7 +21,7 @@ interface ReferralData {
 const Referral_mgt = () => {
   const [selectedReferrals, setSelectedReferrals] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"name" | "referral_count" | "total_earned" | "created_at" | "default">("default");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortOrder] = useState<"asc" | "desc">("desc");
   const [searchTerm, setSearchTerm] = useState("");
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [commissionPercentage, setCommissionPercentage] = useState("");
