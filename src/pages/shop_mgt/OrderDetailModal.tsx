@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import { getSingleOrder } from "../../utils/queries/orders";
+import { API_DOMAIN } from "../../../apiConfig";
 
 interface OrderDetailModalProps {
   isOpen: boolean;
@@ -112,7 +113,13 @@ const OrderDetailModal = ({ isOpen, order, onClose }: OrderDetailModalProps) => 
   const paymentMethod = data.payment_method || "-";
   const installation = data.installation || null;
 
-  const Base_image_url = "https://troosolar.hmstech.org";
+  // Extract base URL from API_DOMAIN (remove /api)
+  const getBaseUrl = () => {
+    const apiDomain = API_DOMAIN || 'http://localhost:8000/api';
+    // Remove /api from the end if present
+    return apiDomain.replace(/\/api$/, '');
+  };
+  const Base_image_url = getBaseUrl();
 
   return (
     <div className="fixed inset-0 backdrop-brightness-50 flex items-end justify-end z-50 p-4">

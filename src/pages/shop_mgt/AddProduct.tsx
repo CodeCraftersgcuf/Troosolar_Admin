@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import images from "../../constants/images";
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -33,6 +34,7 @@ interface AddProductProps {
 }
 
 const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
+  const navigate = useNavigate();
   const [productName, setProductName] = useState('');
   const [productCategory, setProductCategory] = useState('');
   const [productBrand, setProductBrand] = useState('');
@@ -49,6 +51,8 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [markAsComplimentary, setMarkAsComplimentary] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCategoryEmptyMessage, setShowCategoryEmptyMessage] = useState(false);
+  const [showBrandEmptyMessage, setShowBrandEmptyMessage] = useState(false);
 
   const token = Cookies.get('token') || '';
   const queryClient = useQueryClient();
@@ -76,10 +80,18 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     [brandsResponse]
   );
 
+  // Extract base URL from API_DOMAIN (remove /api)
+  const getBaseUrl = () => {
+    const apiDomain = API_DOMAIN || 'http://localhost:8000/api';
+    // Remove /api from the end if present
+    return apiDomain.replace(/\/api$/, '');
+  };
+
   const getImageUrl = (imagePath: string | null) => {
     if (!imagePath) return null;
     if (imagePath.startsWith('http')) return imagePath;
-    return `${import.meta.env.VITE_API_BASE_URL || 'https://troosolar.hmstech.org'}${imagePath}`;
+    const baseUrl = getBaseUrl();
+    return `${baseUrl}${imagePath}`;
   };
 
   // Populate form when editing
@@ -513,13 +525,27 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
               </label>
               <select
                 value={productCategory}
-                onChange={(e) => setProductCategory(e.target.value)}
+                onChange={(e) => {
+                  setProductCategory(e.target.value);
+                  setShowCategoryEmptyMessage(false);
+                }}
+                onFocus={() => {
+                  if (!categoriesLoading && apiCategories.length === 0) {
+                    setShowCategoryEmptyMessage(true);
+                  }
+                }}
+                onBlur={() => {
+                  // Delay hiding to allow button click
+                  setTimeout(() => setShowCategoryEmptyMessage(false), 200);
+                }}
                 className="w-full cursor-pointer px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 required
               >
                 <option value="">Select Category</option>
                 {categoriesLoading ? (
                   <option value="" disabled>Loading categories...</option>
+                ) : apiCategories.length === 0 ? (
+                  <option value="" disabled>No categories available</option>
                 ) : (
                   apiCategories.map((category) => (
                     <option key={category.id} value={category.title}>
@@ -528,6 +554,21 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
                   ))
                 )}
               </select>
+              {showCategoryEmptyMessage && !categoriesLoading && apiCategories.length === 0 && (
+                <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800 mb-2">No categories available. Please add a category first.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      navigate('/settings?tab=product&subtab=categories');
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-medium underline"
+                  >
+                    Add Category →
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Product Brand */}
@@ -537,13 +578,27 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
               </label>
               <select
                 value={productBrand}
-                onChange={(e) => setProductBrand(e.target.value)}
+                onChange={(e) => {
+                  setProductBrand(e.target.value);
+                  setShowBrandEmptyMessage(false);
+                }}
+                onFocus={() => {
+                  if (!brandsLoading && apiBrands.length === 0) {
+                    setShowBrandEmptyMessage(true);
+                  }
+                }}
+                onBlur={() => {
+                  // Delay hiding to allow button click
+                  setTimeout(() => setShowBrandEmptyMessage(false), 200);
+                }}
                 className="w-full cursor-pointer px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 required
               >
                 <option value="">Select Brand</option>
                 {brandsLoading ? (
                   <option value="" disabled>Loading brands...</option>
+                ) : apiBrands.length === 0 ? (
+                  <option value="" disabled>No brands available</option>
                 ) : (
                   apiBrands.map((brand) => (
                     <option key={brand.id} value={brand.title}>
@@ -552,6 +607,21 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
                   ))
                 )}
               </select>
+              {showBrandEmptyMessage && !brandsLoading && apiBrands.length === 0 && (
+                <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800 mb-2">No brands available. Please add a brand first.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      navigate('/settings?tab=product&subtab=brand');
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-medium underline"
+                  >
+                    Add Brand →
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Product Price */}

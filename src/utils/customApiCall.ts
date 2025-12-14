@@ -1,5 +1,6 @@
 import axios from 'axios';
 import type { AxiosResponse } from 'axios';
+import Cookies from 'js-cookie';
 
 export class ApiError extends Error {
   data: any;
@@ -58,6 +59,15 @@ export const apiCall = async (
   } catch (error) {
     console.log(error);
     if (axios.isAxiosError(error) && error.response) {
+      // Handle 401 Unauthorized - redirect to login
+      if (error.response.status === 401) {
+        // Clear token from cookies
+        Cookies.remove("token");
+        // Redirect to login page
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
+      }
       throw new ApiError(
         error.response.data,
         error.response.data?.status || error.response.statusText,

@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import { deleteProduct } from "../../utils/mutations/products";
 import { getSingleProduct } from "../../utils/queries/product";
+import { API_DOMAIN } from "../../../apiConfig";
 
 // API Response Interfaces
 interface ApiProductDetail {
@@ -98,10 +99,18 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
   });
 
   // Helper function to get full image URL
+  // Extract base URL from API_DOMAIN (remove /api)
+  const getBaseUrl = () => {
+    const apiDomain = API_DOMAIN || 'http://localhost:8000/api';
+    // Remove /api from the end if present
+    return apiDomain.replace(/\/api$/, '');
+  };
+
   const getImageUrl = (imagePath: string | null) => {
     if (!imagePath) return '/assets/images/newmanbadge.png';
     if (imagePath.startsWith('http')) return imagePath;
-    return `${import.meta.env.VITE_API_BASE_URL || 'https://troosolar.hmstech.org'}${imagePath}`;
+    const baseUrl = getBaseUrl();
+    return `${baseUrl}${imagePath}`;
   };
 
   // Helper function to format price

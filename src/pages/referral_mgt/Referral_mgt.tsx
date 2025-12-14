@@ -1,39 +1,123 @@
-import { useState, useEffect } from "react";
-import { referralData, sortOptions, type ReferralData } from "./referral";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { sortOptions } from "./referral";
 import Header from "../../component/Header";
 import images from "../../constants/images";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import Cookies from "js-cookie";
+import { getReferralSettings, getReferralList } from "../../utils/queries/referral";
+import { updateReferralSettings } from "../../utils/mutations/referral";
+import LoadingSpinner from "../../components/common/LoadingSpinner";
+
+interface ReferralData {
+  id: number;
+  name: string;
+  email: string;
+  user_code: string;
+  no_of_referral: number;
+  amount_earned: string;
+  date_joined: string;
+}
 
 const Referral_mgt = () => {
   const [selectedReferrals, setSelectedReferrals] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState("default");
+  const [sortBy, setSortBy] = useState<"name" | "referral_count" | "total_earned" | "created_at" | "default">("default");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [searchTerm, setSearchTerm] = useState("");
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [commissionPercentage, setCommissionPercentage] = useState("");
   const [minimumWithdrawal, setMinimumWithdrawal] = useState("");
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(15);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Load settings from localStorage on component mount
+  const token = Cookies.get("token") || "";
+  const queryClient = useQueryClient();
+
+  // Fetch referral settings
+  const {
+    data: settingsResponse,
+    isLoading: settingsLoading,
+  } = useQuery({
+    queryKey: ["referral-settings"],
+    queryFn: () => getReferralSettings(token),
+    enabled: !!token,
+  });
+
+  // Load settings from API when available
   useEffect(() => {
-    const savedSettings = localStorage.getItem("referralSettings");
-    if (savedSettings) {
-      const {
-        commissionPercentage: savedCommission,
-        minimumWithdrawal: savedMinimum,
-      } = JSON.parse(savedSettings);
-      setCommissionPercentage(savedCommission || "");
-      setMinimumWithdrawal(savedMinimum || "");
+    if (settingsResponse?.data) {
+      setCommissionPercentage(settingsResponse.data.commission_percentage?.toString() || "");
+      setMinimumWithdrawal(settingsResponse.data.minimum_withdrawal?.toString() || "");
     }
-  }, []);
+  }, [settingsResponse]);
+
+  // Build query params for referral list
+  const queryParams = useMemo(() => {
+    const params: any = {
+      per_page: itemsPerPage,
+      page: currentPage,
+    };
+    if (searchTerm) {
+      params.search = searchTerm;
+    }
+    if (sortBy !== "default") {
+      params.sort_by = sortBy;
+      params.sort_order = sortOrder;
+    }
+    return params;
+  }, [searchTerm, sortBy, sortOrder, currentPage, itemsPerPage]);
+
+  // Fetch referral list
+  const {
+    data: referralListResponse,
+    isLoading: referralListLoading,
+    isError: referralListError,
+  } = useQuery({
+    queryKey: ["referral-list", queryParams],
+    queryFn: () => getReferralList(token, queryParams),
+    enabled: !!token,
+  });
+
+  // Extract referral data from API response
+  const referralData: ReferralData[] = useMemo(() => {
+    return referralListResponse?.data?.data || [];
+  }, [referralListResponse]);
+
+  // Extract pagination info
+  const pagination = useMemo(() => {
+    return referralListResponse?.data?.pagination || {
+      current_page: 1,
+      last_page: 1,
+      per_page: 15,
+      total: 0,
+    };
+  }, [referralListResponse]);
+
+  // Update settings mutation
+  const updateSettingsMutation = useMutation({
+    mutationFn: (payload: { commission_percentage?: number; minimum_withdrawal?: number }) =>
+      updateReferralSettings(payload, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["referral-settings"] });
+      alert("Settings updated successfully!");
+      setIsSettingsModalOpen(false);
+    },
+    onError: (error: any) => {
+      console.error("Error updating settings:", error);
+      const errorMessage = error?.message || error?.data?.message || "Failed to update settings. Please try again.";
+      alert(`Error: ${errorMessage}`);
+    },
+  });
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (isSortDropdownOpen) {
-        const target = event.target as Element;
-        const sortDropdown = document.querySelector(".sort-dropdown");
-        if (sortDropdown && !sortDropdown.contains(target)) {
-          setIsSortDropdownOpen(false);
-        }
+      if (
+        sortDropdownRef.current &&
+        !sortDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsSortDropdownOpen(false);
       }
     };
 
@@ -48,7 +132,7 @@ const Referral_mgt = () => {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedReferrals(referralData.map((referral) => referral.id));
+      setSelectedReferrals(referralData.map((referral) => referral.id.toString()));
     } else {
       setSelectedReferrals([]);
     }
@@ -63,8 +147,20 @@ const Referral_mgt = () => {
   };
 
   const handleSortSelect = (sortOption: string) => {
-    setSortBy(sortOption);
+    if (sortOption === "default") {
+      setSortBy("default");
+    } else {
+      // Map UI sort options to API sort fields
+      const sortMap: Record<string, "name" | "referral_count" | "total_earned" | "created_at"> = {
+        name: "name",
+        referrals: "referral_count",
+        amount: "total_earned",
+        date: "created_at",
+      };
+      setSortBy(sortMap[sortOption] || "created_at");
+    }
     setIsSortDropdownOpen(false);
+    setCurrentPage(1); // Reset to first page when sorting changes
   };
 
   const handleSaveSettings = () => {
@@ -88,25 +184,28 @@ const Referral_mgt = () => {
       return;
     }
 
-    // Save settings to localStorage
-    const settings = {
-      commissionPercentage: commissionPercentage.trim(),
-      minimumWithdrawal: minimumWithdrawal.trim(),
-      lastUpdated: new Date().toISOString(),
-    };
-
-    localStorage.setItem("referralSettings", JSON.stringify(settings));
-
-    // Show success message
-    alert("Settings saved successfully!");
-
-    // Close modal
-    setIsSettingsModalOpen(false);
+    // Update settings via API
+    updateSettingsMutation.mutate({
+      commission_percentage: commissionNum,
+      minimum_withdrawal: withdrawalNum,
+    });
   };
 
-  const filteredReferrals = referralData.filter((referral) =>
-    referral.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Format currency
+  const formatCurrency = (value: string | number) => {
+    if (!value) return "N0";
+    const numValue = typeof value === "string" ? parseFloat(value.replace(/,/g, "")) : value;
+    return `N${numValue.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // Handle search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentPage(1); // Reset to first page when search changes
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   return (
     <div className="min-h-screen bg-[#F5F7FF]">
@@ -127,14 +226,22 @@ const Referral_mgt = () => {
         {/* Controls Section */}
         <div className="flex items-center justify-between mb-6">
           {/* Sort Dropdown */}
-          <div className="relative inline-block text-left sort-dropdown">
+          <div className="relative inline-block text-left" ref={sortDropdownRef}>
             <div>
               <button
                 onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
                 className="inline-flex justify-between w-48 cursor-pointer rounded-md border border-[#00000080] bg-white px-4 py-2 text-sm font-medium text-black shadow-sm focus:outline-none"
               >
-                {sortOptions.find((option) => option.value === sortBy)?.label ||
-                  "Sort by"}
+                {sortOptions.find((option) => {
+                  if (sortBy === "default") return option.value === "default";
+                  const sortMap: Record<string, string> = {
+                    name: "name",
+                    referral_count: "referrals",
+                    total_earned: "amount",
+                    created_at: "date",
+                  };
+                  return option.value === sortMap[sortBy];
+                })?.label || "Sort by"}
                 <img src={images.arrow} alt="" />
               </button>
             </div>
@@ -160,7 +267,7 @@ const Referral_mgt = () => {
           <div className="relative">
             <input
               type="text"
-              placeholder="Search"
+              placeholder="Search by name, email, or user code"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-12 pr-6 py-3.5 border border-[#00000080] rounded-lg text-[15px] w-[320px] focus:outline-none bg-white shadow-[0_2px_6px_rgba(0,0,0,0.05)] placeholder-gray-400"
@@ -185,70 +292,155 @@ const Referral_mgt = () => {
 
         {/* Table */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              {/* Table Header */}
-              <thead className="bg-[#EBEBEB] border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedReferrals.length === referralData.length}
-                      onChange={(e) => handleSelectAll(e.target.checked)}
-                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                    />
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Name
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    No of referral
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Amount Earned
-                  </th>
-                  <th className="px-6 py-4 text-center text-sm font-medium text-black">
-                    Date joined
-                  </th>
-                </tr>
-              </thead>
-
-              {/* Table Body */}
-              <tbody className="divide-y divide-gray-200">
-                {filteredReferrals.map(
-                  (referral: ReferralData, index: number) => (
-                    <tr
-                      key={referral.id}
-                      className={`${
-                        index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                      } transition-colors border-b border-gray-100 last:border-b-0`}
-                    >
-                      <td className="px-6 py-4 text-center">
+          {referralListLoading ? (
+            <LoadingSpinner message="Loading referral data..." />
+          ) : referralListError ? (
+            <div className="py-16 text-center text-red-500 text-lg">
+              Failed to load referral data. Please try again.
+            </div>
+          ) : referralData.length === 0 ? (
+            <div className="py-16 text-center text-gray-500 text-lg">
+              No referrals found.
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  {/* Table Header */}
+                  <thead className="bg-[#EBEBEB] border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-4 text-center">
                         <input
                           type="checkbox"
-                          checked={selectedReferrals.includes(referral.id)}
-                          onChange={() => handleSelectReferral(referral.id)}
+                          checked={selectedReferrals.length === referralData.length && referralData.length > 0}
+                          onChange={(e) => handleSelectAll(e.target.checked)}
                           className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                         />
-                      </td>
-                      <td className="px-6 py-4 text-sm text-black text-center">
-                        {referral.name}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-black text-center">
-                        {referral.noOfReferral}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-black text-center">
-                        {referral.amountEarned}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-black text-center">
-                        {referral.dateJoined}
-                      </td>
+                      </th>
+                      <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                        Name
+                      </th>
+                      <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                        No of referral
+                      </th>
+                      <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                        Amount Earned
+                      </th>
+                      <th className="px-6 py-4 text-center text-sm font-medium text-black">
+                        Date joined
+                      </th>
                     </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+
+                  {/* Table Body */}
+                  <tbody className="divide-y divide-gray-200">
+                    {referralData.map(
+                      (referral: ReferralData, index: number) => (
+                        <tr
+                          key={referral.id}
+                          className={`${
+                            index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
+                          } transition-colors border-b border-gray-100 last:border-b-0`}
+                        >
+                          <td className="px-6 py-4 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedReferrals.includes(referral.id.toString())}
+                              onChange={() => handleSelectReferral(referral.id.toString())}
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                            />
+                          </td>
+                          <td className="px-6 py-4 text-sm text-black text-center">
+                            {referral.name}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-black text-center">
+                            {referral.no_of_referral}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-black text-center">
+                            {formatCurrency(referral.amount_earned)}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-black text-center">
+                            {referral.date_joined}
+                          </td>
+                        </tr>
+                      )
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {pagination.last_page > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+                  <div className="flex items-center text-sm text-gray-700">
+                    <span>
+                      Showing {((pagination.current_page - 1) * pagination.per_page) + 1} to{" "}
+                      {Math.min(pagination.current_page * pagination.per_page, pagination.total)} of{" "}
+                      {pagination.total} results
+                    </span>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    {/* Previous Button */}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={pagination.current_page === 1}
+                      className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                        pagination.current_page === 1
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                      }`}
+                    >
+                      Previous
+                    </button>
+
+                    {/* Page Numbers */}
+                    <div className="flex items-center space-x-1">
+                      {Array.from({ length: Math.min(5, pagination.last_page) }, (_, i) => {
+                        let pageNumber;
+                        if (pagination.last_page <= 5) {
+                          pageNumber = i + 1;
+                        } else if (pagination.current_page <= 3) {
+                          pageNumber = i + 1;
+                        } else if (pagination.current_page >= pagination.last_page - 2) {
+                          pageNumber = pagination.last_page - 4 + i;
+                        } else {
+                          pageNumber = pagination.current_page - 2 + i;
+                        }
+
+                        return (
+                          <button
+                            key={pageNumber}
+                            onClick={() => setCurrentPage(pageNumber)}
+                            className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                              pagination.current_page === pageNumber
+                                ? 'bg-[#273E8E] text-white border-[#273E8E]'
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNumber}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Next Button */}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, pagination.last_page))}
+                      disabled={pagination.current_page === pagination.last_page}
+                      className={`px-3 py-2 text-sm font-medium rounded-md border ${
+                        pagination.current_page === pagination.last_page
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 cursor-pointer'
+                      }`}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -305,9 +497,14 @@ const Referral_mgt = () => {
               {/* Save Button */}
               <button
                 onClick={handleSaveSettings}
-                className="w-full bg-blue-900 cursor-pointer hover:bg-blue-800 text-white py-3 px-4 rounded-full text-sm font-medium transition-colors mt-8"
+                disabled={updateSettingsMutation.isPending || settingsLoading}
+                className={`w-full bg-blue-900 cursor-pointer hover:bg-blue-800 text-white py-3 px-4 rounded-full text-sm font-medium transition-colors mt-8 ${
+                  updateSettingsMutation.isPending || settingsLoading
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
               >
-                Save
+                {updateSettingsMutation.isPending || settingsLoading ? "Saving..." : "Save"}
               </button>
             </div>
           </div>

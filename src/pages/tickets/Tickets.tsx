@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import Header from "../../component/Header";
-import { shopOrderData } from "./shpmgt";
 import images from "../../constants/images";
 import type { ShopOrderData } from "./shpmgt";
 import TicketDetailModal from "./TicketDetailModal";
@@ -43,15 +42,13 @@ const Tickets = () => {
 
   // Extract summary and tickets from API response
   const summary = apiTickets?.data?.summary || {
-    total_tickets: shopOrderData.length,
-    pending_tickets: shopOrderData.filter((t) => t.status === "Pending")
-      .length,
-    answered_tickets: shopOrderData.filter((t) => t.status === "Answered")
-      .length,
+    total_tickets: 0,
+    pending_tickets: 0,
+    answered_tickets: 0,
   };
 
-  // Map API response to table data
-  const apiTicketData: ShopOrderData[] =
+  // Map API response to table data - only use actual API data
+  const ticketData: ShopOrderData[] =
     apiTickets?.data?.tickets?.map((t: { ticket_id: string; user_name: string; subject: string; status: string; date: string }) => ({
       id: String(t.ticket_id),
       name: t.user_name,
@@ -61,9 +58,6 @@ const Tickets = () => {
       time: t.date?.split(" ")[1] || "",
       status: t.status.charAt(0).toUpperCase() + t.status.slice(1), // "answered" -> "Answered"
     })) || [];
-
-  // Use API data if available, fallback to mock data
-  const ticketData = apiTicketData.length > 0 ? apiTicketData : shopOrderData;
 
   // Filter data based on status, filter tab, and search term
   const filteredOrderData = ticketData.filter((order: ShopOrderData) => {
@@ -410,7 +404,7 @@ const Tickets = () => {
                         <button
                           className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-6 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer"
                           onClick={() => {
-                            // Find the ticket from API data if available, else fallback to mock
+                            // Find the ticket from API data
                             let ticketToShow = order;
                             if (apiTickets?.data?.tickets) {
                               const apiTicket = apiTickets.data.tickets.find(

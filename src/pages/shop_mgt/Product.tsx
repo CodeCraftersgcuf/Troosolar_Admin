@@ -15,6 +15,7 @@ import Cookies from "js-cookie";
 import { getAllBundles } from "../../utils/queries/bundle";
 import { getAllCategories } from "../../utils/queries/categories";
 import { getAllBrands } from "../../utils/queries/brands";
+import { API_DOMAIN } from "../../../apiConfig";
 
 // API Response Interfaces
 interface ApiProductDetail {
@@ -240,10 +241,18 @@ const Product = () => {
   };
 
   // Helper function to get full image URL
+  // Extract base URL from API_DOMAIN (remove /api)
+  const getBaseUrl = () => {
+    const apiDomain = API_DOMAIN || 'http://localhost:8000/api';
+    // Remove /api from the end if present
+    return apiDomain.replace(/\/api$/, '');
+  };
+
   const getImageUrl = (imagePath: string | null) => {
     if (!imagePath) return '/assets/images/newmanbadge.png';
     if (imagePath.startsWith('http')) return imagePath;
-    return `${import.meta.env.VITE_API_BASE_URL || 'https://troosolar.hmstech.org'}${imagePath}`;
+    const baseUrl = getBaseUrl();
+    return `${baseUrl}${imagePath}`;
   };
 
   // Filter products based on selected filters and search query
@@ -575,13 +584,24 @@ const Product = () => {
                 {productData.map((product: ProductData) => (
                   <div
                     key={product.id}
+                    onClick={() => handleViewDetails(product)}
                     className="bg-white rounded-2xl border border-[#CDCDCD] shadow-sm hover:shadow-lg transition-shadow relative overflow-hidden cursor-pointer"
                   >
-                    <div className="aspect-square bg-white overflow-hidden p-2.5">
+                    <div 
+                      className="aspect-square bg-white overflow-hidden p-2.5 relative"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent double-triggering
+                        handleViewDetails(product);
+                      }}
+                    >
                       <img
                         src={product.image || "/assets/images/newman1.png"}
                         alt={product.name}
-                        className="w-full h-full"
+                        className="w-full h-full object-cover cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent double-triggering
+                          handleViewDetails(product);
+                        }}
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.src = "/assets/images/newmanbadge.png";
@@ -644,7 +664,10 @@ const Product = () => {
                           {product.stock} Orders
                         </span>
                         <button
-                          onClick={() => handleViewDetails(product)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering parent div's onClick
+                            handleViewDetails(product);
+                          }}
                           className="bg-[#273E8E] hover:bg-[#1e3270] text-white py-3 px-6 rounded-full text-xs font-semibold transition-colors cursor-pointer"
                         >
                           View Details
@@ -662,13 +685,32 @@ const Product = () => {
                 const stockPercentage = product.old_quantity ?
                   Math.round((parseInt(product.stock) / parseInt(product.old_quantity)) * 100) : 0;
 
+                // Convert API product to ProductData format for compatibility
+                const convertedProduct: ProductData = {
+                  id: product.id.toString(),
+                  name: product.title,
+                  category: "Solar Equipment", // Default category
+                  price: formatPrice(product.discount_price),
+                  stock: parseInt(product.stock),
+                  status: "Active",
+                  image: getImageUrl(product.featured_image_url),
+                  description: product.details.map(d => d.detail).join(", ") || "No description available"
+                };
+
                 return (
                   <div
                     key={product.id}
+                    onClick={() => handleViewDetails(convertedProduct)}
                     className="bg-white rounded-2xl border border-[#CDCDCD] shadow-sm hover:shadow-lg transition-shadow relative overflow-hidden cursor-pointer"
                   >
                     {/* Product Image */}
-                    <div className="aspect-square bg-white overflow-hidden p-2.5 relative">
+                    <div 
+                      className="aspect-square bg-white overflow-hidden p-2.5 relative"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent double-triggering
+                        handleViewDetails(convertedProduct);
+                      }}
+                    >
                       {imageLoadingStates[`product-${product.id}`] && (
                         <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#273E8E]"></div>
@@ -677,7 +719,7 @@ const Product = () => {
                       <img
                         src={getImageUrl(product.featured_image_url)}
                         alt={product.title}
-                        className="w-full h-full"
+                        className="w-full h-full object-cover cursor-pointer"
                         onLoad={() => handleImageLoad(`product-${product.id}`)}
                         onError={() => {
                           handleImageError(`product-${product.id}`);
@@ -685,6 +727,10 @@ const Product = () => {
                           if (img) img.src = "/assets/images/newmanbadge.png";
                         }}
                         style={{ display: imageLoadingStates[`product-${product.id}`] ? 'none' : 'block' }}
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent double-triggering
+                          handleViewDetails(convertedProduct);
+                        }}
                       />
                     </div>
 
@@ -752,18 +798,8 @@ const Product = () => {
                           {product.stock} Stocks
                         </span>
                         <button
-                          onClick={() => {
-                            // Convert API product to ProductData format for compatibility
-                            const convertedProduct: ProductData = {
-                              id: product.id.toString(),
-                              name: product.title,
-                              category: "Solar Equipment", // Default category
-                              price: formatPrice(product.discount_price),
-                              stock: parseInt(product.stock),
-                              status: "Active",
-                              image: getImageUrl(product.featured_image_url),
-                              description: product.details.map(d => d.detail).join(", ") || "No description available"
-                            };
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent triggering parent div's onClick
                             handleViewDetails(convertedProduct);
                           }}
                           className="bg-[#273E8E] hover:bg-[#1e3270] text-white py-3 px-6 rounded-full text-xs font-semibold transition-colors cursor-pointer"

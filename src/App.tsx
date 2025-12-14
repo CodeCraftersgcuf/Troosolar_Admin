@@ -21,6 +21,8 @@ import Cookies from "js-cookie";
 import Tickets from "./pages/tickets/Tickets.tsx";
 import User_approval from "./pages/loans_approval/User_approval.tsx";
 import BNPLBuyNow from "./pages/bnpl_buynow/BNPLBuyNow";
+import NotFound from "./pages/NotFound";
+import NotFoundPublic from "./pages/NotFoundPublic";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = Cookies.get("token");
@@ -68,7 +70,11 @@ function App() {
           <Route path="user-activity/:id/transactions" element={<UserTransactions />} />
           {/* Route for user orders */}
           <Route path="user-activity/:id/orders" element={<UserOrders />} />
+          {/* Catch-all route for 404 in protected routes */}
+          <Route path="*" element={<NotFound />} />
         </Route>
+        {/* Catch-all route for public routes that don't exist (e.g., /register) */}
+        <Route path="*" element={<NotFoundPublic />} />
       </Routes>
     </Router>
   )

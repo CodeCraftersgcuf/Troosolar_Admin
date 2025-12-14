@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { productCategories, brands } from "./product";
 import type { ProductCategory, Brand } from "./product";
 import AddNewCategory from "./AddNewCategory";
@@ -22,11 +23,29 @@ import { deleteBrand } from "../../utils/mutations/brands";
 const IMAGE_BASE_URL = "https://troosolar.hmstech.org";
 
 const Product = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const subtabFromUrl = searchParams.get("subtab") as "categories" | "brand" | null;
+  
   const [categories, setCategories] = useState<ProductCategory[]>(productCategories);
   const [brandList, setBrandList] = useState<Brand[]>(brands);
   const [activeTab, setActiveTab] = useState<"categories" | "brand">(
-    "categories"
+    (subtabFromUrl && ["categories", "brand"].includes(subtabFromUrl)) ? subtabFromUrl : "categories"
   );
+
+  // Update URL when subtab changes (only if different from URL)
+  useEffect(() => {
+    if (activeTab && activeTab !== subtabFromUrl) {
+      const currentTab = searchParams.get("tab") || "product";
+      setSearchParams({ tab: currentTab, subtab: activeTab });
+    }
+  }, [activeTab, setSearchParams, searchParams, subtabFromUrl]);
+
+  // Update subtab when URL changes (only if different from current subtab)
+  useEffect(() => {
+    if (subtabFromUrl && ["categories", "brand"].includes(subtabFromUrl) && subtabFromUrl !== activeTab) {
+      setActiveTab(subtabFromUrl);
+    }
+  }, [subtabFromUrl, activeTab]);
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isAddBrandModalOpen, setIsAddBrandModalOpen] = useState(false);
   const [editCategoryModalOpen, setEditCategoryModalOpen] = useState(false);

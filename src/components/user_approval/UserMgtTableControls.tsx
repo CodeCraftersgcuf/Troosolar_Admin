@@ -150,25 +150,37 @@ const UserMgtTableControls: React.FC<Props> = ({
               <div className="py-1">
                 <button
                   className="w-full cursor-pointer px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
-                  onClick={() => setSelectedSortBy("Sort By")}
+                  onClick={() => {
+                    setSelectedSortBy("Sort By");
+                    setShowSortByDropdown(false);
+                  }}
                 >
                   Sort By
                 </button>
                 <button
                   className="w-full cursor-pointer px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
-                  onClick={() => setSelectedSortBy("Alphabetically")}
+                  onClick={() => {
+                    setSelectedSortBy("Alphabetically");
+                    setShowSortByDropdown(false);
+                  }}
                 >
                   Alphabetically
                 </button>
                 <button
                   className="w-full cursor-pointer px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
-                  onClick={() => setSelectedSortBy("Date Registered")}
+                  onClick={() => {
+                    setSelectedSortBy("Date Registered");
+                    setShowSortByDropdown(false);
+                  }}
                 >
                   Date Registered
                 </button>
                 <button
                   className="w-full cursor-pointer px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
-                  onClick={() => setSelectedSortBy("Active Users")}
+                  onClick={() => {
+                    setSelectedSortBy("Active Users");
+                    setShowSortByDropdown(false);
+                  }}
                 >
                   Active Users
                 </button>

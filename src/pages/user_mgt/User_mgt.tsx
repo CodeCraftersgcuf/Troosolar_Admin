@@ -118,8 +118,35 @@ const User_mgt: React.FC = () => {
       );
     }
 
+    // Apply sorting
+    if (selectedSortBy !== "Sort By") {
+      filtered = [...filtered].sort((a: any, b: any) => {
+        switch (selectedSortBy) {
+          case "Alphabetically":
+            return a.name.localeCompare(b.name);
+          case "Date Registered":
+            // Sort by date (newest first)
+            try {
+              const dateA = a.date ? new Date(a.date.split("/").reverse().join("-")).getTime() : 0;
+              const dateB = b.date ? new Date(b.date.split("/").reverse().join("-")).getTime() : 0;
+              if (isNaN(dateA) && isNaN(dateB)) return 0;
+              if (isNaN(dateA)) return 1; // Put invalid dates at end
+              if (isNaN(dateB)) return -1;
+              return dateB - dateA;
+            } catch {
+              return 0;
+            }
+          case "Active Users":
+            // Sort by active status (active first)
+            return (b.is_active || 0) - (a.is_active || 0);
+          default:
+            return 0;
+        }
+      });
+    }
+
     return filtered;
-  }, [apiUsers, users, searchTerm, selectedMoreAction]);
+  }, [apiUsers, users, searchTerm, selectedMoreAction, selectedSortBy]);
 
   // Pagination logic
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
@@ -130,7 +157,7 @@ const User_mgt: React.FC = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedMoreAction]);
+  }, [searchTerm, selectedMoreAction, selectedSortBy]);
 
   // Handle search
   const handleSearch = (term: string) => {

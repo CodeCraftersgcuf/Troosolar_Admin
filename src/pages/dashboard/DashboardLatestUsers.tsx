@@ -26,34 +26,54 @@ const DashboardLatestUsers: React.FC<DashboardLatestUsersProps> = ({
       Latest Users
     </h2>
     <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200">
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="bg-[#EBEBEB] border border-gray-200">
-            <th className="px-6 py-4 text-black font-medium flex justify-center items-center">
-              <input type="checkbox" className="rounded cursor-pointer" />
-            </th>
-            <th className="px-6 py-4 text-black font-medium text-center">
-              Name
-            </th>
-            <th className="px-6 py-4 text-black font-medium text-center">
-              Email
-            </th>
-            <th className="px-6 py-4 text-black font-medium text-center">
-              Phone
-            </th>
-            <th className="px-6 py-4 text-black font-medium text-center">
-              BVN
-            </th>
-            <th className="px-6 py-4 text-black font-medium text-center">
-              Date Registered
-            </th>
-            <th className="px-6 py-4 text-black font-medium text-center">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody className="bg-white">
-          {currentUsers.map((user, idx) => (
+      {!users || users.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <svg
+            className="w-16 h-16 text-gray-400 mb-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+            />
+          </svg>
+          <p className="text-gray-500 text-lg font-medium mb-2">No Users Yet</p>
+          <p className="text-gray-400 text-sm">There are no users to display.</p>
+        </div>
+      ) : (
+        <>
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="bg-[#EBEBEB] border border-gray-200">
+                <th className="px-6 py-4 text-black font-medium flex justify-center items-center">
+                  <input type="checkbox" className="rounded cursor-pointer" />
+                </th>
+                <th className="px-6 py-4 text-black font-medium text-center">
+                  Name
+                </th>
+                <th className="px-6 py-4 text-black font-medium text-center">
+                  Email
+                </th>
+                <th className="px-6 py-4 text-black font-medium text-center">
+                  Phone
+                </th>
+                <th className="px-6 py-4 text-black font-medium text-center">
+                  BVN
+                </th>
+                <th className="px-6 py-4 text-black font-medium text-center">
+                  Date Registered
+                </th>
+                <th className="px-6 py-4 text-black font-medium text-center">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white">
+              {currentUsers.map((user, idx) => (
             <tr
               key={user.id}
               className={`${idx !== currentUsers.length - 1
@@ -106,12 +126,12 @@ const DashboardLatestUsers: React.FC<DashboardLatestUsersProps> = ({
                 </div>
               </td>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
+              ))}
+            </tbody>
+          </table>
+          
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
           <div className="flex items-center text-sm text-gray-700">
             <span>
@@ -177,6 +197,8 @@ const DashboardLatestUsers: React.FC<DashboardLatestUsersProps> = ({
             </button>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   </div>

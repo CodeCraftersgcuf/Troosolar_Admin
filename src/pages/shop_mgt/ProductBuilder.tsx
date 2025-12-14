@@ -9,6 +9,7 @@ import Cookies from "js-cookie";
 import { getAllProducts } from '../../utils/queries/product';
 
 import { updateBundle } from '../../utils/mutations/bundle';
+import { API_DOMAIN } from '../../../apiConfig';
 
 // API Response Interfaces
 interface ApiProduct {
@@ -87,10 +88,18 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
   );
 
   // Helper function to get full image URL
+  // Extract base URL from API_DOMAIN (remove /api)
+  const getBaseUrl = () => {
+    const apiDomain = API_DOMAIN || 'http://localhost:8000/api';
+    // Remove /api from the end if present
+    return apiDomain.replace(/\/api$/, '');
+  };
+
   const getImageUrl = (imagePath: string | null) => {
     if (!imagePath) return '/assets/images/newman1.png';
     if (imagePath.startsWith('http')) return imagePath;
-    return `${import.meta.env.VITE_API_BASE_URL || 'https://troosolar.hmstech.org'}${imagePath}`;
+    const baseUrl = getBaseUrl();
+    return `${baseUrl}${imagePath}`;
   };
 
   const handleProductSelect = (product: ApiProduct) => {

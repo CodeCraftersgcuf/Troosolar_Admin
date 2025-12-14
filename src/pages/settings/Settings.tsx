@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import Admin from "./Admin.tsx";
 import Header from "../../component/Header.tsx";
 import FinancingPartner from "./FinancingPartner.tsx";
@@ -9,9 +10,40 @@ import Product from "./Product.tsx";
 
 
 const Settings = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabFromUrl = searchParams.get("tab") as "admins" | "tools" | "product" | "financing" | "notifications" | null;
+  const isInternalUpdate = useRef(false);
+  
+  // Initialize activeTab from URL or default to "admins"
   const [activeTab, setActiveTab] = useState<
     "admins" | "tools" | "product" | "financing" | "notifications"
-  >("admins");
+  >(() => {
+    if (tabFromUrl && ["admins", "tools", "product", "financing", "notifications"].includes(tabFromUrl)) {
+      return tabFromUrl;
+    }
+    return "admins";
+  });
+
+  // Update URL when tab changes (user clicks a tab)
+  useEffect(() => {
+    const currentTabFromUrl = searchParams.get("tab");
+    if (activeTab && currentTabFromUrl !== activeTab) {
+      isInternalUpdate.current = true;
+      setSearchParams({ tab: activeTab }, { replace: true });
+    }
+  }, [activeTab, setSearchParams, searchParams]);
+
+  // Update tab when URL changes (browser back/forward or direct navigation)
+  // Only update if the change came from outside (not from our own update)
+  useEffect(() => {
+    if (isInternalUpdate.current) {
+      isInternalUpdate.current = false;
+      return;
+    }
+    if (tabFromUrl && ["admins", "tools", "product", "financing", "notifications"].includes(tabFromUrl) && tabFromUrl !== activeTab) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl, activeTab]);
 
   const tabs = [
     { id: "admins", label: "Admins" },

@@ -158,3 +158,104 @@ export const getOrderInvoiceDetails = async (
   );
 };
 
+// GET /api/admin/cart/products
+export const getCartProducts = async (
+  token: string,
+  params?: {
+    category_id?: number;
+    brand_id?: number;
+    type?: "all" | "products" | "bundles";
+  }
+): Promise<any> => {
+  let url = API_ENDPOINTS.ADMIN.GetCartProducts;
+  if (params) {
+    const queryParams = new URLSearchParams();
+    if (params.category_id) queryParams.append("category_id", params.category_id.toString());
+    if (params.brand_id) queryParams.append("brand_id", params.brand_id.toString());
+    if (params.type) queryParams.append("type", params.type);
+    const queryString = queryParams.toString();
+    if (queryString) url += `?${queryString}`;
+  }
+  return await apiCall(url, "GET", undefined, token);
+};
+
+// GET /api/admin/cart/user/{userId}
+export const getUserCart = async (
+  userId: number | string,
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.GetUserCart(userId),
+    "GET",
+    undefined,
+    token
+  );
+};
+
+// GET /api/admin/audit/requests
+export const getAuditRequests = async (
+  token: string,
+  params?: {
+    status?: string;
+    audit_type?: string;
+    search?: string;
+    per_page?: number;
+    page?: number;
+  }
+): Promise<any> => {
+  let url = API_ENDPOINTS.ADMIN.AuditRequestsList;
+  if (params) {
+    const queryParams = new URLSearchParams();
+    if (params.status) queryParams.append("status", params.status);
+    if (params.audit_type) queryParams.append("audit_type", params.audit_type);
+    if (params.search) queryParams.append("search", params.search);
+    if (params.per_page) queryParams.append("per_page", params.per_page.toString());
+    if (params.page) queryParams.append("page", params.page.toString());
+    const queryString = queryParams.toString();
+    if (queryString) url += `?${queryString}`;
+  }
+  return await apiCall(url, "GET", undefined, token);
+};
+
+// GET /api/admin/audit/requests/{id}
+export const getAuditRequest = async (
+  id: number | string,
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.AuditRequestShow(id),
+    "GET",
+    undefined,
+    token
+  );
+};
+
+// GET /api/admin/audit/users-with-requests
+export const getUsersWithAuditRequests = async (
+  token: string,
+  params?: {
+    search?: string;
+    audit_type?: string;
+    has_pending?: boolean;
+    sort_by?: string;
+    sort_order?: string;
+    per_page?: number;
+    page?: number;
+  }
+): Promise<any> => {
+  let url = API_ENDPOINTS.ADMIN.AuditUsersWithRequests;
+  if (params) {
+    const queryParams = new URLSearchParams();
+    if (params.search) queryParams.append("search", params.search);
+    if (params.audit_type) queryParams.append("audit_type", params.audit_type);
+    if (params.has_pending !== undefined) queryParams.append("has_pending", params.has_pending.toString());
+    if (params.sort_by) queryParams.append("sort_by", params.sort_by);
+    if (params.sort_order) queryParams.append("sort_order", params.sort_order);
+    if (params.per_page) queryParams.append("per_page", params.per_page.toString());
+    if (params.page) queryParams.append("page", params.page.toString());
+    const queryString = queryParams.toString();
+    if (queryString) url += `?${queryString}`;
+  }
+  return await apiCall(url, "GET", undefined, token);
+};
+

@@ -194,6 +194,28 @@ const API_ENDPOINTS = {
       `${API_DOMAIN}/admin/audit/requests/${id}`, // GET
     AuditRequestUpdateStatus: (id: number | string) =>
       `${API_DOMAIN}/admin/audit/requests/${id}/status`, // PUT
+    AuditUsersWithRequests: API_DOMAIN + "/admin/audit/users-with-requests", // GET
+
+    // --- Custom Order Admin Endpoints ---
+    CreateCustomOrder: API_DOMAIN + "/admin/cart/create-custom-order", // POST
+    GetCartProducts: API_DOMAIN + "/admin/cart/products", // GET
+    GetUserCart: (userId: number | string) =>
+      `${API_DOMAIN}/admin/cart/user/${userId}`, // GET
+    RemoveCartItem: (userId: number | string, itemId: number | string) =>
+      `${API_DOMAIN}/admin/cart/user/${userId}/item/${itemId}`, // DELETE
+    ClearUserCart: (userId: number | string) =>
+      `${API_DOMAIN}/admin/cart/user/${userId}/clear`, // DELETE
+    ResendCartEmail: (userId: number | string) =>
+      `${API_DOMAIN}/admin/cart/resend-email/${userId}`, // POST
+
+    // --- Analytics Admin Endpoints ---
+    Analytics: API_DOMAIN + "/admin/analytics", // GET
+
+    // --- Referral Management Admin Endpoints ---
+    ReferralSettings: API_DOMAIN + "/admin/referral/settings", // GET, PUT
+    ReferralList: API_DOMAIN + "/admin/referral/list", // GET
+    ReferralUserDetails: (userId: number | string) =>
+      `${API_DOMAIN}/admin/referral/user/${userId}`, // GET
   },
 };
 
