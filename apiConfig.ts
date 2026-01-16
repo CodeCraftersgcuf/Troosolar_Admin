@@ -1,7 +1,7 @@
-const API_DOMAIN = "https://troosolar.hmstech.org/api";
+// const API_DOMAIN = "https://troosolar.hmstech.org/api";
 
 
-// const API_DOMAIN = "http://localhost:8000/api";
+const API_DOMAIN = "http://localhost:8000/api";
 
 
 
@@ -61,7 +61,18 @@ const API_ENDPOINTS = {
     BundleShow: (id: number | string) => `${API_DOMAIN}/bundles/${id}`, // GET
     BundleUpdate: (id: number | string) => `${API_DOMAIN}/bundles/${id}/update`, // POST
     DeleteBundle: (id: number | string) => `${API_DOMAIN}/bundles/${id}`, // DELETE
-    // (If you later expose list/show, add them here to match backend routes)
+
+    // --- Bundle Materials ---
+    BundleMaterialsList: (bundleId: number | string) =>
+      `${API_DOMAIN}/bundles/${bundleId}/materials`, // GET
+    BundleMaterialAdd: (bundleId: number | string) =>
+      `${API_DOMAIN}/bundles/${bundleId}/materials`, // POST
+    BundleMaterialUpdate: (bundleId: number | string, materialId: number | string) =>
+      `${API_DOMAIN}/bundles/${bundleId}/materials/${materialId}`, // PUT
+    BundleMaterialDelete: (bundleId: number | string, materialId: number | string) =>
+      `${API_DOMAIN}/bundles/${bundleId}/materials/${materialId}`, // DELETE
+    BundleMaterialsBulkAdd: (bundleId: number | string) =>
+      `${API_DOMAIN}/bundles/${bundleId}/materials/bulk`, // POST
 
     // --- Transactions (admin) ---
     TransactionsList: API_DOMAIN + "/transactions", // GET
@@ -217,6 +228,33 @@ const API_ENDPOINTS = {
     ReferralList: API_DOMAIN + "/admin/referral/list", // GET
     ReferralUserDetails: (userId: number | string) =>
       `${API_DOMAIN}/admin/referral/user/${userId}`, // GET
+
+    // --- Material Management Endpoints ---
+    // Seeder Routes
+    SeedAll: API_DOMAIN + "/seed/all", // GET
+    SeedRun: API_DOMAIN + "/seed/run", // POST
+
+    // Material Category Routes
+    MaterialCategoriesList: API_DOMAIN + "/material-categories", // GET
+    MaterialCategoryShow: (id: number | string) =>
+      `${API_DOMAIN}/material-categories/${id}`, // GET
+    MaterialCategoryCreate: API_DOMAIN + "/material-categories", // POST
+    MaterialCategoryUpdate: (id: number | string) =>
+      `${API_DOMAIN}/material-categories/${id}`, // PUT
+    MaterialCategoryDelete: (id: number | string) =>
+      `${API_DOMAIN}/material-categories/${id}`, // DELETE
+
+    // Material Routes
+    MaterialsList: API_DOMAIN + "/materials", // GET
+    MaterialsByCategory: (categoryId: number | string) =>
+      `${API_DOMAIN}/materials/category/${categoryId}`, // GET
+    MaterialShow: (id: number | string) =>
+      `${API_DOMAIN}/materials/${id}`, // GET
+    MaterialCreate: API_DOMAIN + "/materials", // POST
+    MaterialUpdate: (id: number | string) =>
+      `${API_DOMAIN}/materials/${id}`, // PUT
+    MaterialDelete: (id: number | string) =>
+      `${API_DOMAIN}/materials/${id}`, // DELETE
   },
 };
 

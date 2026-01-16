@@ -21,6 +21,8 @@ import Cookies from "js-cookie";
 import Tickets from "./pages/tickets/Tickets.tsx";
 import User_approval from "./pages/loans_approval/User_approval.tsx";
 import BNPLBuyNow from "./pages/bnpl_buynow/BNPLBuyNow";
+import MaterialMgt from "./pages/material_mgt/MaterialMgt";
+import BundleMgt from "./pages/bundle_mgt/BundleMgt";
 import NotFound from "./pages/NotFound";
 import NotFoundPublic from "./pages/NotFoundPublic";
 
@@ -59,6 +61,8 @@ function App() {
           <Route path="balances" element={<Balances />} />
           <Route path="shop-mgt" element={<Shop_mgt />} />
           <Route path="bnpl-buynow" element={<BNPLBuyNow />} />
+          <Route path="material-mgt" element={<MaterialMgt />} />
+          <Route path="bundle-mgt" element={<BundleMgt />} />
           <Route path="referral-mgt" element={<Referral_mgt />} />
           <Route path="tickets" element={<Tickets />} />
           <Route path="analytics" element={<Analytics />} />

@@ -63,6 +63,18 @@ export const Sidebar_links = [
     sublinks: [],
   },
   {
+    name: "Material Mgt",
+    link: "/material-mgt",
+    icon: images.ShopMgt,
+    sublinks: [],
+  },
+  {
+    name: "Bundle Mgt",
+    link: "/bundle-mgt",
+    icon: images.ShopMgt,
+    sublinks: [],
+  },
+  {
     name: "Referral Mgt",
     link: "/referral-mgt",
     icon: images.referral,
