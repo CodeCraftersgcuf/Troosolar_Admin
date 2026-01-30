@@ -1,7 +1,7 @@
-// const API_DOMAIN = "https://troosolar.hmstech.org/api";
+const API_DOMAIN = "https://troosolar.hmstech.org/api";
 
 
-const API_DOMAIN = "http://localhost:8000/api";
+// const API_DOMAIN = "http://localhost:8000/api";
 
 
 

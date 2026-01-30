@@ -3,7 +3,7 @@ import AddCustomService from './AddCustomService';
 import images from '../../constants/images';
 
 //Code Related to the Integration
-import { addBundle } from '../../utils/mutations/bundle';
+import { addBundle, type CustomAppliancePayload } from '../../utils/mutations/bundle';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Cookies from "js-cookie";
 import { getAllProducts } from '../../utils/queries/product';
@@ -69,6 +69,21 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
   const [customServices, setCustomServices] = useState<CustomService[]>([]);
   const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Extended bundle fields (spreadsheet / solar specs)
+  const [productModel, setProductModel] = useState('');
+  const [systemCapacityDisplay, setSystemCapacityDisplay] = useState('');
+  const [detailedDescription, setDetailedDescription] = useState('');
+  const [whatIsInsideBundleText, setWhatIsInsideBundleText] = useState('');
+  const [whatBundlePowersText, setWhatBundlePowersText] = useState('');
+  const [backupTimeDescription, setBackupTimeDescription] = useState('');
+  const [inverRating, setInverRating] = useState('');
+  const [totalOutput, setTotalOutput] = useState('');
+  const [totalLoad, setTotalLoad] = useState('');
+
+  // Custom appliances (name, wattage, quantity, hours)
+  const [customAppliances, setCustomAppliances] = useState<CustomAppliancePayload[]>([]);
+  const [activeSection, setActiveSection] = useState<'basic' | 'specs' | 'details' | 'appliances'>('basic');
 
   // Get token from cookies
   const token = Cookies.get('token') || '';
@@ -149,14 +164,21 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
       setTotalPrice(editingBundle.total_price ? String(editingBundle.total_price) : "");
       setDiscountPrice(editingBundle.discount_price ? String(editingBundle.discount_price) : "");
       setDiscountEndDate(editingBundle.discount_end_date || "");
-      // Don't prefill file input
-      // Preselect products from bundle_items
+      setProductModel(editingBundle.product_model || "");
+      setSystemCapacityDisplay(editingBundle.system_capacity_display || "");
+      setDetailedDescription(editingBundle.detailed_description || "");
+      setWhatIsInsideBundleText(editingBundle.what_is_inside_bundle_text || "");
+      setWhatBundlePowersText(editingBundle.what_bundle_powers_text || "");
+      setBackupTimeDescription(editingBundle.backup_time_description || "");
+      setInverRating(editingBundle.inver_rating || "");
+      setTotalOutput(editingBundle.total_output || "");
+      setTotalLoad(editingBundle.total_load ?? "");
+      setCustomAppliances(editingBundle.custom_appliances || []);
       if (editingBundle.bundle_items && Array.isArray(editingBundle.bundle_items)) {
         const productIds = editingBundle.bundle_items.map((item: any) => item.product_id);
         const selected = availableProducts.filter(p => productIds.includes(p.id));
         setSelectedProducts(selected);
       }
-      // Preselect custom services
       setCustomServices(editingBundle.custom_services || []);
     } else {
       resetForm();
@@ -165,8 +187,11 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
   }, [editingBundle, isOpen, availableProducts]);
 
   const handleCreateOrUpdateBundle = () => {
-    if (!bundleName || !bundleType || !totalPrice || selectedProducts.length === 0) {
-      alert('Please fill in all required fields and select at least one product');
+    const hasProducts = selectedProducts.length > 0;
+    const validCustomAppliances = customAppliances.filter(a => a.name.trim() && a.wattage > 0);
+
+    if (!bundleName || !bundleType || !totalPrice) {
+      alert('Please fill in Bundle Name, Bundle Type, and Total Price');
       return;
     }
     if (!featuredImage && !editingBundle) {
@@ -175,15 +200,32 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
     }
     setIsSubmitting(true);
 
-    const bundleData = {
+    const bundleData: Record<string, unknown> = {
       title: bundleName,
       bundle_type: bundleType,
       total_price: parseFloat(totalPrice),
       discount_price: discountPrice ? parseFloat(discountPrice) : undefined,
       discount_end_date: discountEndDate || undefined,
       featured_image: featuredImage || undefined,
-      items: selectedProducts.map(product => product.id),
-      custom_services: customServices.length > 0 ? customServices : undefined
+      items: hasProducts ? selectedProducts.map(p => p.id) : undefined,
+      custom_services: customServices.length > 0 ? customServices : undefined,
+      product_model: productModel || undefined,
+      system_capacity_display: systemCapacityDisplay || undefined,
+      detailed_description: detailedDescription || undefined,
+      what_is_inside_bundle_text: whatIsInsideBundleText || undefined,
+      what_bundle_powers_text: whatBundlePowersText || undefined,
+      backup_time_description: backupTimeDescription || undefined,
+      inver_rating: inverRating || undefined,
+      total_output: totalOutput || undefined,
+      total_load: bundleType === 'Solar+Inverter+Battery' ? (totalLoad || undefined) : null,
+      custom_appliances: validCustomAppliances.length > 0
+        ? validCustomAppliances.map(a => ({
+          name: a.name.trim(),
+          wattage: Number(a.wattage),
+          quantity: a.quantity ?? 1,
+          estimated_daily_hours_usage: a.estimated_daily_hours_usage,
+        }))
+        : undefined,
     };
 
     if (editingBundle) {
@@ -202,7 +244,34 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
     setDiscountEndDate('');
     setFeaturedImage(null);
     setCustomServices([]);
+    setProductModel('');
+    setSystemCapacityDisplay('');
+    setDetailedDescription('');
+    setWhatIsInsideBundleText('');
+    setWhatBundlePowersText('');
+    setBackupTimeDescription('');
+    setInverRating('');
+    setTotalOutput('');
+    setTotalLoad('');
+    setCustomAppliances([]);
+    setActiveSection('basic');
     setIsSubmitting(false);
+  };
+
+  const addCustomAppliance = () => {
+    setCustomAppliances(prev => [...prev, { name: '', wattage: 0, quantity: 1, estimated_daily_hours_usage: undefined }]);
+  };
+
+  const updateCustomAppliance = (index: number, field: keyof CustomAppliancePayload, value: string | number | undefined) => {
+    setCustomAppliances(prev => {
+      const next = [...prev];
+      (next[index] as Record<string, unknown>)[field] = value;
+      return next;
+    });
+  };
+
+  const removeCustomAppliance = (index: number) => {
+    setCustomAppliances(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleFeaturedImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,31 +298,52 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
 
   if (!isOpen) return null;
 
+  const sectionTabs = [
+    { id: 'basic' as const, label: 'Basic' },
+    { id: 'specs' as const, label: 'Specs' },
+    { id: 'details' as const, label: 'Details' },
+    { id: 'appliances' as const, label: 'Custom Load' },
+  ];
+
   return (
     <div className="fixed inset-0 backdrop-brightness-50 bg-opacity-50 flex items-start justify-end z-50">
-      <div className="bg-white rounded-lg w-full max-w-md max-h-[100vh] overflow-y-auto">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[100vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white z-10">
           <h2 className="text-lg font-semibold text-gray-900">
             {editingBundle ? "Edit Bundle" : "Product Builder"}
           </h2>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full  cursor-pointer"
-
+            className="w-8 h-8 flex items-center justify-center rounded-full cursor-pointer"
           >
             <img src={images.cross} className="w-7 h-7" alt="" />
           </button>
         </div>
 
         <div className="p-4">
-          {/* Add New Button */}
-          <div className="flex justify-end mb-4">
-            <button className="text-blue-600 text-sm font-medium hover:text-blue-700">
-              Add New +
-            </button>
+          {/* Section tabs */}
+          <div className="flex gap-2 mb-4 border-b border-gray-200">
+            {sectionTabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveSection(tab.id)}
+                className={`px-3 py-2 text-sm font-medium rounded-t transition-colors ${
+                  activeSection === tab.id
+                    ? 'border-b-2 border-[#273E8E] text-[#273E8E] bg-gray-50'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
+          {/* Basic: Product list + name, type, image, price */}
+          {activeSection === 'basic' && (
+            <>
+          <p className="text-xs text-gray-500 mb-2">Optional: select products below, or use the <strong>Custom Load</strong> tab to add appliances by name and wattage only.</p>
           {/* Product List */}
           <div className="space-y-3 mb-6">
             {productsLoading ? (
@@ -341,10 +431,13 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">Select bundle type</option>
+                <option value="Inverter + Battery">Inverter + Battery</option>
+                <option value="Solar+Inverter+Battery">Solar+Inverter+Battery</option>
+                <option value="Custom Bundle">Custom Bundle</option>
                 <option value="solar_package">Solar Package</option>
                 <option value="inverter_package">Inverter Package</option>
                 <option value="battery_package">Battery Package</option>
-                <option value="custom">Custom Bundle</option>
+                <option value="custom">Custom</option>
               </select>
             </div>
 
@@ -428,6 +521,197 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
               />
             </div>
           </div>
+            </>
+          )}
+
+          {/* Specs: inver_rating, total_output, total_load, product_model, system_capacity_display */}
+          {activeSection === 'specs' && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Product Model</label>
+              <input
+                type="text"
+                value={productModel}
+                onChange={(e) => setProductModel(e.target.value)}
+                placeholder="e.g. OG-1P1K2-T - 1.2kVA Yinergy Inverter / GCL 12100 12V 1.3kWh Cworth Battery"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">System Capacity (display)</label>
+              <input
+                type="text"
+                value={systemCapacityDisplay}
+                onChange={(e) => setSystemCapacityDisplay(e.target.value)}
+                placeholder="e.g. 1.2kVA Inverter & 1.3kWh Lithium Ion Battery"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Inverter Rating (kVA)</label>
+                <input
+                  type="text"
+                  value={inverRating}
+                  onChange={(e) => setInverRating(e.target.value)}
+                  placeholder="e.g. 1.2 kVA"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Battery / Total Output (kWh)</label>
+                <input
+                  type="text"
+                  value={totalOutput}
+                  onChange={(e) => setTotalOutput(e.target.value)}
+                  placeholder="e.g. 1.3 kWh"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            {bundleType === 'Solar+Inverter+Battery' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Total Load / Solar (W or kW)</label>
+                <input
+                  type="text"
+                  value={totalLoad}
+                  onChange={(e) => setTotalLoad(e.target.value)}
+                  placeholder="e.g. 600 W or 1.2 kWp"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
+          </div>
+          )}
+
+          {/* Details: detailed_description, what_is_inside, what_powers, backup_time */}
+          {activeSection === 'details' && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Detailed Description</label>
+              <textarea
+                rows={4}
+                value={detailedDescription}
+                onChange={(e) => setDetailedDescription(e.target.value)}
+                placeholder="Full description of the bundle and what it powers..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">What is inside the bundle</label>
+              <textarea
+                rows={2}
+                value={whatIsInsideBundleText}
+                onChange={(e) => setWhatIsInsideBundleText(e.target.value)}
+                placeholder="e.g. 1 unit 1.2kVA Inverter, 1 unit 1.3kWh Battery & Installation Materials"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">What the bundle will power</label>
+              <textarea
+                rows={3}
+                value={whatBundlePowersText}
+                onChange={(e) => setWhatBundlePowersText(e.target.value)}
+                placeholder="e.g. 6–10 LED bulbs, 1 LED TV, 1 Decoder, 1 Fan, 1 Laptop, Wi-Fi, Small speakers"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Back-up time description</label>
+              <textarea
+                rows={2}
+                value={backupTimeDescription}
+                onChange={(e) => setBackupTimeDescription(e.target.value)}
+                placeholder="e.g. 1–9 hours depending on load; from sunset to sunrise or when grid is unavailable"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          )}
+
+          {/* Custom appliances: name, wattage, quantity, hours */}
+          {activeSection === 'appliances' && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Add custom appliances with wattage for load calculation (e.g. Fridge 200W, LED TV 20W).</p>
+            <button
+              type="button"
+              onClick={addCustomAppliance}
+              className="text-[#273E8E] text-sm font-medium hover:underline"
+            >
+              + Add appliance
+            </button>
+            {customAppliances.length > 0 && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="text-left p-2">Appliance</th>
+                      <th className="text-left p-2">Wattage (W)</th>
+                      <th className="text-left p-2">Qty</th>
+                      <th className="text-left p-2">Hours/day</th>
+                      <th className="w-10" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customAppliances.map((app, i) => (
+                      <tr key={i} className="border-t border-gray-100">
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={app.name}
+                            onChange={(e) => updateCustomAppliance(i, 'name', e.target.value)}
+                            placeholder="e.g. Fridge"
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <input
+                            type="number"
+                            min={0}
+                            value={app.wattage || ''}
+                            onChange={(e) => updateCustomAppliance(i, 'wattage', e.target.value ? Number(e.target.value) : 0)}
+                            placeholder="W"
+                            className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <input
+                            type="number"
+                            min={1}
+                            value={app.quantity ?? 1}
+                            onChange={(e) => updateCustomAppliance(i, 'quantity', e.target.value ? Number(e.target.value) : 1)}
+                            className="w-14 px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            value={app.estimated_daily_hours_usage ?? ''}
+                            onChange={(e) => updateCustomAppliance(i, 'estimated_daily_hours_usage', e.target.value ? Number(e.target.value) : undefined)}
+                            placeholder="hrs"
+                            className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                        </td>
+                        <td className="p-2">
+                          <button
+                            type="button"
+                            onClick={() => removeCustomAppliance(i)}
+                            className="text-red-600 hover:underline text-xs"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex flex-col gap-3 mt-6">

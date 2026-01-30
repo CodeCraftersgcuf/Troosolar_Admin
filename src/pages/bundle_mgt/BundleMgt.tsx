@@ -3,16 +3,15 @@ import Header from "../../component/Header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
-import { getAllBundles, getSingleBundle } from "../../utils/queries/bundle";
+import { getAllBundles } from "../../utils/queries/bundle";
 import { addBundle, updateBundle, deleteBundle } from "../../utils/mutations/bundle";
 import { getBundleMaterials } from "../../utils/queries/bundleMaterials";
 import {
   addBundleMaterial,
   updateBundleMaterial,
   deleteBundleMaterial,
-  bulkAddBundleMaterials,
 } from "../../utils/mutations/bundleMaterials";
-import { getAllMaterials, getAllMaterialCategories } from "../../utils/queries/materials";
+import { getAllMaterials } from "../../utils/queries/materials";
 
 // Types
 interface Bundle {
@@ -27,6 +26,11 @@ interface Bundle {
   bundleItems?: any[];
   customServices?: any[];
   featured_image?: string;
+  detailed_description?: string;
+  product_model?: string;
+  what_is_inside_bundle_text?: string;
+  what_bundle_powers_text?: string;
+  backup_time_description?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -83,6 +87,11 @@ const BundleMgt = () => {
     inver_rating: "",
     total_output: "",
     total_load: "",
+    description: "",
+    product_model: "",
+    what_is_inside: "",
+    what_it_powers: "",
+    backup_time_description: "",
   });
   const [featuredImage, setFeaturedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -230,6 +239,11 @@ const BundleMgt = () => {
       inver_rating: "",
       total_output: "",
       total_load: "",
+      description: "",
+      product_model: "",
+      what_is_inside: "",
+      what_it_powers: "",
+      backup_time_description: "",
     });
     setFeaturedImage(null);
     setImagePreview(null);
@@ -247,6 +261,11 @@ const BundleMgt = () => {
         inver_rating: bundle.inver_rating || "",
         total_output: bundle.total_output || "",
         total_load: bundle.total_load || "",
+        description: bundle.detailed_description || "",
+        product_model: bundle.product_model || "",
+        what_is_inside: bundle.what_is_inside_bundle_text || "",
+        what_it_powers: bundle.what_bundle_powers_text || "",
+        backup_time_description: bundle.backup_time_description || "",
       });
       if (bundle.featured_image) {
         setImagePreview(bundle.featured_image);
@@ -278,22 +297,17 @@ const BundleMgt = () => {
       discount_price: parseFloat(bundleFormData.discount_price) || 0,
     };
 
-    if (bundleFormData.inver_rating) {
-      payload.inver_rating = bundleFormData.inver_rating;
-    }
-    if (bundleFormData.total_output) {
-      payload.total_output = bundleFormData.total_output;
-    }
-    if (bundleFormData.total_load) {
-      payload.total_load = bundleFormData.total_load;
-    }
-    if (bundleFormData.bundle_type === "Inverter + Battery") {
-      payload.total_load = null;
-    }
+    if (bundleFormData.inver_rating) payload.inver_rating = bundleFormData.inver_rating;
+    if (bundleFormData.total_output) payload.total_output = bundleFormData.total_output;
+    if (bundleFormData.total_load) payload.total_load = bundleFormData.total_load;
+    if (bundleFormData.bundle_type === "Inverter + Battery") payload.total_load = null;
+    if (bundleFormData.description) payload.detailed_description = bundleFormData.description;
+    if (bundleFormData.product_model) payload.product_model = bundleFormData.product_model;
+    if (bundleFormData.what_is_inside) payload.what_is_inside_bundle_text = bundleFormData.what_is_inside;
+    if (bundleFormData.what_it_powers) payload.what_bundle_powers_text = bundleFormData.what_it_powers;
+    if (bundleFormData.backup_time_description) payload.backup_time_description = bundleFormData.backup_time_description;
 
-    if (featuredImage) {
-      payload.featured_image = featuredImage;
-    }
+    if (featuredImage) payload.featured_image = featuredImage;
 
     if (editingBundle) {
       updateBundleMutation.mutate({ id: editingBundle.id, data: payload });
@@ -697,6 +711,81 @@ const BundleMgt = () => {
                     />
                   </div>
                 )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={bundleFormData.description}
+                    onChange={(e) =>
+                      setBundleFormData({ ...bundleFormData, description: e.target.value })
+                    }
+                    placeholder="Full description of the bundle and what it powers..."
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Product Model
+                  </label>
+                  <input
+                    type="text"
+                    value={bundleFormData.product_model}
+                    onChange={(e) =>
+                      setBundleFormData({ ...bundleFormData, product_model: e.target.value })
+                    }
+                    placeholder="e.g. OG-1P1K2-T - 1.2kVA Yinergy Inverter / GCL 12100 12V 1.3kWh Battery"
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    What is inside the bundle
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={bundleFormData.what_is_inside}
+                    onChange={(e) =>
+                      setBundleFormData({ ...bundleFormData, what_is_inside: e.target.value })
+                    }
+                    placeholder="e.g. 1 unit 1.2kVA Inverter, 1 unit 1.3kWh Battery & Installation Materials"
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    What the bundle will power
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={bundleFormData.what_it_powers}
+                    onChange={(e) =>
+                      setBundleFormData({ ...bundleFormData, what_it_powers: e.target.value })
+                    }
+                    placeholder="e.g. 6–10 LED bulbs, 1 LED TV, 1 Decoder, 1 Fan, 1 Laptop, Wi-Fi"
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Back-up time description
+                  </label>
+                  <input
+                    type="text"
+                    value={bundleFormData.backup_time_description}
+                    onChange={(e) =>
+                      setBundleFormData({ ...bundleFormData, backup_time_description: e.target.value })
+                    }
+                    placeholder="e.g. 1–9 hours depending on load"
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  />
+                </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">

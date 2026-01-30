@@ -1,6 +1,13 @@
 import { apiCall } from "../customApiCall";
 import { API_ENDPOINTS } from "../../../apiConfig";
 
+export type CustomAppliancePayload = {
+  name: string;
+  wattage: number;
+  quantity?: number;
+  estimated_daily_hours_usage?: number;
+};
+
 type BundleProductPayload = {
   title?: string;
   bundle_type?: string;
@@ -13,6 +20,17 @@ type BundleProductPayload = {
     title: string;
     service_amount: number;
   }[];
+  // Extended bundle fields (spreadsheet / solar specs)
+  product_model?: string;
+  system_capacity_display?: string;
+  detailed_description?: string;
+  what_is_inside_bundle_text?: string;
+  what_bundle_powers_text?: string;
+  backup_time_description?: string;
+  inver_rating?: string;
+  total_output?: string;
+  total_load?: string | null;
+  custom_appliances?: CustomAppliancePayload[];
 };
 
 // Add Bundle (mutation)
@@ -51,6 +69,20 @@ export const addBundle = async (
         service.service_amount.toString()
       );
     });
+  }
+
+  if (data.product_model) formData.append("product_model", data.product_model);
+  if (data.system_capacity_display) formData.append("system_capacity_display", data.system_capacity_display);
+  if (data.detailed_description) formData.append("detailed_description", data.detailed_description);
+  if (data.what_is_inside_bundle_text) formData.append("what_is_inside_bundle_text", data.what_is_inside_bundle_text);
+  if (data.what_bundle_powers_text) formData.append("what_bundle_powers_text", data.what_bundle_powers_text);
+  if (data.backup_time_description) formData.append("backup_time_description", data.backup_time_description);
+  if (data.inver_rating) formData.append("inver_rating", data.inver_rating);
+  if (data.total_output) formData.append("total_output", data.total_output);
+  if (data.total_load != null && data.total_load !== "") formData.append("total_load", String(data.total_load));
+
+  if (data.custom_appliances && data.custom_appliances.length > 0) {
+    formData.append("custom_appliances", JSON.stringify(data.custom_appliances));
   }
 
   return await apiCall(
@@ -98,6 +130,20 @@ export const updateBundle = async (
         service.service_amount.toString()
       );
     });
+  }
+
+  if (data.product_model) formData.append("product_model", data.product_model);
+  if (data.system_capacity_display) formData.append("system_capacity_display", data.system_capacity_display);
+  if (data.detailed_description) formData.append("detailed_description", data.detailed_description);
+  if (data.what_is_inside_bundle_text) formData.append("what_is_inside_bundle_text", data.what_is_inside_bundle_text);
+  if (data.what_bundle_powers_text) formData.append("what_bundle_powers_text", data.what_bundle_powers_text);
+  if (data.backup_time_description) formData.append("backup_time_description", data.backup_time_description);
+  if (data.inver_rating) formData.append("inver_rating", data.inver_rating);
+  if (data.total_output) formData.append("total_output", data.total_output);
+  if (data.total_load != null && data.total_load !== "") formData.append("total_load", String(data.total_load));
+
+  if (data.custom_appliances && data.custom_appliances.length > 0) {
+    formData.append("custom_appliances", JSON.stringify(data.custom_appliances));
   }
 
   return await apiCall(

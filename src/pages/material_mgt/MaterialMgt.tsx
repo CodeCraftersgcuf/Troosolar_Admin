@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Header from "../../component/Header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
@@ -6,8 +6,6 @@ import LoadingSpinner from "../../components/common/LoadingSpinner";
 import {
   getAllMaterialCategories,
   getAllMaterials,
-  getMaterialCategory,
-  getMaterial,
 } from "../../utils/queries/materials";
 import {
   createMaterialCategory,
