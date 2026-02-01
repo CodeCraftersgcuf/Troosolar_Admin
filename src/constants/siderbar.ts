@@ -19,25 +19,25 @@ export const Sidebar_links = [
     icon: images.creditMgt,
     sublinks: [],
   },
-  {
-    name: "Initial Loan Applications",
-    link: "/loans-approval",
-    icon: images.Loanmgt,
-    sublinks: [],
-  },
-  {
-    name: "Loans Mgt",
-    link: "/loans-mgt",
-    icon: images.Loanmgt,
-    sublinks: [],
-  },
-
-  {
-    name: "Loans Disbursement",
-    link: "/loans-disbursement",
-    icon: images.loansDisbursement,
-    sublinks: [],
-  },
+  // Hidden from sidebar – uncomment to show
+  // {
+  //   name: "Initial Loan Applications",
+  //   link: "/loans-approval",
+  //   icon: images.Loanmgt,
+  //   sublinks: [],
+  // },
+  // {
+  //   name: "Loans Mgt",
+  //   link: "/loans-mgt",
+  //   icon: images.Loanmgt,
+  //   sublinks: [],
+  // },
+  // {
+  //   name: "Loans Disbursement",
+  //   link: "/loans-disbursement",
+  //   icon: images.loansDisbursement,
+  //   sublinks: [],
+  // },
   {
     name: "Transactions",
     link: "/transactions",

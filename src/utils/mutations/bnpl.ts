@@ -1,6 +1,43 @@
 import { apiCall } from "../customApiCall";
 import { API_ENDPOINTS } from "../../../apiConfig";
 
+// PUT /api/admin/bnpl/applications/{id} - assign beneficiary email, name, phone
+export const updateBNPLApplication = async (
+  id: number | string,
+  payload: {
+    beneficiary_email?: string;
+    beneficiary_name?: string;
+    beneficiary_phone?: string;
+    beneficiary_relationship?: string;
+  },
+  token: string
+): Promise<{ status: string; data: unknown; message: string }> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.BNPLApplicationUpdate(id),
+    "PUT",
+    payload,
+    token
+  );
+};
+
+// PUT /api/admin/bnpl/applications/{id}/offer - change loan amount, down payment, tenor
+export const updateBNPLLoanOffer = async (
+  id: number | string,
+  payload: {
+    loan_amount?: number;
+    down_payment?: number;
+    repayment_duration?: number;
+  },
+  token: string
+): Promise<{ status: string; data: unknown; message: string }> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.BNPLApplicationUpdateOffer(id),
+    "PUT",
+    payload,
+    token
+  );
+};
+
 // PUT /api/admin/bnpl/applications/{id}/status
 export const updateBNPLApplicationStatus = async (
   id: number | string,

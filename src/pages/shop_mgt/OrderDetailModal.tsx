@@ -19,7 +19,7 @@ interface OrderDetailModalProps {
     delivery_address?: {
       address?: string;
       phone_number?: string;
-    };
+    } | null;
     items?: Array<{
       item?: {
         title?: string;

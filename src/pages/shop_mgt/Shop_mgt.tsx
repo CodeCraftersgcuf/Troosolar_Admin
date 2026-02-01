@@ -44,6 +44,13 @@ interface DeliveryAddress {
   updated_at: string;
 }
 
+interface UserInfo {
+  id: number;
+  name: string;
+  email?: string;
+  phone?: string;
+}
+
 interface ApiOrder {
   id: number;
   order_number: string;
@@ -55,9 +62,10 @@ interface ApiOrder {
   product_id: number;
   bundle_id: number | null;
   created_at: string;
-  delivery_address: DeliveryAddress;
+  delivery_address: DeliveryAddress | null;
   items: OrderItem[];
-  include_user_info: boolean;
+  include_user_info?: boolean;
+  user_info?: UserInfo;
 }
 
 
@@ -146,8 +154,17 @@ const Shop_mgt = () => {
   // Map API response to ShopOrderData format
   const mappedOrders: ShopOrderData[] = ordersData?.orders?.map((order: ApiOrder) => {
     const firstItem = order.items?.[0];
-    const productName = firstItem?.item?.title || "Unknown Product";
-    const customerName = order.delivery_address?.title || "Unknown Customer";
+    // Backend returns user_info.name (first_name + sur_name) for admin; delivery_address.title is address label, not customer name
+    const customerName =
+      order.user_info?.name?.trim() ||
+      order.delivery_address?.title?.trim() ||
+      "Unknown Customer";
+    // Item title from first order item (Product or Bundle)
+    const productName =
+      firstItem?.item?.title?.trim() ||
+      (order.items?.length
+        ? order.items.map((i) => i.item?.title).filter(Boolean).join(", ") || "—"
+        : "—");
     const orderDate = new Date(order.created_at);
     const formattedDate = orderDate.toLocaleDateString('en-GB', {
       day: '2-digit',

@@ -170,6 +170,10 @@ const API_ENDPOINTS = {
     BNPLApplicationsList: API_DOMAIN + "/admin/bnpl/applications", // GET
     BNPLApplicationShow: (id: number | string) =>
       `${API_DOMAIN}/admin/bnpl/applications/${id}`, // GET
+    BNPLApplicationUpdate: (id: number | string) =>
+      `${API_DOMAIN}/admin/bnpl/applications/${id}`, // PUT - assign beneficiary email etc
+    BNPLApplicationUpdateOffer: (id: number | string) =>
+      `${API_DOMAIN}/admin/bnpl/applications/${id}/offer`, // PUT - change loan amount, down payment, tenor
     BNPLApplicationUpdateStatus: (id: number | string) =>
       `${API_DOMAIN}/admin/bnpl/applications/${id}/status`, // PUT
     BNPLGuarantorsList: API_DOMAIN + "/admin/bnpl/guarantors", // GET

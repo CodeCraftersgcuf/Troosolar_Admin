@@ -22,6 +22,8 @@ import {
   getUsersWithAuditRequests,
 } from "../../utils/queries/bnpl";
 import {
+  updateBNPLApplication,
+  updateBNPLLoanOffer,
   updateBNPLApplicationStatus,
   updateBNPLGuarantorStatus,
   updateBuyNowOrderStatus,
@@ -31,6 +33,12 @@ import {
   resendCartEmail,
   updateAuditRequestStatus,
 } from "../../utils/mutations/bnpl";
+import { sendToPartnerDetail } from "../../utils/mutations/loans";
+import { getAllFinance } from "../../utils/queries/finance";
+import { API_DOMAIN } from "../../../apiConfig";
+
+// Base URL for document links (backend stores paths like "loan_applications/xxx.pdf")
+const DOCUMENT_BASE_URL = API_DOMAIN.replace(/\/api\/?$/, "") || "https://troosolar.hmstech.org";
 
 const BNPLBuyNow: React.FC = () => {
   const [activeTab, setActiveTab] = useState("BNPL Applications");
@@ -54,6 +62,24 @@ const BNPLBuyNow: React.FC = () => {
     counter_offer_min_deposit: "",
     counter_offer_min_tenor: "",
   });
+  // BNPL Assign beneficiary & adjust offer (like loan flow)
+  const [beneficiaryForm, setBeneficiaryForm] = useState({
+    beneficiary_email: "",
+    beneficiary_name: "",
+    beneficiary_phone: "",
+    beneficiary_relationship: "",
+  });
+  const [offerForm, setOfferForm] = useState({
+    loan_amount: "",
+    down_payment: "",
+    repayment_duration: "",
+  });
+  const [savingBeneficiary, setSavingBeneficiary] = useState(false);
+  const [savingOffer, setSavingOffer] = useState(false);
+  // Send to Partner (like loan flow - before approving)
+  const [showSendToPartnerModal, setShowSendToPartnerModal] = useState(false);
+  const [selectedPartnerIdForSend, setSelectedPartnerIdForSend] = useState<number | "">("");
+  const [sendingToPartner, setSendingToPartner] = useState(false);
   
   // Custom Orders state
   const [showCreateOrderModal, setShowCreateOrderModal] = useState(false);
@@ -172,6 +198,14 @@ const BNPLBuyNow: React.FC = () => {
     }),
     enabled: activeTab === "Custom Orders" && !!token,
   });
+
+  // Financing partners (for Send to Partner in BNPL)
+  const { data: financePartnersData, isLoading: financePartnersLoading } = useQuery({
+    queryKey: ["all-finance-partners"],
+    queryFn: () => getAllFinance(token),
+    enabled: (showSendToPartnerModal && !!token) || !!token,
+  });
+  const financePartnersList = Array.isArray(financePartnersData?.data) ? financePartnersData.data : [];
 
   // Cart Products Query
   const {
@@ -385,6 +419,21 @@ const BNPLBuyNow: React.FC = () => {
         detailData = { data: item };
       }
       setSelectedItem(detailData.data);
+      if (activeTab === "BNPL Applications" && detailData.data) {
+        const d = detailData.data;
+        setBeneficiaryForm({
+          beneficiary_email: d.beneficiary_email || "",
+          beneficiary_name: d.beneficiary_name || "",
+          beneficiary_phone: d.beneficiary_phone || "",
+          beneficiary_relationship: d.beneficiary_relationship || "",
+        });
+        const mono = d.mono;
+        setOfferForm({
+          loan_amount: mono?.loan_amount ?? d.loan_amount ?? "",
+          down_payment: mono?.down_payment ?? "",
+          repayment_duration: mono?.repayment_duration ?? d.repayment_duration ?? "",
+        });
+      }
       setShowDetailModal(true);
     } catch (error) {
       console.error("Failed to fetch details:", error);
@@ -429,6 +478,14 @@ const BNPLBuyNow: React.FC = () => {
     if (!statusForm.status) {
       alert("Please select a status");
       return;
+    }
+
+    // BNPL: When approving, show confirmation that user can then pay down payment and order will be fulfilled
+    if (activeTab === "BNPL Applications" && statusForm.status === "approved") {
+      const confirmed = window.confirm(
+        "You are about to complete this order. Once you approve, the user will be able to pay their down payment and the order will be fulfilled. Continue?"
+      );
+      if (!confirmed) return;
     }
 
     const payload: any = {
@@ -535,11 +592,20 @@ const BNPLBuyNow: React.FC = () => {
   };
 
   const currentData = getCurrentData();
-  const items = activeTab !== "Custom Orders" ? (currentData?.data || []) : [];
-  const total = activeTab !== "Custom Orders" 
-    ? (currentData?.total || 0) 
-    : (auditUsersData?.data?.pagination?.total || 0);
-  const totalPages = Math.ceil(total / itemsPerPage);
+  // Support both paginated response (data.data, data.total) and direct array
+  const items =
+    activeTab === "Custom Orders"
+      ? []
+      : Array.isArray(currentData)
+        ? currentData
+        : (currentData?.data ?? []);
+  const total =
+    activeTab !== "Custom Orders"
+      ? (typeof (currentData as any)?.total === "number"
+          ? (currentData as any).total
+          : items.length)
+      : (auditUsersData?.data?.pagination?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1714,6 +1780,181 @@ const BNPLBuyNow: React.FC = () => {
                       </div>
                     )}
 
+                    {/* Assign / Update Beneficiary (like loan flow) */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        Assign / Update Beneficiary
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-4">Assign email and contact for this application (e.g. for sending offer).</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Beneficiary Email</label>
+                          <input
+                            type="email"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            placeholder="email@example.com"
+                            value={beneficiaryForm.beneficiary_email}
+                            onChange={(e) => setBeneficiaryForm((f) => ({ ...f, beneficiary_email: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Beneficiary Name</label>
+                          <input
+                            type="text"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            placeholder="Full name"
+                            value={beneficiaryForm.beneficiary_name}
+                            onChange={(e) => setBeneficiaryForm((f) => ({ ...f, beneficiary_name: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Beneficiary Phone</label>
+                          <input
+                            type="text"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            placeholder="Phone"
+                            value={beneficiaryForm.beneficiary_phone}
+                            onChange={(e) => setBeneficiaryForm((f) => ({ ...f, beneficiary_phone: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={savingBeneficiary}
+                        onClick={async () => {
+                          if (!selectedItem?.id) return;
+                          setSavingBeneficiary(true);
+                          try {
+                            await updateBNPLApplication(selectedItem.id, {
+                              beneficiary_email: beneficiaryForm.beneficiary_email || undefined,
+                              beneficiary_name: beneficiaryForm.beneficiary_name || undefined,
+                              beneficiary_phone: beneficiaryForm.beneficiary_phone || undefined,
+                            }, token);
+                            queryClient.invalidateQueries({ queryKey: ["bnpl-applications"] });
+                            const fresh = await getBNPLApplication(selectedItem.id, token);
+                            setSelectedItem(fresh.data);
+                            alert("Beneficiary updated successfully.");
+                          } catch (err: any) {
+                            alert(err?.message || "Failed to update beneficiary");
+                          } finally {
+                            setSavingBeneficiary(false);
+                          }
+                        }}
+                        className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        {savingBeneficiary ? "Saving..." : "Save Beneficiary"}
+                      </button>
+                    </div>
+
+                    {/* Adjust Loan Offer (change amount, down payment, tenor) */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Adjust Loan Offer
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-4">Change loan amount, initial deposit, or repayment duration before approving or sending counter offer.</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Loan Amount (₦)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            placeholder="Loan amount"
+                            value={offerForm.loan_amount}
+                            onChange={(e) => setOfferForm((f) => ({ ...f, loan_amount: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Down Payment (₦)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            placeholder="Initial deposit"
+                            value={offerForm.down_payment}
+                            onChange={(e) => setOfferForm((f) => ({ ...f, down_payment: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Repayment Duration (months)</label>
+                          <select
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            value={offerForm.repayment_duration}
+                            onChange={(e) => setOfferForm((f) => ({ ...f, repayment_duration: e.target.value }))}
+                          >
+                            <option value="">Select</option>
+                            <option value="3">3 months</option>
+                            <option value="6">6 months</option>
+                            <option value="9">9 months</option>
+                            <option value="12">12 months</option>
+                          </select>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={savingOffer}
+                        onClick={async () => {
+                          if (!selectedItem?.id) return;
+                          setSavingOffer(true);
+                          try {
+                            await updateBNPLLoanOffer(selectedItem.id, {
+                              loan_amount: offerForm.loan_amount ? Number(offerForm.loan_amount) : undefined,
+                              down_payment: offerForm.down_payment ? Number(offerForm.down_payment) : undefined,
+                              repayment_duration: offerForm.repayment_duration ? Number(offerForm.repayment_duration) : undefined,
+                            }, token);
+                            queryClient.invalidateQueries({ queryKey: ["bnpl-applications"] });
+                            const fresh = await getBNPLApplication(selectedItem.id, token);
+                            setSelectedItem(fresh.data);
+                            setOfferForm({
+                              loan_amount: fresh.data?.mono?.loan_amount ?? fresh.data?.loan_amount ?? "",
+                              down_payment: fresh.data?.mono?.down_payment ?? "",
+                              repayment_duration: fresh.data?.mono?.repayment_duration ?? fresh.data?.repayment_duration ?? "",
+                            });
+                            alert("Loan offer updated successfully.");
+                          } catch (err: any) {
+                            alert(err?.message || "Failed to update loan offer");
+                          } finally {
+                            setSavingOffer(false);
+                          }
+                        }}
+                        className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        {savingOffer ? "Saving..." : "Save Loan Offer"}
+                      </button>
+                    </div>
+
+                    {/* Send to Partner (before approving - like loan flow) */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        Send to Partner
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-4">You can send application details to a financing partner before approving. The user will receive notification once you approve.</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPartnerIdForSend("");
+                          setShowSendToPartnerModal(true);
+                        }}
+                        className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-4 py-2 rounded-lg text-sm font-medium inline-flex items-center"
+                      >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        Send details to partner (Email)
+                      </button>
+                    </div>
+
                     {/* Loan Details */}
                     <div className="bg-white rounded-lg border border-gray-200 p-6">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -1838,14 +2079,54 @@ const BNPLBuyNow: React.FC = () => {
                                   View Document
                                 </a>
                               ) : (
-                                <p className="text-sm font-medium text-gray-900">
-                                  {selectedItem.upload_document}
-                                </p>
+                                <a
+                                  href={`${DOCUMENT_BASE_URL}/${selectedItem.upload_document}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm font-medium text-[#273E8E] hover:underline flex items-center"
+                                >
+                                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  View Document
+                                </a>
                               )
                             )}
                           </div>
                         )}
-                        {(!selectedItem.title_document && !selectedItem.upload_document) && (
+                        {selectedItem.bank_statement_path && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Bank Statement</p>
+                            <a
+                              href={selectedItem.bank_statement_path.startsWith("http") ? selectedItem.bank_statement_path : `${DOCUMENT_BASE_URL}/${selectedItem.bank_statement_path}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-medium text-[#273E8E] hover:underline flex items-center"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              View Bank Statement
+                            </a>
+                          </div>
+                        )}
+                        {selectedItem.live_photo_path && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Live Photo</p>
+                            <a
+                              href={selectedItem.live_photo_path.startsWith("http") ? selectedItem.live_photo_path : `${DOCUMENT_BASE_URL}/${selectedItem.live_photo_path}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-medium text-[#273E8E] hover:underline flex items-center"
+                            >
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                              View Live Photo
+                            </a>
+                          </div>
+                        )}
+                        {(!selectedItem.title_document && !selectedItem.upload_document && !selectedItem.bank_statement_path && !selectedItem.live_photo_path) && (
                           <p className="text-sm text-gray-500 italic">No documents uploaded</p>
                         )}
                       </div>
@@ -1861,7 +2142,8 @@ const BNPLBuyNow: React.FC = () => {
                             "id", "status", "loan_amount", "repayment_duration", "monthly_payment",
                             "interest_rate", "user", "beneficiary_name", "beneficiary_email",
                             "beneficiary_phone", "beneficiary_relationship", "title_document",
-                            "upload_document", "created_at", "updated_at", "guarantors", "loan_configuration"
+                            "upload_document", "bank_statement_path", "live_photo_path",
+                            "created_at", "updated_at", "guarantors", "loan_configuration"
                           ];
                           if (skipKeys.includes(key) || !value || value === null || value === "null") {
                             return null;
@@ -2492,6 +2774,12 @@ const BNPLBuyNow: React.FC = () => {
                 </select>
               </div>
 
+              {statusForm.status === "approved" && activeTab === "BNPL Applications" && (
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+                  Once you approve, the user will be able to pay their down payment and the order will be fulfilled.
+                </div>
+              )}
+
               {statusForm.status === "counter_offer" && activeTab === "BNPL Applications" && (
                 <>
                   <div>
@@ -2589,6 +2877,83 @@ const BNPLBuyNow: React.FC = () => {
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                 )}
                 Update Status
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send to Partner Modal (BNPL - before approving) */}
+      {showSendToPartnerModal && (selectedItem?.user_id != null || selectedItem?.user?.id != null) && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Send to Partner</h2>
+              <button
+                onClick={() => {
+                  setShowSendToPartnerModal(false);
+                  setSelectedPartnerIdForSend("");
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Send this BNPL application details to a financing partner before approving. The partner will receive an email.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Select Partner</label>
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#273E8E] focus:border-transparent outline-none"
+                value={selectedPartnerIdForSend}
+                onChange={(e) => setSelectedPartnerIdForSend(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">Select partner</option>
+                {financePartnersLoading ? (
+                  <option disabled>Loading partners...</option>
+                ) : (
+                  financePartnersList.map((partner: any) => (
+                    <option key={partner.id} value={partner.id}>
+                      {partner["Partner name"] ?? partner.name ?? `Partner #${partner.id}`}
+                      {partner.Status ? ` (${partner.Status})` : ""}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowSendToPartnerModal(false);
+                  setSelectedPartnerIdForSend("");
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!selectedPartnerIdForSend || sendingToPartner}
+                onClick={async () => {
+                  const userId = selectedItem?.user_id ?? selectedItem?.user?.id;
+                  if (!userId || !selectedPartnerIdForSend) return;
+                  setSendingToPartner(true);
+                  try {
+                    await sendToPartnerDetail(userId, { partner_id: Number(selectedPartnerIdForSend) }, token);
+                    setShowSendToPartnerModal(false);
+                    setSelectedPartnerIdForSend("");
+                    alert("Email sent to partner successfully.");
+                  } catch (err: any) {
+                    alert(err?.response?.data?.message || err?.message || "Failed to send to partner.");
+                  } finally {
+                    setSendingToPartner(false);
+                  }
+                }}
+                className="px-6 py-2 rounded-lg font-medium bg-[#273E8E] text-white hover:bg-[#1e3270] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sendingToPartner ? "Sending..." : "Send Email"}
               </button>
             </div>
           </div>
