@@ -25,27 +25,18 @@ const IMAGE_BASE_URL = "https://troosolar.hmstech.org";
 const Product = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const subtabFromUrl = searchParams.get("subtab") as "categories" | "brand" | null;
-  
+
+  // Single source of truth from URL to avoid sync loops and navigation throttling
+  const activeTab: "categories" | "brand" =
+    subtabFromUrl === "categories" || subtabFromUrl === "brand" ? subtabFromUrl : "categories";
+
+  const setActiveTab = (subtab: "categories" | "brand") => {
+    const currentTab = searchParams.get("tab") || "product";
+    setSearchParams({ tab: currentTab, subtab }, { replace: true });
+  };
+
   const [categories, setCategories] = useState<ProductCategory[]>(productCategories);
   const [brandList, setBrandList] = useState<Brand[]>(brands);
-  const [activeTab, setActiveTab] = useState<"categories" | "brand">(
-    (subtabFromUrl && ["categories", "brand"].includes(subtabFromUrl)) ? subtabFromUrl : "categories"
-  );
-
-  // Update URL when subtab changes (only if different from URL)
-  useEffect(() => {
-    if (activeTab && activeTab !== subtabFromUrl) {
-      const currentTab = searchParams.get("tab") || "product";
-      setSearchParams({ tab: currentTab, subtab: activeTab });
-    }
-  }, [activeTab, setSearchParams, searchParams, subtabFromUrl]);
-
-  // Update subtab when URL changes (only if different from current subtab)
-  useEffect(() => {
-    if (subtabFromUrl && ["categories", "brand"].includes(subtabFromUrl) && subtabFromUrl !== activeTab) {
-      setActiveTab(subtabFromUrl);
-    }
-  }, [subtabFromUrl, activeTab]);
   const [isAddCategoryModalOpen, setIsAddCategoryModalOpen] = useState(false);
   const [isAddBrandModalOpen, setIsAddBrandModalOpen] = useState(false);
   const [editCategoryModalOpen, setEditCategoryModalOpen] = useState(false);

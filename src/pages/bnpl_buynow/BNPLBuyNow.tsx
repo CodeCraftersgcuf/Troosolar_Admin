@@ -20,6 +20,8 @@ import {
   getAuditRequests,
   getAuditRequest,
   getUsersWithAuditRequests,
+  getBNPLSettings,
+  getSiteBanner,
 } from "../../utils/queries/bnpl";
 import {
   updateBNPLApplication,
@@ -32,6 +34,13 @@ import {
   clearUserCart,
   resendCartEmail,
   updateAuditRequestStatus,
+  uploadBNPLGuarantorForm,
+  setBNPLApplicationGuarantor,
+  acceptBNPLInstallationDate,
+  rejectBNPLInstallationDate,
+  updateBNPLSettings,
+  uploadSiteBanner,
+  deleteSiteBanner,
 } from "../../utils/mutations/bnpl";
 import { sendToPartnerDetail } from "../../utils/mutations/loans";
 import { getAllFinance } from "../../utils/queries/finance";
@@ -73,9 +82,22 @@ const BNPLBuyNow: React.FC = () => {
     loan_amount: "",
     down_payment: "",
     repayment_duration: "",
+    interest_rate: "",
+    management_fee_percentage: "",
+    legal_fee_percentage: "",
+    insurance_fee_percentage: "",
   });
   const [savingBeneficiary, setSavingBeneficiary] = useState(false);
   const [savingOffer, setSavingOffer] = useState(false);
+  const [guarantorForm, setGuarantorForm] = useState({
+    full_name: "",
+    phone: "",
+    email: "",
+    relationship: "",
+  });
+  const [savingGuarantor, setSavingGuarantor] = useState(false);
+  const [savingInstallationAccept, setSavingInstallationAccept] = useState(false);
+  const [savingInstallationReject, setSavingInstallationReject] = useState(false);
   // Send to Partner (like loan flow - before approving)
   const [showSendToPartnerModal, setShowSendToPartnerModal] = useState(false);
   const [selectedPartnerIdForSend, setSelectedPartnerIdForSend] = useState<number | "">("");
@@ -109,6 +131,28 @@ const BNPLBuyNow: React.FC = () => {
     price: "",
     quantity: "1",
   });
+
+  // Guarantor Form (admin upload)
+  const [guarantorFormFile, setGuarantorFormFile] = useState<File | null>(null);
+  const [uploadingGuarantorForm, setUploadingGuarantorForm] = useState(false);
+
+  // Home Banner (dashboard promo)
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [removingBanner, setRemovingBanner] = useState(false);
+
+  // Loan Settings (global BNPL config)
+  const [loanSettingsForm, setLoanSettingsForm] = useState({
+    interest_rate_percentage: "",
+    min_down_percentage: "",
+    management_fee_percentage: "",
+    legal_fee_percentage: "",
+    insurance_fee_percentage: "",
+    minimum_loan_amount: "",
+    loan_durations: [] as number[],
+    newDuration: "",
+  });
+  const [savingLoanSettings, setSavingLoanSettings] = useState(false);
 
   const token = Cookies.get("token") || "";
   const queryClient = useQueryClient();
@@ -207,6 +251,38 @@ const BNPLBuyNow: React.FC = () => {
   });
   const financePartnersList = Array.isArray(financePartnersData?.data) ? financePartnersData.data : [];
 
+  // BNPL global settings (for Loan Settings tab and for detail modal duration dropdown)
+  const { data: bnplSettingsData, isLoading: bnplSettingsLoading } = useQuery({
+    queryKey: ["bnpl-settings"],
+    queryFn: () => getBNPLSettings(token),
+    enabled: (activeTab === "Loan Settings" || !!showDetailModal) && !!token,
+  });
+  const bnplSettings = bnplSettingsData?.data?.data ?? bnplSettingsData?.data ?? null;
+  const allowedDurations: number[] = Array.isArray(bnplSettings?.loan_durations) ? bnplSettings.loan_durations : [3, 6, 9, 12];
+
+  useEffect(() => {
+    if (activeTab === "Loan Settings" && bnplSettings) {
+      setLoanSettingsForm((f) => ({
+        ...f,
+        interest_rate_percentage: String(bnplSettings.interest_rate_percentage ?? ""),
+        min_down_percentage: String(bnplSettings.min_down_percentage ?? ""),
+        management_fee_percentage: String(bnplSettings.management_fee_percentage ?? ""),
+        legal_fee_percentage: String(bnplSettings.legal_fee_percentage ?? ""),
+        insurance_fee_percentage: String(bnplSettings.insurance_fee_percentage ?? ""),
+        minimum_loan_amount: String(bnplSettings.minimum_loan_amount ?? ""),
+        loan_durations: Array.isArray(bnplSettings.loan_durations) ? [...bnplSettings.loan_durations] : [],
+      }));
+    }
+  }, [activeTab, bnplSettings]);
+
+  // Site banner (home promo) - for Banner tab
+  const { data: siteBannerData, isLoading: siteBannerLoading, refetch: refetchSiteBanner } = useQuery({
+    queryKey: ["site-banner"],
+    queryFn: () => getSiteBanner(token),
+    enabled: activeTab === "Banner" && !!token,
+  });
+  const bannerUrl = siteBannerData?.data?.url ?? siteBannerData?.data?.path ?? null;
+
   // Cart Products Query
   const {
     data: cartProductsData,
@@ -244,6 +320,13 @@ const BNPLBuyNow: React.FC = () => {
         counter_offer_min_deposit: "",
         counter_offer_min_tenor: "",
       });
+      alert("Status updated successfully.");
+    },
+    onError: (error: any) => {
+      const msg = error?.message || error?.response?.data?.message || "Failed to update status.";
+      const errors = error?.response?.data?.errors || error?.data?.errors;
+      const detail = errors && typeof errors === "object" ? Object.values(errors).flat().join(" ") : "";
+      alert(detail ? `${msg}\n${detail}` : msg);
     },
   });
 
@@ -432,6 +515,16 @@ const BNPLBuyNow: React.FC = () => {
           loan_amount: mono?.loan_amount ?? d.loan_amount ?? "",
           down_payment: mono?.down_payment ?? "",
           repayment_duration: mono?.repayment_duration ?? d.repayment_duration ?? "",
+          interest_rate: mono?.interest_rate ?? "",
+          management_fee_percentage: mono?.management_fee_percentage ?? "",
+          legal_fee_percentage: mono?.legal_fee_percentage ?? "",
+          insurance_fee_percentage: mono?.insurance_fee_percentage ?? "",
+        });
+        setGuarantorForm({
+          full_name: d.guarantor?.full_name || "",
+          phone: d.guarantor?.phone || "",
+          email: d.guarantor?.email || "",
+          relationship: d.guarantor?.relationship || "",
         });
       }
       setShowDetailModal(true);
@@ -465,11 +558,17 @@ const BNPLBuyNow: React.FC = () => {
 
   const handleUpdateStatus = (item: any) => {
     setSelectedItem(item);
+    const loanAmount = Number(item?.loan_amount ?? item?.mono?.loan_amount ?? 0);
+    const existingDeposit = Number(item?.counter_offer_min_deposit ?? 0);
+    const existingPercent =
+      loanAmount > 0 && existingDeposit > 0
+        ? String(Math.round((existingDeposit / loanAmount) * 100))
+        : "";
     setStatusForm({
       status: item.status || item.order_status || "",
       admin_notes: "",
-      counter_offer_min_deposit: "",
-      counter_offer_min_tenor: "",
+      counter_offer_min_deposit: existingPercent,
+      counter_offer_min_tenor: item?.counter_offer_min_tenor ?? "",
     });
     setShowStatusModal(true);
   };
@@ -497,12 +596,23 @@ const BNPLBuyNow: React.FC = () => {
     }
 
     if (statusForm.status === "counter_offer") {
-      if (statusForm.counter_offer_min_deposit) {
-        payload.counter_offer_min_deposit = Number(statusForm.counter_offer_min_deposit);
+      const percent = statusForm.counter_offer_min_deposit ? Number(statusForm.counter_offer_min_deposit) : 0;
+      const tenor = statusForm.counter_offer_min_tenor ? Number(statusForm.counter_offer_min_tenor) : 0;
+      if (!percent || percent <= 0 || percent > 100) {
+        alert("Please enter a valid Counter Offer Min Deposit percentage (e.g. 30, 40, 50).");
+        return;
       }
-      if (statusForm.counter_offer_min_tenor) {
-        payload.counter_offer_min_tenor = Number(statusForm.counter_offer_min_tenor);
+      if (!tenor || !allowedDurations.includes(tenor)) {
+        alert(`Please select a valid Counter Offer Min Tenor (${allowedDurations.join(", ")} months).`);
+        return;
       }
+      const loanAmount = Number(selectedItem?.loan_amount ?? selectedItem?.mono?.loan_amount ?? 0);
+      if (loanAmount <= 0) {
+        alert("Cannot set counter offer: loan amount is missing for this application. Try opening the application details first, then use Update Status again.");
+        return;
+      }
+      payload.counter_offer_min_deposit = Math.round((loanAmount * percent) / 100);
+      payload.counter_offer_min_tenor = tenor;
     }
 
     if (activeTab === "BNPL Applications") {
@@ -536,7 +646,13 @@ const BNPLBuyNow: React.FC = () => {
       case "Audit Requests":
         return auditRequestsData?.data;
       case "Custom Orders":
-        return null; // Custom Orders doesn't use paginated data
+        return null;
+      case "Guarantor Form":
+        return null;
+      case "Loan Settings":
+        return null;
+      case "Banner":
+        return null;
       default:
         return null;
     }
@@ -556,6 +672,12 @@ const BNPLBuyNow: React.FC = () => {
         return auditRequestsLoading;
       case "Custom Orders":
         return auditUsersLoading;
+      case "Guarantor Form":
+        return false;
+      case "Loan Settings":
+        return bnplSettingsLoading;
+      case "Banner":
+        return siteBannerLoading;
       default:
         return false;
     }
@@ -601,9 +723,11 @@ const BNPLBuyNow: React.FC = () => {
         : (currentData?.data ?? []);
   const total =
     activeTab !== "Custom Orders"
-      ? (typeof (currentData as any)?.total === "number"
-          ? (currentData as any).total
-          : items.length)
+      ? (typeof (currentData as any)?.pagination?.total === "number"
+          ? (currentData as any).pagination.total
+          : typeof (currentData as any)?.total === "number"
+            ? (currentData as any).total
+            : items.length)
       : (auditUsersData?.data?.pagination?.total || 0);
   const totalPages = Math.max(1, Math.ceil(total / itemsPerPage));
 
@@ -629,7 +753,7 @@ const BNPLBuyNow: React.FC = () => {
         <div className="mb-8">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
-              {["BNPL Applications", "BNPL Guarantors", "Buy Now Orders", "BNPL Orders", "Audit Requests", "Custom Orders"].map(
+              {["BNPL Applications", "BNPL Guarantors", "Guarantor Form", "Loan Settings", "Banner", "Buy Now Orders", "BNPL Orders", "Audit Requests", "Custom Orders"].map(
                 (tab) => (
                   <button
                     key={tab}
@@ -678,7 +802,8 @@ const BNPLBuyNow: React.FC = () => {
           )}
         </div>
 
-        {/* Filters and Search */}
+        {/* Filters and Search - hidden on Guarantor Form, Loan Settings, and Banner tabs */}
+        {activeTab !== "Guarantor Form" && activeTab !== "Loan Settings" && activeTab !== "Banner" && (
         <div className="mb-6 bg-white rounded-lg p-4 shadow-sm">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
@@ -770,9 +895,240 @@ const BNPLBuyNow: React.FC = () => {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Custom Orders Tab Content */}
-        {activeTab === "Custom Orders" ? (
+        {/* Loan Settings Tab Content - Global BNPL config */}
+        {activeTab === "Loan Settings" ? (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 max-w-3xl">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">BNPL Loan Settings</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Configure default interest rate, minimum down payment %, fees, minimum loan amount, and allowed loan durations. These apply to new applications unless overridden per application in View Detail.
+            </p>
+            {bnplSettingsLoading ? (
+              <LoadingSpinner message="Loading settings..." />
+            ) : (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!token) return;
+                  setSavingLoanSettings(true);
+                  try {
+                    await updateBNPLSettings({
+                      interest_rate_percentage: loanSettingsForm.interest_rate_percentage ? Number(loanSettingsForm.interest_rate_percentage) : undefined,
+                      min_down_percentage: loanSettingsForm.min_down_percentage ? Number(loanSettingsForm.min_down_percentage) : undefined,
+                      management_fee_percentage: loanSettingsForm.management_fee_percentage ? Number(loanSettingsForm.management_fee_percentage) : undefined,
+                      legal_fee_percentage: loanSettingsForm.legal_fee_percentage ? Number(loanSettingsForm.legal_fee_percentage) : undefined,
+                      insurance_fee_percentage: loanSettingsForm.insurance_fee_percentage ? Number(loanSettingsForm.insurance_fee_percentage) : undefined,
+                      minimum_loan_amount: loanSettingsForm.minimum_loan_amount ? Number(loanSettingsForm.minimum_loan_amount) : undefined,
+                      loan_durations: loanSettingsForm.loan_durations.length ? loanSettingsForm.loan_durations : undefined,
+                    }, token);
+                    queryClient.invalidateQueries({ queryKey: ["bnpl-settings"] });
+                    alert("Loan settings saved successfully.");
+                  } catch (err: any) {
+                    alert(err?.response?.data?.message || err?.message || "Failed to save settings.");
+                  } finally {
+                    setSavingLoanSettings(false);
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Interest rate (%)</label>
+                    <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2" value={loanSettingsForm.interest_rate_percentage} onChange={(e) => setLoanSettingsForm((f) => ({ ...f, interest_rate_percentage: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Minimum down (%)</label>
+                    <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2" value={loanSettingsForm.min_down_percentage} onChange={(e) => setLoanSettingsForm((f) => ({ ...f, min_down_percentage: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Management fee (%)</label>
+                    <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2" value={loanSettingsForm.management_fee_percentage} onChange={(e) => setLoanSettingsForm((f) => ({ ...f, management_fee_percentage: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Legal fee (%)</label>
+                    <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2" value={loanSettingsForm.legal_fee_percentage} onChange={(e) => setLoanSettingsForm((f) => ({ ...f, legal_fee_percentage: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Insurance fee (%)</label>
+                    <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2" value={loanSettingsForm.insurance_fee_percentage} onChange={(e) => setLoanSettingsForm((f) => ({ ...f, insurance_fee_percentage: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Minimum loan amount (₦)</label>
+                    <input type="number" min="0" step="1000" className="w-full border border-gray-300 rounded-lg px-3 py-2" value={loanSettingsForm.minimum_loan_amount} onChange={(e) => setLoanSettingsForm((f) => ({ ...f, minimum_loan_amount: e.target.value }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Loan durations (months)</label>
+                  <p className="text-xs text-gray-500 mb-2">Add allowed tenors e.g. 3, 6, 9, 12. Admin can add more (e.g. 18, 24).</p>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {loanSettingsForm.loan_durations.map((m) => (
+                      <span key={m} className="inline-flex items-center px-3 py-1 rounded-full bg-[#273E8E] text-white text-sm">
+                        {m} months
+                        <button type="button" className="ml-2 hover:opacity-80" onClick={() => setLoanSettingsForm((f) => ({ ...f, loan_durations: f.loan_durations.filter((d) => d !== m) }))}>×</button>
+                      </span>
+                    ))}
+                    <div className="flex gap-2">
+                      <input type="number" min="1" max="120" placeholder="e.g. 18" className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm" value={loanSettingsForm.newDuration} onChange={(e) => setLoanSettingsForm((f) => ({ ...f, newDuration: e.target.value }))} />
+                      <button type="button" className="px-3 py-1 bg-gray-200 rounded-lg text-sm hover:bg-gray-300" onClick={() => { const n = parseInt(loanSettingsForm.newDuration, 10); if (!isNaN(n) && n >= 1 && n <= 120 && !loanSettingsForm.loan_durations.includes(n)) { setLoanSettingsForm((f) => ({ ...f, loan_durations: [...f.loan_durations, n].sort((a, b) => a - b), newDuration: "" })); } }}>Add</button>
+                    </div>
+                  </div>
+                </div>
+                <button type="submit" disabled={savingLoanSettings} className="bg-[#273E8E] hover:bg-[#1e3270] disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium">
+                  {savingLoanSettings ? "Saving..." : "Save Loan Settings"}
+                </button>
+              </form>
+            )}
+          </div>
+        ) : activeTab === "Guarantor Form" ? (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 max-w-2xl">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">BNPL Guarantor Form</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              Upload the guarantor form PDF that approved loan users will download. Use your own template with your terms, conditions, and fields. This file replaces the default form—users see only the option to download this form in their dashboard.
+            </p>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!guarantorFormFile || !token) return;
+                setUploadingGuarantorForm(true);
+                try {
+                  const res = await uploadBNPLGuarantorForm(guarantorFormFile, token);
+                  if (res?.status === "success") {
+                    alert(res?.message || "Guarantor form updated successfully.");
+                    setGuarantorFormFile(null);
+                  } else {
+                    alert(res?.message || "Upload failed.");
+                  }
+                } catch (err: any) {
+                  const msg = err?.response?.data?.message || err?.message || "Failed to upload guarantor form.";
+                  const errors = err?.response?.data?.errors;
+                  alert(errors ? Object.values(errors).flat().join("\n") : msg);
+                } finally {
+                  setUploadingGuarantorForm(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select PDF file (max 10MB)</label>
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={(e) => setGuarantorFormFile(e.target.files?.[0] || null)}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#273E8E] file:text-white hover:file:bg-[#1e3270]"
+                />
+                {guarantorFormFile && (
+                  <p className="mt-2 text-sm text-gray-600">Selected: {guarantorFormFile.name}</p>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={!guarantorFormFile || uploadingGuarantorForm}
+                className="bg-[#273E8E] hover:bg-[#1e3270] disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+              >
+                {uploadingGuarantorForm ? "Uploading..." : "Upload Guarantor Form"}
+              </button>
+            </form>
+          </div>
+        ) : activeTab === "Banner" ? (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 max-w-2xl">
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Home Promotion Banner</h2>
+            <p className="text-sm text-gray-600 mb-6">
+              This banner is shown on the user dashboard home. Upload an image to set or replace it; remove it to hide the banner.
+            </p>
+            {siteBannerLoading ? (
+              <LoadingSpinner message="Loading banner..." />
+            ) : (
+              <>
+                {bannerUrl && (
+                  <div className="mb-6">
+                    <p className="text-sm font-medium text-gray-700 mb-2">Current banner</p>
+                    <img
+                      src={bannerUrl}
+                      alt="Current promotion banner"
+                      className="max-w-full h-auto max-h-[243px] rounded-lg object-cover border border-gray-200"
+                    />
+                  </div>
+                )}
+                {!bannerUrl && (
+                  <p className="text-sm text-gray-500 mb-6">No banner set. Upload an image below to show a promotion on the dashboard.</p>
+                )}
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!bannerFile || !token) return;
+                    setUploadingBanner(true);
+                    try {
+                      const res = await uploadSiteBanner(bannerFile, token);
+                      if (res?.status === "success") {
+                        alert(res?.message || "Banner updated successfully.");
+                        setBannerFile(null);
+                        refetchSiteBanner();
+                      } else {
+                        alert(res?.message || "Upload failed.");
+                      }
+                    } catch (err: any) {
+                      const msg = err?.response?.data?.message || err?.message || "Failed to upload banner.";
+                      const errors = err?.response?.data?.errors;
+                      alert(errors ? Object.values(errors).flat().join("\n") : msg);
+                    } finally {
+                      setUploadingBanner(false);
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Select image (JPEG, PNG, GIF, WebP – max 5MB)</label>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                      onChange={(e) => setBannerFile(e.target.files?.[0] || null)}
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#273E8E] file:text-white hover:file:bg-[#1e3270]"
+                    />
+                    {bannerFile && (
+                      <p className="mt-2 text-sm text-gray-600">Selected: {bannerFile.name}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="submit"
+                      disabled={!bannerFile || uploadingBanner}
+                      className="bg-[#273E8E] hover:bg-[#1e3270] disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                    >
+                      {uploadingBanner ? "Uploading..." : "Upload / Replace Banner"}
+                    </button>
+                    {bannerUrl && (
+                      <button
+                        type="button"
+                        disabled={removingBanner}
+                        onClick={async () => {
+                          if (!token || !confirm("Remove the home banner? It will no longer show on the dashboard.")) return;
+                          setRemovingBanner(true);
+                          try {
+                            const res = await deleteSiteBanner(token);
+                            if (res?.status === "success") {
+                              alert(res?.message || "Banner removed.");
+                              refetchSiteBanner();
+                            } else {
+                              alert(res?.message || "Failed to remove banner.");
+                            }
+                          } catch (err: any) {
+                            alert(err?.response?.data?.message || err?.message || "Failed to remove banner.");
+                          } finally {
+                            setRemovingBanner(false);
+                          }
+                        }}
+                        className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                      >
+                        {removingBanner ? "Removing..." : "Remove Banner"}
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+        ) : activeTab === "Custom Orders" ? (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
             <div className="p-6 border-b border-gray-200">
               <div className="flex justify-between items-center">
@@ -1163,7 +1519,7 @@ const BNPLBuyNow: React.FC = () => {
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                {formatDate(item.created_at)}
+                                {item.created_at ? formatDate(item.created_at) : "—"}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                 <div className="flex items-center space-x-2">
@@ -1271,11 +1627,11 @@ const BNPLBuyNow: React.FC = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                 {item.user
-                                  ? `${item.user.first_name} ${item.user.sur_name}`
+                                  ? (item.user.name || `${(item.user as any).first_name ?? ""} ${(item.user as any).sur_name ?? ""}`.trim() || "N/A")
                                   : "N/A"}
                                 <br />
                                 <span className="text-xs text-gray-500">
-                                  {item.user?.email || ""}
+                                  {item.user?.email ?? ""}
                                 </span>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
@@ -1288,8 +1644,10 @@ const BNPLBuyNow: React.FC = () => {
                                   </span>
                                 )}
                               </td>
-                              <td className="px-6 py-4 text-sm text-gray-600">
-                                {item.property_address || (
+                              <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                                {item.property_address ? (
+                                  <span title={item.property_address}>{item.property_address}</span>
+                                ) : (
                                   <span className="text-gray-400 italic">Not provided</span>
                                 )}
                                 {item.property_state && (
@@ -1849,15 +2207,15 @@ const BNPLBuyNow: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Adjust Loan Offer (change amount, down payment, tenor) */}
+                    {/* Adjust Loan Offer (change amount, down payment, tenor) – all amounts in Naira (₦) */}
                     <div className="bg-white rounded-lg border border-gray-200 p-6">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        Adjust Loan Offer
+                        Adjust Loan Offer (₦)
                       </h3>
-                      <p className="text-sm text-gray-500 mb-4">Change loan amount, initial deposit, or repayment duration before approving or sending counter offer.</p>
+                      <p className="text-sm text-gray-500 mb-4">Change loan amount, initial deposit, or repayment duration before approving or sending counter offer. All amounts are in Nigerian Naira (₦).</p>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
                           <label className="block text-xs text-gray-500 mb-1">Loan Amount (₦)</label>
@@ -1866,7 +2224,7 @@ const BNPLBuyNow: React.FC = () => {
                             min="0"
                             step="1000"
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                            placeholder="Loan amount"
+                            placeholder="e.g. 5000000"
                             value={offerForm.loan_amount}
                             onChange={(e) => setOfferForm((f) => ({ ...f, loan_amount: e.target.value }))}
                           />
@@ -1878,7 +2236,7 @@ const BNPLBuyNow: React.FC = () => {
                             min="0"
                             step="1000"
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                            placeholder="Initial deposit"
+                            placeholder="e.g. 1500000"
                             value={offerForm.down_payment}
                             onChange={(e) => setOfferForm((f) => ({ ...f, down_payment: e.target.value }))}
                           />
@@ -1891,11 +2249,28 @@ const BNPLBuyNow: React.FC = () => {
                             onChange={(e) => setOfferForm((f) => ({ ...f, repayment_duration: e.target.value }))}
                           >
                             <option value="">Select</option>
-                            <option value="3">3 months</option>
-                            <option value="6">6 months</option>
-                            <option value="9">9 months</option>
-                            <option value="12">12 months</option>
+                            {allowedDurations.map((m) => (
+                              <option key={m} value={m}>{m} months</option>
+                            ))}
                           </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Interest rate (%)</label>
+                          <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Default from settings" value={offerForm.interest_rate} onChange={(e) => setOfferForm((f) => ({ ...f, interest_rate: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Management fee (%)</label>
+                          <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Default" value={offerForm.management_fee_percentage} onChange={(e) => setOfferForm((f) => ({ ...f, management_fee_percentage: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Legal fee (%)</label>
+                          <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Default" value={offerForm.legal_fee_percentage} onChange={(e) => setOfferForm((f) => ({ ...f, legal_fee_percentage: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Insurance fee (%)</label>
+                          <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" placeholder="Default" value={offerForm.insurance_fee_percentage} onChange={(e) => setOfferForm((f) => ({ ...f, insurance_fee_percentage: e.target.value }))} />
                         </div>
                       </div>
                       <button
@@ -1909,18 +2284,27 @@ const BNPLBuyNow: React.FC = () => {
                               loan_amount: offerForm.loan_amount ? Number(offerForm.loan_amount) : undefined,
                               down_payment: offerForm.down_payment ? Number(offerForm.down_payment) : undefined,
                               repayment_duration: offerForm.repayment_duration ? Number(offerForm.repayment_duration) : undefined,
+                              interest_rate: offerForm.interest_rate ? Number(offerForm.interest_rate) : undefined,
+                              management_fee_percentage: offerForm.management_fee_percentage ? Number(offerForm.management_fee_percentage) : undefined,
+                              legal_fee_percentage: offerForm.legal_fee_percentage ? Number(offerForm.legal_fee_percentage) : undefined,
+                              insurance_fee_percentage: offerForm.insurance_fee_percentage ? Number(offerForm.insurance_fee_percentage) : undefined,
                             }, token);
                             queryClient.invalidateQueries({ queryKey: ["bnpl-applications"] });
                             const fresh = await getBNPLApplication(selectedItem.id, token);
+                            const mono = fresh.data?.mono;
                             setSelectedItem(fresh.data);
                             setOfferForm({
-                              loan_amount: fresh.data?.mono?.loan_amount ?? fresh.data?.loan_amount ?? "",
-                              down_payment: fresh.data?.mono?.down_payment ?? "",
-                              repayment_duration: fresh.data?.mono?.repayment_duration ?? fresh.data?.repayment_duration ?? "",
+                              loan_amount: mono?.loan_amount ?? fresh.data?.loan_amount ?? "",
+                              down_payment: mono?.down_payment ?? "",
+                              repayment_duration: mono?.repayment_duration ?? fresh.data?.repayment_duration ?? "",
+                              interest_rate: mono?.interest_rate ?? "",
+                              management_fee_percentage: mono?.management_fee_percentage ?? "",
+                              legal_fee_percentage: mono?.legal_fee_percentage ?? "",
+                              insurance_fee_percentage: mono?.insurance_fee_percentage ?? "",
                             });
                             alert("Loan offer updated successfully.");
                           } catch (err: any) {
-                            alert(err?.message || "Failed to update loan offer");
+                            alert(err?.response?.data?.message || err?.message || "Failed to update loan offer");
                           } finally {
                             setSavingOffer(false);
                           }
@@ -1929,6 +2313,187 @@ const BNPLBuyNow: React.FC = () => {
                       >
                         {savingOffer ? "Saving..." : "Save Loan Offer"}
                       </button>
+                    </div>
+
+                    {/* Guarantor – admin adds guarantor data; user only downloads/uploads form */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Guarantor
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-4">Add guarantor details for this application. The user will only see the option to download the guarantor form and upload the signed copy—they cannot add guarantor details.</p>
+                      {/* Customer's signed guarantor form – section when uploaded */}
+                      {selectedItem?.guarantor?.signed_form_path && (
+                        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <h4 className="text-sm font-semibold text-green-800 mb-2">Customer&apos;s signed guarantor form</h4>
+                          <p className="text-xs text-green-700 mb-3">The customer has uploaded the signed guarantor form. You can view or download it below.</p>
+                          <a
+                            href={selectedItem.guarantor.signed_form_path.startsWith("http") ? selectedItem.guarantor.signed_form_path : `${DOCUMENT_BASE_URL}/${selectedItem.guarantor.signed_form_path}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-sm font-medium text-[#273E8E] hover:underline"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            View / Download signed guarantor form
+                          </a>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Full name</label>
+                          <input
+                            type="text"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            placeholder="Guarantor full name"
+                            value={guarantorForm.full_name}
+                            onChange={(e) => setGuarantorForm((f) => ({ ...f, full_name: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                          <input
+                            type="text"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            placeholder="Phone"
+                            value={guarantorForm.phone}
+                            onChange={(e) => setGuarantorForm((f) => ({ ...f, phone: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Email (optional)</label>
+                          <input
+                            type="email"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            placeholder="email@example.com"
+                            value={guarantorForm.email}
+                            onChange={(e) => setGuarantorForm((f) => ({ ...f, email: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Relationship (optional)</label>
+                          <input
+                            type="text"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                            placeholder="e.g. Spouse, Colleague"
+                            value={guarantorForm.relationship}
+                            onChange={(e) => setGuarantorForm((f) => ({ ...f, relationship: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={savingGuarantor || !guarantorForm.full_name.trim() || !guarantorForm.phone.trim()}
+                        onClick={async () => {
+                          if (!selectedItem?.id) return;
+                          setSavingGuarantor(true);
+                          try {
+                            await setBNPLApplicationGuarantor(selectedItem.id, {
+                              full_name: guarantorForm.full_name.trim(),
+                              phone: guarantorForm.phone.trim(),
+                              email: guarantorForm.email?.trim() || undefined,
+                              relationship: guarantorForm.relationship?.trim() || undefined,
+                            }, token);
+                            queryClient.invalidateQueries({ queryKey: ["bnpl-applications"] });
+                            const fresh = await getBNPLApplication(selectedItem.id, token);
+                            setSelectedItem(fresh.data);
+                            setGuarantorForm({
+                              full_name: fresh.data?.guarantor?.full_name || "",
+                              phone: fresh.data?.guarantor?.phone || "",
+                              email: fresh.data?.guarantor?.email || "",
+                              relationship: fresh.data?.guarantor?.relationship || "",
+                            });
+                            alert("Guarantor saved. User can download the form and upload the signed copy.");
+                          } catch (err: any) {
+                            alert(err?.message || "Failed to save guarantor");
+                          } finally {
+                            setSavingGuarantor(false);
+                          }
+                        }}
+                        className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        {savingGuarantor ? "Saving..." : "Save Guarantor"}
+                      </button>
+                    </div>
+
+                    {/* Installation Date – accept or reject customer's requested date */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        Installation Date
+                      </h3>
+                      <p className="text-sm text-gray-500 mb-4">Customer can book an installation date after down payment. Accept or reject the requested date here. If rejected, they will be notified and can book another date.</p>
+                      {selectedItem?.installation_requested_date ? (
+                        <div className="space-y-3">
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">Requested date:</span> {selectedItem.installation_requested_date}
+                          </p>
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">Status:</span>{" "}
+                            <span className={selectedItem.installation_booking_status === "accepted" ? "text-green-600" : selectedItem.installation_booking_status === "rejected" ? "text-red-600" : "text-amber-600"}>
+                              {selectedItem.installation_booking_status || "pending"}
+                            </span>
+                          </p>
+                          {selectedItem.installation_booking_status === "pending" && (
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                disabled={savingInstallationAccept || savingInstallationReject}
+                                onClick={async () => {
+                                  if (!selectedItem?.id || !token) return;
+                                  setSavingInstallationAccept(true);
+                                  try {
+                                    await acceptBNPLInstallationDate(selectedItem.id, token);
+                                    queryClient.invalidateQueries({ queryKey: ["bnpl-applications"] });
+                                    const fresh = await getBNPLApplication(selectedItem.id, token);
+                                    setSelectedItem(fresh.data);
+                                    alert("Installation date accepted.");
+                                  } catch (err: any) {
+                                    alert(err?.response?.data?.message || err?.message || "Failed to accept");
+                                  } finally {
+                                    setSavingInstallationAccept(false);
+                                  }
+                                }}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                              >
+                                {savingInstallationAccept ? "Accepting..." : "Accept"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={savingInstallationAccept || savingInstallationReject}
+                                onClick={async () => {
+                                  if (!selectedItem?.id || !token) return;
+                                  setSavingInstallationReject(true);
+                                  try {
+                                    await rejectBNPLInstallationDate(selectedItem.id, token);
+                                    queryClient.invalidateQueries({ queryKey: ["bnpl-applications"] });
+                                    const fresh = await getBNPLApplication(selectedItem.id, token);
+                                    setSelectedItem(fresh.data);
+                                    alert("Installation date rejected. Customer has been notified to book another date.");
+                                  } catch (err: any) {
+                                    alert(err?.response?.data?.message || err?.message || "Failed to reject");
+                                  } finally {
+                                    setSavingInstallationReject(false);
+                                  }
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                              >
+                                {savingInstallationReject ? "Rejecting..." : "Reject"}
+                              </button>
+                            </div>
+                          )}
+                          {Array.isArray(selectedItem.installation_rejected_dates) && selectedItem.installation_rejected_dates.length > 0 && (
+                            <p className="text-xs text-gray-500">Rejected dates (customer cannot re-select): {selectedItem.installation_rejected_dates.join(", ")}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">No installation date requested yet. Customer will see &quot;Book Installation Date&quot; after down payment.</p>
+                      )}
                     </div>
 
                     {/* Send to Partner (before approving - like loan flow) */}
@@ -1959,7 +2524,7 @@ const BNPLBuyNow: React.FC = () => {
                     <div className="bg-white rounded-lg border border-gray-200 p-6">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         Loan Details
                       </h3>
@@ -2784,10 +3349,13 @@ const BNPLBuyNow: React.FC = () => {
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Counter Offer Min Deposit
+                      Counter Offer Min Deposit (%)
                     </label>
                     <input
                       type="number"
+                      min={0}
+                      max={100}
+                      step={5}
                       className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                       value={statusForm.counter_offer_min_deposit}
                       onChange={(e) =>
@@ -2796,15 +3364,22 @@ const BNPLBuyNow: React.FC = () => {
                           counter_offer_min_deposit: e.target.value,
                         })
                       }
-                      placeholder="Enter minimum deposit"
+                      placeholder="e.g. 40"
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Percentage of loan amount. The equivalent amount in ₦ will be calculated when you save.
+                      {selectedItem?.loan_amount && statusForm.counter_offer_min_deposit && Number(statusForm.counter_offer_min_deposit) > 0 && (
+                        <span className="block mt-1 font-medium text-gray-700">
+                          ≈ {formatCurrency(Math.round((Number(selectedItem.loan_amount) * Number(statusForm.counter_offer_min_deposit)) / 100))} minimum deposit
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Counter Offer Min Tenor
+                      Counter Offer Min Tenor (months)
                     </label>
-                    <input
-                      type="number"
+                    <select
                       className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                       value={statusForm.counter_offer_min_tenor}
                       onChange={(e) =>
@@ -2813,8 +3388,12 @@ const BNPLBuyNow: React.FC = () => {
                           counter_offer_min_tenor: e.target.value,
                         })
                       }
-                      placeholder="Enter minimum tenor (months)"
-                    />
+                    >
+                      <option value="">Select tenor</option>
+                      {allowedDurations.map((m) => (
+                        <option key={m} value={m}>{m} months</option>
+                      ))}
+                    </select>
                   </div>
                 </>
               )}

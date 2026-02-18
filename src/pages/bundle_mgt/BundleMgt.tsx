@@ -12,12 +12,22 @@ import {
   deleteBundleMaterial,
 } from "../../utils/mutations/bundleMaterials";
 import { getAllMaterials } from "../../utils/queries/materials";
+import { getAllBrands } from "../../utils/queries/brands";
 
 // Types
+interface ApiBrand {
+  id: number;
+  title: string;
+  icon?: string;
+  category_id?: number;
+}
+
 interface Bundle {
   id: number;
   title: string;
   bundle_type: string;
+  brand_id?: number | null;
+  brand?: { id: number; title: string } | null;
   total_price: number;
   discount_price: number;
   inver_rating?: string;
@@ -82,6 +92,7 @@ const BundleMgt = () => {
   const [bundleFormData, setBundleFormData] = useState({
     title: "",
     bundle_type: "Inverter + Battery",
+    brand_id: "" as string | number,
     total_price: "",
     discount_price: "",
     inver_rating: "",
@@ -146,6 +157,14 @@ const BundleMgt = () => {
 
   const allMaterials: Material[] =
     (materialsData as any)?.data || (materialsData as any) || [];
+
+  // Fetch brands for bundle form
+  const { data: brandsData } = useQuery({
+    queryKey: ["brands"],
+    queryFn: () => getAllBrands(token),
+    enabled: !!token && showBundleModal,
+  });
+  const apiBrands: ApiBrand[] = (brandsData as any)?.data || [];
 
   // Fetch bundle materials
   const {
@@ -234,6 +253,7 @@ const BundleMgt = () => {
     setBundleFormData({
       title: "",
       bundle_type: "Inverter + Battery",
+      brand_id: "",
       total_price: "",
       discount_price: "",
       inver_rating: "",
@@ -253,9 +273,11 @@ const BundleMgt = () => {
   const handleOpenBundleModal = (bundle?: Bundle) => {
     if (bundle) {
       setEditingBundle(bundle);
+      const brandId = bundle.brand_id ?? bundle.brand?.id ?? "";
       setBundleFormData({
         title: bundle.title,
         bundle_type: bundle.bundle_type,
+        brand_id: brandId,
         total_price: bundle.total_price.toString(),
         discount_price: bundle.discount_price?.toString() || "",
         inver_rating: bundle.inver_rating || "",
@@ -296,6 +318,12 @@ const BundleMgt = () => {
       total_price: parseFloat(bundleFormData.total_price) || 0,
       discount_price: parseFloat(bundleFormData.discount_price) || 0,
     };
+
+    if (bundleFormData.brand_id !== "" && bundleFormData.brand_id != null) {
+      payload.brand_id = typeof bundleFormData.brand_id === "string" ? parseInt(bundleFormData.brand_id, 10) : bundleFormData.brand_id;
+    } else {
+      payload.brand_id = null;
+    }
 
     if (bundleFormData.inver_rating) payload.inver_rating = bundleFormData.inver_rating;
     if (bundleFormData.total_output) payload.total_output = bundleFormData.total_output;
@@ -629,6 +657,30 @@ const BundleMgt = () => {
                   >
                     <option value="Inverter + Battery">Inverter + Battery</option>
                     <option value="Solar+Inverter+Battery">Solar+Inverter+Battery</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Brand
+                  </label>
+                  <select
+                    value={bundleFormData.brand_id === "" ? "" : String(bundleFormData.brand_id)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setBundleFormData({
+                        ...bundleFormData,
+                        brand_id: v === "" ? "" : (parseInt(v, 10) as number),
+                      });
+                    }}
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  >
+                    <option value="">No brand</option>
+                    {apiBrands.map((brand) => (
+                      <option key={brand.id} value={brand.id}>
+                        {brand.title}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

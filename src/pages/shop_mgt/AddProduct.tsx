@@ -127,7 +127,7 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
         top_deal: boolean;
         installation_compulsory: boolean;
         category_id: number;
-        brand_id: number;
+        brand_id: number | null;
         details?: Array<{ detail: string }>;
         featured_image_url?: string;
         images?: Array<{ image: string }>;
@@ -147,13 +147,13 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       setMarkAsComplimentary(product.installation_compulsory || false);
 
       const category = apiCategories.find((cat) => cat.id === product.category_id);
-      const brand = apiBrands.find((brand) => brand.id === product.brand_id);
+      const brand = product.brand_id != null ? apiBrands.find((b) => b.id === product.brand_id) : null;
 
       console.log("➡️ Matched category:", category);
       console.log("➡️ Matched brand:", brand);
 
       setProductCategory(category?.title || "");
-      setProductBrand(brand?.title || "");
+      setProductBrand(brand?.title ?? "");
 
       if (product.details && product.details.length > 0) {
         const details = product.details.map((d) => d.detail);
@@ -227,7 +227,8 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
         updatePayload.append("title", productName ?? "");
         updatePayload.append("category_id", String(apiCategories.find(cat => cat.title === productCategory)?.id ?? ""));
         updatePayload.append("price", productPrice ?? "0");
-        updatePayload.append("brand_id", String(apiBrands.find(brand => brand.title === productBrand)?.id ?? ""));
+        const brandId = productBrand ? apiBrands.find(b => b.title === productBrand)?.id : null;
+        updatePayload.append("brand_id", brandId != null ? String(brandId) : "");
         updatePayload.append("discount_price", discountPrice ? discountPrice : "0");
         if (discountEndDate) updatePayload.append("discount_end_date", discountEndDate);
         updatePayload.append("stock", stockQuantity ?? "0");
@@ -297,7 +298,7 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
 
 
   const handleSubmit = async () => {
-    if (!productName || !productCategory || !productBrand || !productPrice || !stockQuantity) {
+    if (!productName || !productCategory || !productPrice || !stockQuantity) {
       alert('Please fill in all required fields');
       return;
     }
@@ -308,9 +309,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     setIsSubmitting(true);
 
     const selectedCategoryData = apiCategories.find(cat => cat.title === productCategory);
-    const selectedBrandData = apiBrands.find(brand => brand.title === productBrand);
-    if (!selectedCategoryData || !selectedBrandData) {
-      alert('Please select valid category and brand');
+    const selectedBrandData = productBrand ? apiBrands.find(b => b.title === productBrand) : null;
+    if (!selectedCategoryData) {
+      alert('Please select a valid category');
       setIsSubmitting(false);
       return;
     }
@@ -319,7 +320,7 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       title: productName,
       category_id: selectedCategoryData.id,
       price: parseFloat(productPrice) || 0,
-      brand_id: selectedBrandData.id,
+      brand_id: selectedBrandData?.id ?? null,
       discount_price: discountPrice ? parseFloat(discountPrice) : 0,
       discount_end_date: discountEndDate || undefined,
       stock: stockQuantity,
@@ -572,10 +573,10 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
               )}
             </div>
 
-            {/* Product Brand */}
+            {/* Product Brand (optional) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Product Brand *
+                Product Brand
               </label>
               <select
                 value={productBrand}
@@ -589,13 +590,11 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
                   }
                 }}
                 onBlur={() => {
-                  // Delay hiding to allow button click
                   setTimeout(() => setShowBrandEmptyMessage(false), 200);
                 }}
                 className="w-full cursor-pointer px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                required
               >
-                <option value="">Select Brand</option>
+                <option value="">No brand</option>
                 {brandsLoading ? (
                   <option value="" disabled>Loading brands...</option>
                 ) : apiBrands.length === 0 ? (

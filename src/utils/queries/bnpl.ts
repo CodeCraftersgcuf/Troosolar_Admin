@@ -39,6 +39,26 @@ export const getBNPLApplication = async (
   );
 };
 
+// GET /api/admin/bnpl/settings
+export const getBNPLSettings = async (token: string): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.BNPLSettingsGet,
+    "GET",
+    undefined,
+    token
+  );
+};
+
+// GET /api/admin/site/banner - home promo banner (url/path)
+export const getSiteBanner = async (token: string): Promise<{ status: string; data?: { url?: string; path?: string }; message: string }> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.SiteBannerGet,
+    "GET",
+    undefined,
+    token
+  );
+};
+
 // GET /api/admin/bnpl/guarantors
 export const getBNPLGuarantors = async (
   token: string,

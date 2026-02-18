@@ -11,6 +11,7 @@ export type CustomAppliancePayload = {
 type BundleProductPayload = {
   title?: string;
   bundle_type?: string;
+  brand_id?: number | null;
   total_price?: number;
   discount_price?: number;
   discount_end_date?: string;
@@ -42,6 +43,11 @@ export const addBundle = async (
 
   if (data.title) formData.append("title", data.title);
   if (data.bundle_type) formData.append("bundle_type", data.bundle_type);
+  if (data.brand_id != null) {
+    formData.append("brand_id", String(data.brand_id));
+  } else {
+    formData.append("brand_id", "");
+  }
   if (data.total_price !== undefined) {
     formData.append("total_price", data.total_price.toString());
   }
@@ -103,6 +109,11 @@ export const updateBundle = async (
 
   if (data.title) formData.append("title", data.title);
   if (data.bundle_type) formData.append("bundle_type", data.bundle_type);
+  if (data.brand_id != null) {
+    formData.append("brand_id", String(data.brand_id));
+  } else {
+    formData.append("brand_id", "");
+  }
   if (data.total_price !== undefined) {
     formData.append("total_price", data.total_price.toString());
   }

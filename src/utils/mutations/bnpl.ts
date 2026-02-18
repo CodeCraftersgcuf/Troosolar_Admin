@@ -1,3 +1,4 @@
+import axios from "axios";
 import { apiCall } from "../customApiCall";
 import { API_ENDPOINTS } from "../../../apiConfig";
 
@@ -20,13 +21,17 @@ export const updateBNPLApplication = async (
   );
 };
 
-// PUT /api/admin/bnpl/applications/{id}/offer - change loan amount, down payment, tenor
+// PUT /api/admin/bnpl/applications/{id}/offer - change loan amount, down payment, tenor, interest & fees
 export const updateBNPLLoanOffer = async (
   id: number | string,
   payload: {
     loan_amount?: number;
     down_payment?: number;
     repayment_duration?: number;
+    interest_rate?: number;
+    management_fee_percentage?: number;
+    legal_fee_percentage?: number;
+    insurance_fee_percentage?: number;
   },
   token: string
 ): Promise<{ status: string; data: unknown; message: string }> => {
@@ -70,6 +75,120 @@ export const updateBNPLGuarantorStatus = async (
     API_ENDPOINTS.ADMIN.BNPLGuarantorUpdateStatus(id),
     "PUT",
     payload,
+    token
+  );
+};
+
+// POST /api/admin/bnpl/applications/{id}/guarantor - admin set guarantor for application
+export const setBNPLApplicationGuarantor = async (
+  applicationId: number | string,
+  payload: {
+    full_name: string;
+    phone: string;
+    email?: string;
+    relationship?: string;
+  },
+  token: string
+): Promise<{ status: string; data?: any; message: string }> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.BNPLApplicationSetGuarantor(applicationId),
+    "POST",
+    payload,
+    token
+  );
+};
+
+// PUT /api/admin/bnpl/applications/{id}/installation-date/accept
+export const acceptBNPLInstallationDate = async (
+  applicationId: number | string,
+  token: string
+): Promise<{ status: string; data?: any; message: string }> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.BNPLApplicationInstallationDateAccept(applicationId),
+    "PUT",
+    undefined,
+    token
+  );
+};
+
+// PUT /api/admin/bnpl/applications/{id}/installation-date/reject
+export const rejectBNPLInstallationDate = async (
+  applicationId: number | string,
+  token: string
+): Promise<{ status: string; data?: any; message: string }> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.BNPLApplicationInstallationDateReject(applicationId),
+    "PUT",
+    undefined,
+    token
+  );
+};
+
+// PUT /api/admin/bnpl/settings
+export const updateBNPLSettings = async (
+  payload: {
+    interest_rate_percentage?: number;
+    min_down_percentage?: number;
+    management_fee_percentage?: number;
+    legal_fee_percentage?: number;
+    insurance_fee_percentage?: number;
+    minimum_loan_amount?: number;
+    loan_durations?: number[];
+  },
+  token: string
+): Promise<{ status: string; data?: any; message: string }> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.BNPLSettingsUpdate,
+    "PUT",
+    payload,
+    token
+  );
+};
+
+// POST /api/admin/bnpl/guarantor-form - upload PDF (FormData: guarantor_form)
+export const uploadBNPLGuarantorForm = async (
+  file: File,
+  token: string
+): Promise<{ status: string; data?: any; message: string }> => {
+  const formData = new FormData();
+  formData.append("guarantor_form", file);
+  const res = await axios.post(
+    API_ENDPOINTS.ADMIN.BNPLGuarantorFormUpload,
+    formData,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+  return res.data;
+};
+
+// POST /api/admin/site/banner - upload home promo banner (FormData: banner)
+export const uploadSiteBanner = async (
+  file: File,
+  token: string
+): Promise<{ status: string; data?: { url?: string; path?: string }; message: string }> => {
+  const formData = new FormData();
+  formData.append("banner", file);
+  const res = await axios.post(
+    API_ENDPOINTS.ADMIN.SiteBannerUpload,
+    formData,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+  return res.data;
+};
+
+// DELETE /api/admin/site/banner - remove home promo banner
+export const deleteSiteBanner = async (token: string): Promise<{ status: string; message: string }> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.SiteBannerDelete,
+    "DELETE",
+    undefined,
     token
   );
 };

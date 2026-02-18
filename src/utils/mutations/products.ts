@@ -7,7 +7,7 @@ export const addProduct = async (
     title: string;
     category_id: number;
     price: number;
-    brand_id?: number;
+    brand_id?: number | null;
     discount_price?: number;
     discount_end_date?: string;
     stock?: string;
@@ -27,9 +27,11 @@ export const addProduct = async (
   formData.append("category_id", data.category_id.toString());
   formData.append("price", data.price.toString());
 
-  // Optional fields
-  if (data.brand_id !== undefined)
+  // Optional fields (brand_id nullable)
+  if (data.brand_id !== undefined && data.brand_id !== null)
     formData.append("brand_id", data.brand_id.toString());
+  else if (data.brand_id === null)
+    formData.append("brand_id", "");
   if (data.discount_price !== undefined)
     formData.append("discount_price", data.discount_price.toString());
   if (data.discount_end_date)
