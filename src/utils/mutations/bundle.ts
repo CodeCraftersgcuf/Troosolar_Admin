@@ -8,6 +8,18 @@ export type CustomAppliancePayload = {
   estimated_daily_hours_usage?: number;
 };
 
+type BundleItemDetail = {
+  product_id: number;
+  quantity?: number;
+  rate_override?: number | null;
+};
+
+type BundleMaterialDetail = {
+  material_id: number;
+  quantity?: number;
+  rate_override?: number | null;
+};
+
 type BundleProductPayload = {
   title?: string;
   bundle_type?: string;
@@ -16,12 +28,13 @@ type BundleProductPayload = {
   discount_price?: number;
   discount_end_date?: string;
   featured_image?: File;
-  items?: number[]; // array of product IDs
+  items?: number[];
+  items_detail?: BundleItemDetail[];
+  materials_detail?: BundleMaterialDetail[];
   custom_services?: {
     title: string;
     service_amount: number;
   }[];
-  // Extended bundle fields (spreadsheet / solar specs)
   product_model?: string;
   system_capacity_display?: string;
   detailed_description?: string;
@@ -32,6 +45,7 @@ type BundleProductPayload = {
   total_output?: string;
   total_load?: string | null;
   custom_appliances?: CustomAppliancePayload[];
+  specifications?: Record<string, string>;
 };
 
 // Add Bundle (mutation)
@@ -61,9 +75,27 @@ export const addBundle = async (
     formData.append("featured_image", data.featured_image);
   }
 
-  if (data.items && data.items.length > 0) {
+  if (data.items_detail && data.items_detail.length > 0) {
+    data.items_detail.forEach((item, i) => {
+      formData.append(`items_detail[${i}][product_id]`, String(item.product_id));
+      formData.append(`items_detail[${i}][quantity]`, String(item.quantity ?? 1));
+      if (item.rate_override != null) {
+        formData.append(`items_detail[${i}][rate_override]`, String(item.rate_override));
+      }
+    });
+  } else if (data.items && data.items.length > 0) {
     data.items.forEach((itemId, index) => {
       formData.append(`items[${index}]`, itemId.toString());
+    });
+  }
+
+  if (data.materials_detail && data.materials_detail.length > 0) {
+    data.materials_detail.forEach((mat, i) => {
+      formData.append(`materials_detail[${i}][material_id]`, String(mat.material_id));
+      formData.append(`materials_detail[${i}][quantity]`, String(mat.quantity ?? 1));
+      if (mat.rate_override != null) {
+        formData.append(`materials_detail[${i}][rate_override]`, String(mat.rate_override));
+      }
     });
   }
 
@@ -89,6 +121,10 @@ export const addBundle = async (
 
   if (data.custom_appliances && data.custom_appliances.length > 0) {
     formData.append("custom_appliances", JSON.stringify(data.custom_appliances));
+  }
+
+  if (data.specifications && Object.keys(data.specifications).length > 0) {
+    formData.append("specifications", JSON.stringify(data.specifications));
   }
 
   return await apiCall(
@@ -127,19 +163,34 @@ export const updateBundle = async (
     formData.append("featured_image", data.featured_image);
   }
 
-  if (data.items && data.items.length > 0) {
+  if (data.items_detail && data.items_detail.length > 0) {
+    data.items_detail.forEach((item, i) => {
+      formData.append(`items_detail[${i}][product_id]`, String(item.product_id));
+      formData.append(`items_detail[${i}][quantity]`, String(item.quantity ?? 1));
+      if (item.rate_override != null) {
+        formData.append(`items_detail[${i}][rate_override]`, String(item.rate_override));
+      }
+    });
+  } else if (data.items && data.items.length > 0) {
     data.items.forEach((itemId, index) => {
       formData.append(`items[${index}]`, itemId.toString());
     });
   }
 
-  if (data.custom_services && data.custom_services.length > 0) {
-    data.custom_services.forEach((service, index) => {
-      formData.append(`custom_services[${index}][title]`, service.title);
-      formData.append(
-        `custom_services[${index}][service_amount]`,
-        service.service_amount.toString()
-      );
+  if (data.materials_detail && data.materials_detail.length > 0) {
+    data.materials_detail.forEach((mat, i) => {
+      formData.append(`materials_detail[${i}][material_id]`, String(mat.material_id));
+      formData.append(`materials_detail[${i}][quantity]`, String(mat.quantity ?? 1));
+      if (mat.rate_override != null) {
+        formData.append(`materials_detail[${i}][rate_override]`, String(mat.rate_override));
+      }
+    });
+  }
+
+  if (data.custom_services !== undefined && Array.isArray(data.custom_services)) {
+    data.custom_services.forEach((svc, i) => {
+      formData.append(`custom_services[${i}][title]`, svc.title || "");
+      formData.append(`custom_services[${i}][service_amount]`, String(svc.service_amount ?? 0));
     });
   }
 
@@ -155,6 +206,10 @@ export const updateBundle = async (
 
   if (data.custom_appliances && data.custom_appliances.length > 0) {
     formData.append("custom_appliances", JSON.stringify(data.custom_appliances));
+  }
+
+  if (data.specifications && Object.keys(data.specifications).length > 0) {
+    formData.append("specifications", JSON.stringify(data.specifications));
   }
 
   return await apiCall(

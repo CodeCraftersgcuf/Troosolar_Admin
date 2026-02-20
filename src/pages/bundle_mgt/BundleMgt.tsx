@@ -13,6 +13,8 @@ import {
 } from "../../utils/mutations/bundleMaterials";
 import { getAllMaterials } from "../../utils/queries/materials";
 import { getAllBrands } from "../../utils/queries/brands";
+import { getSingleBundle } from "../../utils/queries/bundle";
+import { updateMaterial } from "../../utils/mutations/materials";
 
 // Types
 interface ApiBrand {
@@ -20,6 +22,22 @@ interface ApiBrand {
   title: string;
   icon?: string;
   category_id?: number;
+}
+
+interface BundleSpecifications {
+  company_oem?: string;
+  inverter_capacity_kva?: string;
+  voltage?: string;
+  battery_type?: string;
+  battery_capacity_kwh?: string;
+  inverter_warranty?: string;
+  battery_warranty?: string;
+  solar_panel_capacity_w?: string;
+  solar_panel_capacity_kw?: string;
+  backup_time_range?: string;
+  solar_panel_type?: string;
+  solar_panels_wattage?: string;
+  solar_panels_warranty?: string;
 }
 
 interface Bundle {
@@ -36,11 +54,14 @@ interface Bundle {
   bundleItems?: any[];
   customServices?: any[];
   featured_image?: string;
+  featured_image_url?: string;
   detailed_description?: string;
   product_model?: string;
+  system_capacity_display?: string;
   what_is_inside_bundle_text?: string;
   what_bundle_powers_text?: string;
   backup_time_description?: string;
+  specifications?: BundleSpecifications | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -98,12 +119,17 @@ const BundleMgt = () => {
     inver_rating: "",
     total_output: "",
     total_load: "",
+    system_capacity_display: "",
     description: "",
     product_model: "",
     what_is_inside: "",
     what_it_powers: "",
     backup_time_description: "",
   });
+  // Dynamic specification rows: [{id, key, value}]
+  const [specRows, setSpecRows] = useState<{ id: number; key: string; value: string }[]>([]);
+  const specDragIdx = React.useRef<number | null>(null);
+  const specDragOverIdx = React.useRef<number | null>(null);
   const [featuredImage, setFeaturedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
@@ -128,6 +154,19 @@ const BundleMgt = () => {
     id: number;
     name: string;
   } | null>(null);
+
+  // Order List modal states
+  const [showOrderListModal, setShowOrderListModal] = useState(false);
+  const [orderListBundle, setOrderListBundle] = useState<Bundle | null>(null);
+  const [orderListTab, setOrderListTab] = useState<"orderlist" | "invoice">("orderlist");
+
+  // Editable order list state — keyed by "mat-{id}"
+  const [editMatRate, setEditMatRate] = useState<Record<string, string>>({});
+  const [editOrderItems, setEditOrderItems] = useState<{ id: number; title: string; amount: string }[]>([]);
+  const [editSvc, setEditSvc] = useState<{ id: number; title: string; amount: string }[]>([]);
+  const [orderListDirty, setOrderListDirty] = useState(false);
+  const [savingOrderList, setSavingOrderList] = useState(false);
+  const OL_PREFIX = "[OL]";
 
   const token = Cookies.get("token") || "";
   const queryClient = useQueryClient();
@@ -158,11 +197,11 @@ const BundleMgt = () => {
   const allMaterials: Material[] =
     (materialsData as any)?.data || (materialsData as any) || [];
 
-  // Fetch brands for bundle form
+  // Fetch brands for bundle form (fetch always so it's ready when modal opens)
   const { data: brandsData } = useQuery({
     queryKey: ["brands"],
     queryFn: () => getAllBrands(token),
-    enabled: !!token && showBundleModal,
+    enabled: !!token,
   });
   const apiBrands: ApiBrand[] = (brandsData as any)?.data || [];
 
@@ -175,6 +214,67 @@ const BundleMgt = () => {
     queryFn: () => getBundleMaterials(selectedBundle!.id, token),
     enabled: !!token && !!selectedBundle && showMaterialsModal,
   });
+
+  // Fetch full bundle details for Order List modal
+  const {
+    data: bundleDetailsData,
+    isLoading: bundleDetailsLoading,
+  } = useQuery({
+    queryKey: ["bundle-details", orderListBundle?.id],
+    queryFn: () => getSingleBundle(String(orderListBundle!.id), token),
+    enabled: !!token && !!orderListBundle && showOrderListModal,
+  });
+
+  const bundleDetails: any = (bundleDetailsData as any)?.data || null;
+
+  // Initialize editable state when bundle details load
+  React.useEffect(() => {
+    if (!bundleDetails) return;
+
+    const matRateMap: Record<string, string> = {};
+    (bundleDetails.bundle_materials || []).forEach((bm: any) => {
+      const key = `mat-${bm.material_id}`;
+      const rate = bm.rate_override ?? bm.material?.selling_rate ?? bm.material?.rate ?? 0;
+      matRateMap[key] = String(rate);
+    });
+    setEditMatRate(matRateMap);
+
+    // ── 1. Parse custom_services → [OL] order items + invoice fees ──
+    const allServices = (bundleDetails.custom_services || []) as any[];
+    const olItems: { id: number; title: string; amount: string }[] = [];
+    const feeItems: { id: number; title: string; amount: string }[] = [];
+    allServices.forEach((svc: any) => {
+      const rawTitle = svc.title || "";
+      if (rawTitle.startsWith(OL_PREFIX)) {
+        const stripped = rawTitle.slice(OL_PREFIX.length).trim();
+        if (stripped) {
+          olItems.push({ id: svc.id, title: stripped, amount: String(svc.service_amount || 0) });
+        }
+      } else {
+        feeItems.push({ id: svc.id, title: rawTitle, amount: String(svc.service_amount || 0) });
+      }
+    });
+
+    // ── 2. If no valid [OL] items saved yet, seed from bundle_items / product_model ──
+    if (olItems.length === 0) {
+      const biArr = (bundleDetails.bundle_items || []) as any[];
+      biArr.forEach((bi: any, idx: number) => {
+        const prodTitle = bi.product?.title || bi.product?.name || bi.title || bi.name || "";
+        if (prodTitle.trim()) {
+          const rate = bi.rate_override ?? bi.product?.price ?? 0;
+          olItems.push({ id: Date.now() + idx, title: prodTitle, amount: String(parseFloat(String(rate)) || 0) });
+        }
+      });
+      if (olItems.length === 0 && bundleDetails.product_model) {
+        String(bundleDetails.product_model).split("/").map((s: string) => s.trim()).filter(Boolean)
+          .forEach((part: string, idx: number) => olItems.push({ id: Date.now() + idx, title: part, amount: "0" }));
+      }
+    }
+
+    setEditOrderItems(olItems);
+    setEditSvc(feeItems);
+    setOrderListDirty(false);
+  }, [bundleDetails]);
 
   const bundleMaterials: BundleMaterial[] =
     (bundleMaterialsData as any)?.data || (bundleMaterialsData as any) || [];
@@ -248,6 +348,28 @@ const BundleMgt = () => {
     },
   });
 
+  // Update material selling_rate inline from Order List
+  // @ts-ignore – kept for future use
+  const updateMaterialRateMutation = useMutation({
+    mutationFn: ({ materialId, selling_rate }: { materialId: number; selling_rate: number }) =>
+      updateMaterial(materialId, { selling_rate }, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundle-details"] });
+      queryClient.invalidateQueries({ queryKey: ["materials"] });
+    },
+  });
+
+  // Update bundle-material quantity inline from Order List
+  // @ts-ignore – kept for future use
+  const updateBundleMaterialQtyMutation = useMutation({
+    mutationFn: ({ bundleId, materialId, quantity }: { bundleId: number; materialId: number; quantity: number }) =>
+      updateBundleMaterial(bundleId, materialId, { quantity }, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bundle-details"] });
+      queryClient.invalidateQueries({ queryKey: ["bundle-materials"] });
+    },
+  });
+
   // Form handlers
   const resetBundleForm = () => {
     setBundleFormData({
@@ -259,12 +381,14 @@ const BundleMgt = () => {
       inver_rating: "",
       total_output: "",
       total_load: "",
+      system_capacity_display: "",
       description: "",
       product_model: "",
       what_is_inside: "",
       what_it_powers: "",
       backup_time_description: "",
     });
+    setSpecRows([]);
     setFeaturedImage(null);
     setImagePreview(null);
     setEditingBundle(null);
@@ -274,6 +398,7 @@ const BundleMgt = () => {
     if (bundle) {
       setEditingBundle(bundle);
       const brandId = bundle.brand_id ?? bundle.brand?.id ?? "";
+      const sp = bundle.specifications ?? {};
       setBundleFormData({
         title: bundle.title,
         bundle_type: bundle.bundle_type,
@@ -283,14 +408,21 @@ const BundleMgt = () => {
         inver_rating: bundle.inver_rating || "",
         total_output: bundle.total_output || "",
         total_load: bundle.total_load || "",
+        system_capacity_display: bundle.system_capacity_display || "",
         description: bundle.detailed_description || "",
         product_model: bundle.product_model || "",
         what_is_inside: bundle.what_is_inside_bundle_text || "",
         what_it_powers: bundle.what_bundle_powers_text || "",
         backup_time_description: bundle.backup_time_description || "",
       });
-      if (bundle.featured_image) {
-        setImagePreview(bundle.featured_image);
+      // Load specifications as dynamic key-value rows
+      const loadedRows = Object.entries(sp)
+        .filter(([, v]) => v !== "" && v != null)
+        .map(([k, v], idx) => ({ id: Date.now() + idx, key: k, value: String(v) }));
+      setSpecRows(loadedRows);
+      const imgUrl = bundle.featured_image_url || bundle.featured_image || null;
+      if (imgUrl) {
+        setImagePreview(imgUrl);
       }
     } else {
       resetBundleForm();
@@ -329,11 +461,21 @@ const BundleMgt = () => {
     if (bundleFormData.total_output) payload.total_output = bundleFormData.total_output;
     if (bundleFormData.total_load) payload.total_load = bundleFormData.total_load;
     if (bundleFormData.bundle_type === "Inverter + Battery") payload.total_load = null;
+    if (bundleFormData.system_capacity_display) payload.system_capacity_display = bundleFormData.system_capacity_display;
     if (bundleFormData.description) payload.detailed_description = bundleFormData.description;
     if (bundleFormData.product_model) payload.product_model = bundleFormData.product_model;
     if (bundleFormData.what_is_inside) payload.what_is_inside_bundle_text = bundleFormData.what_is_inside;
     if (bundleFormData.what_it_powers) payload.what_bundle_powers_text = bundleFormData.what_it_powers;
     if (bundleFormData.backup_time_description) payload.backup_time_description = bundleFormData.backup_time_description;
+
+    // Build specifications object from dynamic spec rows
+    const specs: Record<string, string> = {};
+    specRows.forEach((row) => {
+      const k = row.key.trim();
+      const v = row.value.trim();
+      if (k && v) specs[k] = v;
+    });
+    payload.specifications = specs;
 
     if (featuredImage) payload.featured_image = featuredImage;
 
@@ -431,6 +573,113 @@ const BundleMgt = () => {
       materialId: deleteMaterialTarget.id,
     });
   };
+
+  // Order List handlers
+  const handleOpenOrderList = (bundle: Bundle) => {
+    setOrderListBundle(bundle);
+    setOrderListTab("orderlist");
+    setShowOrderListModal(true);
+  };
+
+  const handleRemoveMaterialFromBundle = (materialId: number) => {
+    if (!orderListBundle || !bundleDetails) return;
+    const materials_detail = (bundleDetails.bundle_materials || [])
+      .filter((bm: any) => bm.material_id !== materialId)
+      .map((bm: any) => ({
+        material_id: bm.material_id,
+        quantity: bm.quantity ?? 1,
+        rate_override: parseFloat(editMatRate[`mat-${bm.material_id}`]) || null,
+      }));
+    updateBundleMutation.mutate(
+      { id: orderListBundle.id, data: { materials_detail, total_price: orderListBundle.total_price, discount_price: orderListBundle.discount_price ?? orderListBundle.total_price, title: orderListBundle.title } as any },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ["bundle-details", orderListBundle.id] });
+        },
+      }
+    );
+  };
+
+  const handleSaveOrderList = () => {
+    if (!orderListBundle || !bundleDetails) return;
+    setSavingOrderList(true);
+
+    const materials_detail = (bundleDetails.bundle_materials || []).map((bm: any) => ({
+      material_id: bm.material_id,
+      quantity: bm.quantity ?? 1,
+      rate_override: parseFloat(editMatRate[`mat-${bm.material_id}`]) || null,
+    }));
+
+    const orderItems = editOrderItems
+      .filter((s) => s.title.trim() !== "")
+      .map((s) => ({
+        title: `${OL_PREFIX}${s.title.trim()}`,
+        service_amount: parseFloat(s.amount) || 0,
+      }));
+
+    const feeItems = editSvc
+      .filter((s) => s.title.trim() !== "")
+      .map((s) => ({
+        title: s.title.trim(),
+        service_amount: parseFloat(s.amount) || 0,
+      }));
+
+    const custom_services = [...orderItems, ...feeItems];
+
+    const payload: any = {
+      materials_detail,
+      custom_services,
+      total_price: orderListBundle.total_price,
+      discount_price: orderListBundle.discount_price ?? orderListBundle.total_price,
+      title: orderListBundle.title,
+    };
+
+    updateBundleMutation.mutate(
+      {
+        id: orderListBundle.id,
+        data: payload,
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ["bundle-details", orderListBundle.id] });
+          queryClient.invalidateQueries({ queryKey: ["bundles"] });
+          setEditOrderItems(orderItems.map((s, i) => ({ id: Date.now() + i, title: s.title.slice(OL_PREFIX.length), amount: String(s.service_amount) })));
+          setEditSvc(feeItems.map((s, i) => ({ id: Date.now() + 1000 + i, title: s.title, amount: String(s.service_amount) })));
+          setOrderListDirty(false);
+          setSavingOrderList(false);
+          alert("Changes saved successfully!");
+        },
+        onError: (err: any) => {
+          setSavingOrderList(false);
+          const msg = err?.response?.data?.message || err?.message || "Failed to save changes.";
+          alert(`Save failed: ${msg}`);
+        },
+      }
+    );
+  };
+
+  const handleAddOrderItem = () => {
+    setEditOrderItems((prev) => [...prev, { id: Date.now(), title: "", amount: "0" }]);
+    setOrderListDirty(true);
+  };
+
+  const handleRemoveOrderItem = (idx: number) => {
+    setEditOrderItems((prev) => prev.filter((_, i) => i !== idx));
+    setOrderListDirty(true);
+  };
+
+  const handleAddService = () => {
+    setEditSvc((prev) => [...prev, { id: Date.now(), title: "", amount: "0" }]);
+    setOrderListDirty(true);
+  };
+
+  const handleRemoveService = (idx: number) => {
+    setEditSvc((prev) => prev.filter((_, i) => i !== idx));
+    setOrderListDirty(true);
+  };
+
+  const formatNaira = (val: number) =>
+    `₦${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
     <div className="bg-[#F5F7FF] min-h-screen">
@@ -574,7 +823,13 @@ const BundleMgt = () => {
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center justify-center space-x-2">
+                          <div className="flex items-center justify-center space-x-2 flex-wrap gap-y-2">
+                            <button
+                              onClick={() => handleOpenOrderList(bundle)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer"
+                            >
+                              Order List
+                            </button>
                             <button
                               onClick={() => handleManageMaterials(bundle)}
                               className="bg-[#E8A91D] hover:bg-[#d89a1a] text-white px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer"
@@ -608,10 +863,10 @@ const BundleMgt = () => {
       {/* Bundle Modal */}
       {showBundleModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl p-6 w-full max-w-4xl max-h-[92vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">
-                {editingBundle ? "Edit Bundle" : "Add Bundle"}
+                {editingBundle ? `Edit Bundle — ${editingBundle.title}` : "Add Bundle"}
               </h2>
               <button
                 onClick={() => {
@@ -626,236 +881,285 @@ const BundleMgt = () => {
               </button>
             </div>
             <form onSubmit={handleBundleSubmit}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={bundleFormData.title}
-                    onChange={(e) =>
-                      setBundleFormData({ ...bundleFormData, title: e.target.value })
-                    }
-                    placeholder="e.g., Y1.2kVA+1.3kWh"
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
-                </div>
+              <div className="space-y-5">
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Bundle Type <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    required
-                    value={bundleFormData.bundle_type}
-                    onChange={(e) =>
-                      setBundleFormData({ ...bundleFormData, bundle_type: e.target.value })
-                    }
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  >
-                    <option value="Inverter + Battery">Inverter + Battery</option>
-                    <option value="Solar+Inverter+Battery">Solar+Inverter+Battery</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Brand
-                  </label>
-                  <select
-                    value={bundleFormData.brand_id === "" ? "" : String(bundleFormData.brand_id)}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setBundleFormData({
-                        ...bundleFormData,
-                        brand_id: v === "" ? "" : (parseInt(v, 10) as number),
-                      });
-                    }}
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  >
-                    <option value="">No brand</option>
-                    {apiBrands.map((brand) => (
-                      <option key={brand.id} value={brand.id}>
-                        {brand.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Total Price <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      step="0.01"
-                      value={bundleFormData.total_price}
-                      onChange={(e) =>
-                        setBundleFormData({ ...bundleFormData, total_price: e.target.value })
-                      }
-                      className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Discount Price
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={bundleFormData.discount_price}
-                      onChange={(e) =>
-                        setBundleFormData({ ...bundleFormData, discount_price: e.target.value })
-                      }
-                      className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    />
+                {/* ── Section 1: Basic Info ── */}
+                <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Basic Info</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="col-span-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Title <span className="text-red-500">*</span></label>
+                      <input type="text" required value={bundleFormData.title}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, title: e.target.value })}
+                        placeholder="e.g., LitePower1213"
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Bundle Type <span className="text-red-500">*</span></label>
+                      <select required value={bundleFormData.bundle_type}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, bundle_type: e.target.value })}
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="Inverter + Battery">Inverter + Battery</option>
+                        <option value="Solar+Inverter+Battery">Solar+Inverter+Battery</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
+                      <select
+                        value={bundleFormData.brand_id === "" ? "" : String(bundleFormData.brand_id)}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setBundleFormData({ ...bundleFormData, brand_id: v === "" ? "" : (parseInt(v, 10) as number) });
+                        }}
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="">No brand</option>
+                        {apiBrands.map((brand) => (
+                          <option key={brand.id} value={brand.id}>{brand.title}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">System Capacity Display</label>
+                      <input type="text" value={bundleFormData.system_capacity_display}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, system_capacity_display: e.target.value })}
+                        placeholder="e.g. 1.2kVA + 1.3kWh"
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Inverter Rating
-                    </label>
-                    <input
-                      type="text"
-                      value={bundleFormData.inver_rating}
-                      onChange={(e) =>
-                        setBundleFormData({ ...bundleFormData, inver_rating: e.target.value })
-                      }
-                      placeholder="e.g., 1.2 kVA"
-                      className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Total Output
-                    </label>
-                    <input
-                      type="text"
-                      value={bundleFormData.total_output}
-                      onChange={(e) =>
-                        setBundleFormData({ ...bundleFormData, total_output: e.target.value })
-                      }
-                      placeholder="e.g., 1.3 kWh"
-                      className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    />
+                {/* ── Section 2: Pricing ── */}
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Pricing</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Total Price (₦) <span className="text-red-500">*</span></label>
+                      <input type="number" required step="0.01" value={bundleFormData.total_price}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, total_price: e.target.value })}
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Discount Price (₦)</label>
+                      <input type="number" step="0.01" value={bundleFormData.discount_price}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, discount_price: e.target.value })}
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
                   </div>
                 </div>
 
-                {bundleFormData.bundle_type === "Solar+Inverter+Battery" && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Total Load (Solar Panel Wattage)
-                    </label>
-                    <input
-                      type="text"
-                      value={bundleFormData.total_load}
-                      onChange={(e) =>
-                        setBundleFormData({ ...bundleFormData, total_load: e.target.value })
-                      }
-                      placeholder="e.g., 600 W"
-                      className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    />
+                {/* ── Section 3: Technical Ratings ── */}
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Technical Ratings</h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Inverter Rating (kVA)</label>
+                      <input type="text" value={bundleFormData.inver_rating}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, inver_rating: e.target.value })}
+                        placeholder="e.g. 1.2"
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Battery Capacity (kWh)</label>
+                      <input type="text" value={bundleFormData.total_output}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, total_output: e.target.value })}
+                        placeholder="e.g. 1.3"
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    {bundleFormData.bundle_type === "Solar+Inverter+Battery" && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Solar Capacity (kWp)</label>
+                        <input type="text" value={bundleFormData.total_load}
+                          onChange={(e) => setBundleFormData({ ...bundleFormData, total_load: e.target.value })}
+                          placeholder="e.g. 0.6"
+                          className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                      </div>
+                    )}
                   </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={bundleFormData.description}
-                    onChange={(e) =>
-                      setBundleFormData({ ...bundleFormData, description: e.target.value })
-                    }
-                    placeholder="Full description of the bundle and what it powers..."
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Product Model
-                  </label>
-                  <input
-                    type="text"
-                    value={bundleFormData.product_model}
-                    onChange={(e) =>
-                      setBundleFormData({ ...bundleFormData, product_model: e.target.value })
-                    }
-                    placeholder="e.g. OG-1P1K2-T - 1.2kVA Yinergy Inverter / GCL 12100 12V 1.3kWh Battery"
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
+                {/* ── Section 4: Product Model & Content ── */}
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Content & Description</h3>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Product Model</label>
+                    <input type="text" value={bundleFormData.product_model}
+                      onChange={(e) => setBundleFormData({ ...bundleFormData, product_model: e.target.value })}
+                      placeholder="e.g. OG-1P1K2-T - 1.2kVA Yinergy Inverter / GCL 12100 12V 1.3kWh Battery"
+                      className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea rows={3} value={bundleFormData.description}
+                      onChange={(e) => setBundleFormData({ ...bundleFormData, description: e.target.value })}
+                      placeholder="Full description of the bundle and what it powers..."
+                      className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">What is inside the bundle</label>
+                      <textarea rows={2} value={bundleFormData.what_is_inside}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, what_is_inside: e.target.value })}
+                        placeholder="e.g. 1 unit 1.2kVA Inverter, 1 unit 1.3kWh Battery & Installation Materials"
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">What the bundle will power</label>
+                      <textarea rows={2} value={bundleFormData.what_it_powers}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, what_it_powers: e.target.value })}
+                        placeholder="e.g. 6–10 LED bulbs, 1 LED TV, 1 Decoder, 1 Fan, 1 Laptop, Wi-Fi"
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Back-up Time Description</label>
+                    <input type="text" value={bundleFormData.backup_time_description}
+                      onChange={(e) => setBundleFormData({ ...bundleFormData, backup_time_description: e.target.value })}
+                      placeholder="e.g. 1–9 hours depending on load"
+                      className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    What is inside the bundle
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={bundleFormData.what_is_inside}
-                    onChange={(e) =>
-                      setBundleFormData({ ...bundleFormData, what_is_inside: e.target.value })
-                    }
-                    placeholder="e.g. 1 unit 1.2kVA Inverter, 1 unit 1.3kWh Battery & Installation Materials"
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
+                {/* ── Section 5: Specifications (dynamic key-value) ── */}
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Specifications</h3>
+                    <button
+                      type="button"
+                      onClick={() => setSpecRows((prev) => [...prev, { id: Date.now(), key: "", value: "" }])}
+                      className="flex items-center gap-1 bg-[#273E8E] hover:bg-[#1e3270] text-white text-xs px-3 py-1.5 rounded-full transition-colors"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Field
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">Add any specification fields (e.g. "Voltage" → "12V", "Inverter Capacity" → "1.2 kVA").</p>
+
+                  {specRows.length === 0 ? (
+                    <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-lg">
+                      <p className="text-sm text-gray-400">No specifications yet. Click &quot;+ Add Field&quot; to add one.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {/* Header row */}
+                      <div className="grid grid-cols-[auto_1fr_1fr_auto] gap-2 px-1">
+                        <span className="w-6" />
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Field Name</span>
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Value</span>
+                        <span className="w-8" />
+                      </div>
+                      {specRows.map((row, idx) => (
+                        <div
+                          key={row.id}
+                          draggable
+                          onDragStart={() => { specDragIdx.current = idx; }}
+                          onDragEnter={() => { specDragOverIdx.current = idx; }}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => {
+                            const from = specDragIdx.current;
+                            const to = specDragOverIdx.current;
+                            if (from === null || to === null || from === to) return;
+                            setSpecRows((prev) => {
+                              const next = [...prev];
+                              const [moved] = next.splice(from, 1);
+                              next.splice(to, 0, moved);
+                              return next;
+                            });
+                            specDragIdx.current = null;
+                            specDragOverIdx.current = null;
+                          }}
+                          onDragEnd={() => {
+                            specDragIdx.current = null;
+                            specDragOverIdx.current = null;
+                          }}
+                          className="grid grid-cols-[auto_1fr_1fr_auto] gap-2 items-center group rounded-lg hover:bg-gray-100 transition-colors"
+                        >
+                          {/* Drag handle */}
+                          <div
+                            className="w-6 flex flex-col items-center justify-center gap-[3px] cursor-grab active:cursor-grabbing py-2 opacity-40 group-hover:opacity-100 transition-opacity"
+                            title="Drag to reorder"
+                          >
+                            <span className="block w-3.5 h-0.5 bg-gray-500 rounded" />
+                            <span className="block w-3.5 h-0.5 bg-gray-500 rounded" />
+                            <span className="block w-3.5 h-0.5 bg-gray-500 rounded" />
+                          </div>
+                          <input
+                            type="text"
+                            value={row.key}
+                            onChange={(e) => setSpecRows((prev) => prev.map((r, i) => i === idx ? { ...r, key: e.target.value } : r))}
+                            placeholder="e.g. Voltage"
+                            className="border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                          />
+                          <input
+                            type="text"
+                            value={row.value}
+                            onChange={(e) => setSpecRows((prev) => prev.map((r, i) => i === idx ? { ...r, value: e.target.value } : r))}
+                            placeholder="e.g. 12V"
+                            className="border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setSpecRows((prev) => prev.filter((_, i) => i !== idx))}
+                            className="w-8 h-8 flex items-center justify-center text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove field"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Quick-add preset buttons */}
+                  <div className="pt-2 border-t border-gray-200">
+                    <p className="text-xs text-gray-400 mb-2">Quick add common fields:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { key: "Company / OEM", value: "" },
+                        { key: "Voltage", value: "" },
+                        { key: "Inverter Capacity (kVA)", value: "" },
+                        { key: "Inverter Warranty", value: "" },
+                        { key: "Battery Type", value: "" },
+                        { key: "Battery Capacity (kWh)", value: "" },
+                        { key: "Battery Warranty", value: "" },
+                        { key: "Backup Time Range", value: "" },
+                        { key: "Solar Panel Type", value: "" },
+                        { key: "Solar Capacity (kW)", value: "" },
+                        { key: "Solar Panel Wattage", value: "" },
+                        { key: "Solar Panel Warranty", value: "" },
+                      ].map((preset) => {
+                        const alreadyAdded = specRows.some((r) => r.key === preset.key);
+                        return (
+                          <button
+                            key={preset.key}
+                            type="button"
+                            disabled={alreadyAdded}
+                            onClick={() => setSpecRows((prev) => [...prev, { id: Date.now(), key: preset.key, value: preset.value }])}
+                            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                              alreadyAdded
+                                ? "border-gray-200 text-gray-300 cursor-not-allowed"
+                                : "border-[#273E8E] text-[#273E8E] hover:bg-[#273E8E] hover:text-white cursor-pointer"
+                            }`}
+                          >
+                            + {preset.key}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    What the bundle will power
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={bundleFormData.what_it_powers}
-                    onChange={(e) =>
-                      setBundleFormData({ ...bundleFormData, what_it_powers: e.target.value })
-                    }
-                    placeholder="e.g. 6–10 LED bulbs, 1 LED TV, 1 Decoder, 1 Fan, 1 Laptop, Wi-Fi"
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Back-up time description
-                  </label>
-                  <input
-                    type="text"
-                    value={bundleFormData.backup_time_description}
-                    onChange={(e) =>
-                      setBundleFormData({ ...bundleFormData, backup_time_description: e.target.value })
-                    }
-                    placeholder="e.g. 1–9 hours depending on load"
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Featured Image
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  />
+                {/* ── Section 6: Featured Image ── */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Featured Image</label>
+                  <input type="file" accept="image/*" onChange={handleImageChange}
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
                   {imagePreview && (
                     <div className="mt-2">
-                      <img
-                        src={imagePreview}
-                        alt="Preview"
-                        className="w-32 h-32 object-cover rounded-lg border border-gray-200"
-                      />
+                      <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded-lg border border-gray-200" />
                     </div>
                   )}
                 </div>
@@ -924,7 +1228,7 @@ const BundleMgt = () => {
 
       {/* Materials Management Modal */}
       {showMaterialsModal && selectedBundle && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <div>
@@ -946,6 +1250,9 @@ const BundleMgt = () => {
                   onClick={() => {
                     setShowMaterialsModal(false);
                     setSelectedBundle(null);
+                    if (orderListBundle) {
+                      queryClient.invalidateQueries({ queryKey: ["bundle-details", orderListBundle.id] });
+                    }
                   }}
                   className="text-gray-500 hover:text-gray-700"
                 >
@@ -1033,7 +1340,7 @@ const BundleMgt = () => {
 
       {/* Add/Edit Material Modal */}
       {showAddMaterialModal && selectedBundle && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[110] p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-gray-900">
@@ -1134,7 +1441,7 @@ const BundleMgt = () => {
 
       {/* Delete Material Confirmation Modal */}
       {showDeleteMaterialModal && deleteMaterialTarget && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[110] p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Confirm Remove</h2>
             <p className="text-gray-600 mb-6">
@@ -1162,6 +1469,455 @@ const BundleMgt = () => {
           </div>
         </div>
       )}
+
+      {/* Order List & Invoice Modal */}
+      {showOrderListModal && orderListBundle && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Order List & Invoice — {orderListBundle.title}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Manage the items that appear in the customer's order summary and invoice for this bundle.
+                </p>
+              </div>
+              <button
+                onClick={() => { setShowOrderListModal(false); setOrderListBundle(null); }}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 mb-6">
+              <button
+                onClick={() => setOrderListTab("orderlist")}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  orderListTab === "orderlist"
+                    ? "border-[#273E8E] text-[#273E8E]"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Order List
+              </button>
+              <button
+                onClick={() => setOrderListTab("invoice")}
+                className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  orderListTab === "invoice"
+                    ? "border-[#273E8E] text-[#273E8E]"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Invoice
+              </button>
+            </div>
+
+            {bundleDetailsLoading ? (
+              <LoadingSpinner message="Loading bundle details..." />
+            ) : !bundleDetails ? (
+              <p className="text-gray-500 text-center py-8">Could not load bundle details.</p>
+            ) : orderListTab === "orderlist" ? (
+              /* ---- ORDER LIST TAB ---- */
+              <div>
+                {/* Save bar */}
+                {orderListDirty && (
+                  <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-4 flex items-center justify-between">
+                    <span className="text-sm text-yellow-800 font-medium">You have unsaved changes.</span>
+                    <button
+                      onClick={handleSaveOrderList}
+                      disabled={savingOrderList}
+                      className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-5 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {savingOrderList ? "Saving…" : "Save Changes"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Materials Section */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-semibold text-gray-800">Materials (Installation Items)</h3>
+                    <button
+                      onClick={() => {
+                        setSelectedBundle(orderListBundle);
+                        setShowMaterialsModal(true);
+                      }}
+                      className="bg-[#E8A91D] hover:bg-[#d89a1a] text-white px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer"
+                    >
+                      Manage Materials
+                    </button>
+                  </div>
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-[#EBEBEB] border-b">
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black">Item Description</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black w-20">Qty</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black w-16">Unit</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black w-36">Rate (₦)</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black w-32">Total Cost</th>
+                          <th className="px-4 py-3 text-center text-sm font-medium text-black w-24">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(!bundleDetails.bundle_materials || bundleDetails.bundle_materials.length === 0) ? (
+                          <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No materials added. Use &quot;Manage Materials&quot; to add installation materials.</td></tr>
+                        ) : (
+                          bundleDetails.bundle_materials.map((bm: any, idx: number) => {
+                            const mat = bm.material;
+                            const qty = bm.quantity || 1;
+                            const mKey = `mat-${bm.material_id}`;
+                            const rateStr = editMatRate[mKey] ?? String(bm.rate_override ?? mat?.selling_rate ?? mat?.rate ?? 0);
+                            const rate = parseFloat(rateStr) || 0;
+                            const total = rate * qty;
+                            return (
+                              <tr key={bm.id} className={idx % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                                <td className="px-4 py-2 text-sm font-medium text-gray-900">{mat?.name || `Material #${bm.material_id}`}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700 text-center">{qty}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700">{mat?.unit || "Nos"}</td>
+                                <td className="px-4 py-2">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={rateStr}
+                                    onChange={(e) => {
+                                      setEditMatRate((p) => ({ ...p, [mKey]: e.target.value }));
+                                      setOrderListDirty(true);
+                                    }}
+                                    className="w-32 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                                  />
+                                </td>
+                                <td className="px-4 py-2 text-sm font-medium text-gray-700">
+                                  {total > 0 ? formatNaira(total) : <span className="italic text-gray-400">Included</span>}
+                                </td>
+                                <td className="px-4 py-2 text-center">
+                                  <button
+                                    onClick={() => handleRemoveMaterialFromBundle(bm.material_id)}
+                                    className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                  >
+                                    Remove
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* ── Order List Items (editable — maps to customer's Order Summary) ── */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-semibold text-gray-800">Order List Items</h3>
+                    <button
+                      onClick={handleAddOrderItem}
+                      className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer"
+                    >
+                      + Add Item
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">These items appear on the customer&apos;s Order Summary. You can add, edit, or remove items.</p>
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-[#EBEBEB] border-b">
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black">ITEM DESCRIPTION</th>
+                          <th className="px-4 py-3 text-center text-sm font-medium text-black w-16">QTY</th>
+                          <th className="px-4 py-3 text-center text-sm font-medium text-black w-16">UNIT</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium text-black w-32">RATE (₦)</th>
+                          <th className="px-4 py-3 text-center text-sm font-medium text-black w-24">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {editOrderItems.length === 0 ? (
+                          <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No order list items. Click &quot;+ Add Item&quot; to add items shown on the order summary.</td></tr>
+                        ) : (
+                          editOrderItems.map((item, idx) => {
+                            const rate = parseFloat(item.amount) || 0;
+                            return (
+                              <tr key={item.id} className={idx % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                                <td className="px-4 py-2">
+                                  <input
+                                    type="text"
+                                    value={item.title}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setEditOrderItems((prev) => prev.map((s, i) => i === idx ? { ...s, title: val } : s));
+                                      setOrderListDirty(true);
+                                    }}
+                                    placeholder="e.g. 1.2kVA Inverter, 1.3kWh Battery"
+                                    className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                                  />
+                                </td>
+                                <td className="px-4 py-2 text-sm text-center">1</td>
+                                <td className="px-4 py-2 text-sm text-center text-gray-600">Nos</td>
+                                <td className="px-4 py-2">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={item.amount}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setEditOrderItems((prev) => prev.map((s, i) => i === idx ? { ...s, amount: val } : s));
+                                      setOrderListDirty(true);
+                                    }}
+                                    placeholder="0 = Included"
+                                    className="w-28 border border-gray-300 rounded px-2 py-1 text-sm text-right focus:ring-1 focus:ring-blue-500 outline-none"
+                                  />
+                                  {rate === 0 && <span className="text-xs text-gray-400 ml-1 italic">Included</span>}
+                                </td>
+                                <td className="px-4 py-2 text-center">
+                                  <button
+                                    onClick={() => handleRemoveOrderItem(idx)}
+                                    className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                  >
+                                    Remove
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Sub-Total */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex justify-between items-center">
+                  <span className="font-semibold text-gray-800">Bundle Price (Sub-Total)</span>
+                  <span className="text-xl font-bold text-[#273E8E]">{formatNaira(orderListBundle.total_price)}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  These items appear on the customer&apos;s Order Summary. Click &quot;Save Changes&quot; to persist.
+                </p>
+
+                {/* Bottom Save Button */}
+                {orderListDirty && (
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      onClick={handleSaveOrderList}
+                      disabled={savingOrderList}
+                      className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-8 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {savingOrderList ? "Saving…" : "Save All Changes"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* ---- INVOICE TAB (editable fees + preview) ---- */
+              <div>
+                {/* Save bar */}
+                {orderListDirty && (
+                  <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-4 flex items-center justify-between">
+                    <span className="text-sm text-yellow-800 font-medium">You have unsaved changes.</span>
+                    <button
+                      onClick={handleSaveOrderList}
+                      disabled={savingOrderList}
+                      className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-5 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {savingOrderList ? "Saving…" : "Save Changes"}
+                    </button>
+                  </div>
+                )}
+
+                {/* ── Editable Invoice Fees Section ── */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="text-lg font-semibold text-gray-800">Invoice Fees</h3>
+                    <button
+                      onClick={handleAddService}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer"
+                    >
+                      + Add Fee
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">These fees appear on the Invoice alongside the order list items (e.g. Installation Fees, Delivery Fees, Inspection Fees).</p>
+                  <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="bg-[#EBEBEB] border-b">
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black">Fee Name</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black w-40">Amount (₦)</th>
+                          <th className="px-4 py-3 text-center text-sm font-medium text-black w-24">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {editSvc.length === 0 ? (
+                          <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-400">No fees. Click &quot;+ Add Fee&quot; to add invoice fees.</td></tr>
+                        ) : (
+                          editSvc.map((svc, idx) => (
+                            <tr key={svc.id} className={idx % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                              <td className="px-4 py-2">
+                                <input
+                                  type="text"
+                                  value={svc.title}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditSvc((prev) => prev.map((s, i) => i === idx ? { ...s, title: val } : s));
+                                    setOrderListDirty(true);
+                                  }}
+                                  placeholder="e.g. Installation Fees, Delivery Fees"
+                                  className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                              </td>
+                              <td className="px-4 py-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={svc.amount}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditSvc((prev) => prev.map((s, i) => i === idx ? { ...s, amount: val } : s));
+                                    setOrderListDirty(true);
+                                  }}
+                                  className="w-36 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                                />
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                <button
+                                  onClick={() => handleRemoveService(idx)}
+                                  className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Bottom Save for fees */}
+                {orderListDirty && (
+                  <div className="mb-6 flex justify-end">
+                    <button
+                      onClick={handleSaveOrderList}
+                      disabled={savingOrderList}
+                      className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-8 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {savingOrderList ? "Saving…" : "Save All Changes"}
+                    </button>
+                  </div>
+                )}
+
+                {/* ═══ FULL INVOICE PREVIEW (read-only combined view) ═══ */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4">Invoice Preview — {orderListBundle.title}</h3>
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b-2 border-gray-300">
+                        <th className="py-2 text-left text-sm font-bold text-gray-700">ITEM DESCRIPTION</th>
+                        <th className="py-2 text-center text-sm font-bold text-gray-700 w-16">QTY</th>
+                        <th className="py-2 text-center text-sm font-bold text-gray-700 w-16">UNIT</th>
+                        <th className="py-2 text-right text-sm font-bold text-gray-700 w-32">RATE</th>
+                        <th className="py-2 text-right text-sm font-bold text-gray-700 w-28">TOTAL COST</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Order list items */}
+                      {editOrderItems.filter(i => i.title.trim()).map((item, idx) => {
+                        const rate = parseFloat(item.amount) || 0;
+                        return (
+                          <tr key={`inv-ol-${idx}`} className="border-b border-gray-100">
+                            <td className="py-2 text-sm text-gray-800">{item.title}</td>
+                            <td className="py-2 text-sm text-center">1</td>
+                            <td className="py-2 text-sm text-center text-gray-600">Nos</td>
+                            <td className="py-2 text-sm text-right">{rate > 0 ? formatNaira(rate) : <span className="italic text-gray-400">Included</span>}</td>
+                            <td className="py-2 text-sm text-right font-medium">{rate > 0 ? formatNaira(rate) : <span className="italic text-gray-400">Included</span>}</td>
+                          </tr>
+                        );
+                      })}
+
+                      {/* Grouped installation materials cost row */}
+                      {(bundleDetails?.bundle_materials || []).length > 0 && (() => {
+                        let matTotal = 0;
+                        (bundleDetails.bundle_materials || []).forEach((bm: any) => {
+                          const mKey = `mat-${bm.material_id}`;
+                          const qty = bm.quantity || 1;
+                          const rate = parseFloat(editMatRate[mKey] ?? String(bm.rate_override ?? bm.material?.selling_rate ?? bm.material?.rate ?? 0)) || 0;
+                          matTotal += rate * qty;
+                        });
+                        return (
+                          <tr className="border-b border-gray-100 bg-gray-50/50">
+                            <td className="py-2 text-sm text-gray-800">Installation Materials Cost</td>
+                            <td className="py-2 text-sm text-center">1</td>
+                            <td className="py-2 text-sm text-center text-gray-600">Lots</td>
+                            <td className="py-2 text-sm text-right">{matTotal > 0 ? formatNaira(matTotal) : <span className="italic text-gray-400">Included</span>}</td>
+                            <td className="py-2 text-sm text-right font-medium">{matTotal > 0 ? formatNaira(matTotal) : <span className="italic text-gray-400">Included</span>}</td>
+                          </tr>
+                        );
+                      })()}
+
+                      {/* Invoice fee rows */}
+                      {editSvc.filter(s => s.title.trim()).map((svc, idx) => {
+                        const amt = parseFloat(svc.amount) || 0;
+                        const isInspection = /inspection/i.test(svc.title);
+                        return (
+                          <tr key={`inv-fee-${idx}`} className="border-b border-gray-100">
+                            <td className="py-2 text-sm text-gray-800">{svc.title}</td>
+                            <td className="py-2 text-sm text-center">1</td>
+                            <td className="py-2 text-sm text-center text-gray-600">{isInspection ? 'Lots' : 'Nos'}</td>
+                            <td className="py-2 text-sm text-right">{amt > 0 ? formatNaira(amt) : <span className="italic text-gray-400">Included</span>}</td>
+                            <td className="py-2 text-sm text-right font-medium">{amt > 0 ? formatNaira(amt) : <span className="italic text-gray-400">Included</span>}</td>
+                          </tr>
+                        );
+                      })}
+
+                      {editOrderItems.filter(i => i.title.trim()).length === 0 && (bundleDetails?.bundle_materials || []).length === 0 && editSvc.filter(s => s.title.trim()).length === 0 && (
+                        <tr><td colSpan={5} className="py-6 text-center text-gray-400">No items yet. Add order list items from the Order List tab and fees above.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+
+                  {/* Totals */}
+                  {(() => {
+                    const bundlePrice = orderListBundle.total_price;
+                    const feesTotal = editSvc.reduce((s: number, svc: { amount: string }) => s + (parseFloat(svc.amount) || 0), 0);
+                    const netTotal = bundlePrice + feesTotal;
+                    const vat = netTotal * 0.075;
+                    const grandTotal = netTotal + vat;
+                    return (
+                      <div className="mt-4 space-y-2 border-t-2 border-gray-300 pt-4">
+                        <div className="flex justify-between text-sm">
+                          <span className="font-bold text-gray-800">Net-Total</span>
+                          <span className="font-bold">{formatNaira(netTotal)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">VAT (7.5%)</span>
+                          <span className="font-semibold">{formatNaira(vat)}</span>
+                        </div>
+                        <div className="flex justify-between text-lg font-bold border-t pt-2 text-red-600">
+                          <span>Grand-Total</span>
+                          <span>{formatNaira(grandTotal)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <p className="text-xs text-gray-500 mt-3">
+                  Manage fees above. Order list items are managed from the Order List tab.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
