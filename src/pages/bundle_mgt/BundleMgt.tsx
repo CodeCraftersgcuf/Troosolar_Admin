@@ -15,6 +15,8 @@ import { getAllMaterials } from "../../utils/queries/materials";
 import { getAllBrands } from "../../utils/queries/brands";
 import { getSingleBundle } from "../../utils/queries/bundle";
 import { updateMaterial } from "../../utils/mutations/materials";
+import { getCalculatorSettings } from "../../utils/queries/calculator";
+import { updateCalculatorSettings } from "../../utils/mutations/calculator";
 
 // Types
 interface ApiBrand {
@@ -44,6 +46,7 @@ interface Bundle {
   id: number;
   title: string;
   bundle_type: string;
+  is_available?: boolean;
   brand_id?: number | null;
   brand?: { id: number; title: string } | null;
   total_price: number;
@@ -103,16 +106,21 @@ interface Material {
   };
 }
 
+const DEFAULT_BUNDLE_TYPES = ["Inverter + Battery", "Solar+Inverter+Battery"];
+
 const BundleMgt = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [bundleTypeFilter, setBundleTypeFilter] = useState<string>("all");
+  const [bundleTypeOptions, setBundleTypeOptions] = useState<string[]>(DEFAULT_BUNDLE_TYPES);
+  const [newBundleType, setNewBundleType] = useState("");
   
   // Modal states
   const [showBundleModal, setShowBundleModal] = useState(false);
   const [editingBundle, setEditingBundle] = useState<Bundle | null>(null);
   const [bundleFormData, setBundleFormData] = useState({
     title: "",
-    bundle_type: "Inverter + Battery",
+    bundle_type: DEFAULT_BUNDLE_TYPES[0],
+    is_available: true,
     brand_id: "" as string | number,
     total_price: "",
     discount_price: "",
@@ -162,7 +170,7 @@ const BundleMgt = () => {
 
   // Editable order list state — keyed by "mat-{id}"
   const [editMatRate, setEditMatRate] = useState<Record<string, string>>({});
-  const [editOrderItems, setEditOrderItems] = useState<{ id: number; title: string; amount: string }[]>([]);
+  const [editOrderItems, setEditOrderItems] = useState<{ id: number; title: string; amount: string; quantity: string; unit: string; quantityApplies: boolean }[]>([]);
   const [editSvc, setEditSvc] = useState<{ id: number; title: string; amount: string }[]>([]);
   const [orderListDirty, setOrderListDirty] = useState(false);
   const [savingOrderList, setSavingOrderList] = useState(false);
@@ -170,6 +178,31 @@ const BundleMgt = () => {
 
   const token = Cookies.get("token") || "";
   const queryClient = useQueryClient();
+
+  const { data: calculatorSettingsData } = useQuery({
+    queryKey: ["calculator-settings"],
+    queryFn: () => getCalculatorSettings(token),
+    enabled: !!token,
+  });
+
+  React.useEffect(() => {
+    const payload = (calculatorSettingsData as any)?.data || {};
+    const configured = Array.isArray(payload?.bundle_types)
+      ? payload.bundle_types
+      : DEFAULT_BUNDLE_TYPES;
+    const normalized = configured
+      .map((v: unknown) => String(v ?? "").trim())
+      .filter(Boolean);
+    setBundleTypeOptions(normalized.length ? Array.from(new Set(normalized)) : DEFAULT_BUNDLE_TYPES);
+  }, [calculatorSettingsData]);
+
+  const saveBundleTypesMutation = useMutation({
+    mutationFn: (types: string[]) => updateCalculatorSettings({ bundle_types: types }, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calculator-settings"] });
+      setNewBundleType("");
+    },
+  });
 
   // Fetch bundles
   const {
@@ -241,14 +274,26 @@ const BundleMgt = () => {
 
     // ── 1. Parse custom_services → [OL] order items + invoice fees ──
     const allServices = (bundleDetails.custom_services || []) as any[];
-    const olItems: { id: number; title: string; amount: string }[] = [];
+    const olItems: { id: number; title: string; amount: string; quantity: string; unit: string; quantityApplies: boolean }[] = [];
     const feeItems: { id: number; title: string; amount: string }[] = [];
     allServices.forEach((svc: any) => {
       const rawTitle = svc.title || "";
       if (rawTitle.startsWith(OL_PREFIX)) {
         const stripped = rawTitle.slice(OL_PREFIX.length).trim();
         if (stripped) {
-          olItems.push({ id: svc.id, title: stripped, amount: String(svc.service_amount || 0) });
+          const qtyRaw = svc.quantity ?? 1;
+          const qtyAppliesRaw = svc.quantity_applies ?? svc.quantity_applicable ?? svc.is_quantity_applicable;
+          const qtyApplies = qtyAppliesRaw === undefined || qtyAppliesRaw === null
+            ? true
+            : !(String(qtyAppliesRaw).toLowerCase() === "false" || String(qtyAppliesRaw) === "0");
+          olItems.push({
+            id: svc.id,
+            title: stripped,
+            amount: String(svc.service_amount || 0),
+            quantity: String(qtyRaw || 1),
+            unit: String(svc.unit || "Nos"),
+            quantityApplies: qtyApplies,
+          });
         }
       } else {
         feeItems.push({ id: svc.id, title: rawTitle, amount: String(svc.service_amount || 0) });
@@ -262,12 +307,19 @@ const BundleMgt = () => {
         const prodTitle = bi.product?.title || bi.product?.name || bi.title || bi.name || "";
         if (prodTitle.trim()) {
           const rate = bi.rate_override ?? bi.product?.price ?? 0;
-          olItems.push({ id: Date.now() + idx, title: prodTitle, amount: String(parseFloat(String(rate)) || 0) });
+          olItems.push({
+            id: Date.now() + idx,
+            title: prodTitle,
+            amount: String(parseFloat(String(rate)) || 0),
+            quantity: String(bi.quantity || 1),
+            unit: "Nos",
+            quantityApplies: true,
+          });
         }
       });
       if (olItems.length === 0 && bundleDetails.product_model) {
         String(bundleDetails.product_model).split("/").map((s: string) => s.trim()).filter(Boolean)
-          .forEach((part: string, idx: number) => olItems.push({ id: Date.now() + idx, title: part, amount: "0" }));
+          .forEach((part: string, idx: number) => olItems.push({ id: Date.now() + idx, title: part, amount: "0", quantity: "1", unit: "Nos", quantityApplies: true }));
       }
     }
 
@@ -374,7 +426,8 @@ const BundleMgt = () => {
   const resetBundleForm = () => {
     setBundleFormData({
       title: "",
-      bundle_type: "Inverter + Battery",
+      bundle_type: bundleTypeOptions[0] || DEFAULT_BUNDLE_TYPES[0],
+      is_available: true,
       brand_id: "",
       total_price: "",
       discount_price: "",
@@ -402,6 +455,7 @@ const BundleMgt = () => {
       setBundleFormData({
         title: bundle.title,
         bundle_type: bundle.bundle_type,
+        is_available: bundle.is_available !== false,
         brand_id: brandId,
         total_price: bundle.total_price.toString(),
         discount_price: bundle.discount_price?.toString() || "",
@@ -415,6 +469,9 @@ const BundleMgt = () => {
         what_it_powers: bundle.what_bundle_powers_text || "",
         backup_time_description: bundle.backup_time_description || "",
       });
+      if (bundle.bundle_type && !bundleTypeOptions.includes(bundle.bundle_type)) {
+        setBundleTypeOptions((prev) => [...prev, bundle.bundle_type]);
+      }
       // Load specifications as dynamic key-value rows
       const loadedRows = Object.entries(sp)
         .filter(([, v]) => v !== "" && v != null)
@@ -428,6 +485,18 @@ const BundleMgt = () => {
       resetBundleForm();
     }
     setShowBundleModal(true);
+  };
+
+  const handleAddBundleType = () => {
+    const trimmed = newBundleType.trim();
+    if (!trimmed) return;
+    if (bundleTypeOptions.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
+      setNewBundleType("");
+      return;
+    }
+    const updated = [...bundleTypeOptions, trimmed];
+    setBundleTypeOptions(updated);
+    saveBundleTypesMutation.mutate(updated);
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -447,6 +516,7 @@ const BundleMgt = () => {
     const payload: any = {
       title: bundleFormData.title,
       bundle_type: bundleFormData.bundle_type,
+      is_available: bundleFormData.is_available,
       total_price: parseFloat(bundleFormData.total_price) || 0,
       discount_price: parseFloat(bundleFormData.discount_price) || 0,
     };
@@ -615,6 +685,9 @@ const BundleMgt = () => {
       .map((s) => ({
         title: `${OL_PREFIX}${s.title.trim()}`,
         service_amount: parseFloat(s.amount) || 0,
+        quantity: Math.max(1, parseInt(s.quantity || "1", 10) || 1),
+        unit: (s.unit || "Nos").trim() || "Nos",
+        quantity_applies: !!s.quantityApplies,
       }));
 
     const feeItems = editSvc
@@ -643,7 +716,14 @@ const BundleMgt = () => {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ["bundle-details", orderListBundle.id] });
           queryClient.invalidateQueries({ queryKey: ["bundles"] });
-          setEditOrderItems(orderItems.map((s, i) => ({ id: Date.now() + i, title: s.title.slice(OL_PREFIX.length), amount: String(s.service_amount) })));
+          setEditOrderItems(orderItems.map((s, i) => ({
+            id: Date.now() + i,
+            title: s.title.slice(OL_PREFIX.length),
+            amount: String(s.service_amount),
+            quantity: String(s.quantity || 1),
+            unit: String(s.unit || "Nos"),
+            quantityApplies: s.quantity_applies !== false,
+          })));
           setEditSvc(feeItems.map((s, i) => ({ id: Date.now() + 1000 + i, title: s.title, amount: String(s.service_amount) })));
           setOrderListDirty(false);
           setSavingOrderList(false);
@@ -659,7 +739,7 @@ const BundleMgt = () => {
   };
 
   const handleAddOrderItem = () => {
-    setEditOrderItems((prev) => [...prev, { id: Date.now(), title: "", amount: "0" }]);
+    setEditOrderItems((prev) => [...prev, { id: Date.now(), title: "", amount: "0", quantity: "1", unit: "Nos", quantityApplies: true }]);
     setOrderListDirty(true);
   };
 
@@ -723,9 +803,27 @@ const BundleMgt = () => {
               className="px-4 py-3.5 border border-[#00000080] rounded-lg text-[15px] bg-white focus:outline-none shadow-[0_2px_6px_rgba(0,0,0,0.05)]"
             >
               <option value="all">All Types</option>
-              <option value="Inverter + Battery">Inverter + Battery</option>
-              <option value="Solar+Inverter+Battery">Solar+Inverter+Battery</option>
+              {bundleTypeOptions.map((type) => (
+                <option key={type} value={type}>{type}</option>
+              ))}
             </select>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newBundleType}
+                onChange={(e) => setNewBundleType(e.target.value)}
+                placeholder="Add bundle type"
+                className="px-3 py-3 border border-[#00000080] rounded-lg text-sm bg-white focus:outline-none shadow-[0_2px_6px_rgba(0,0,0,0.05)]"
+              />
+              <button
+                type="button"
+                onClick={handleAddBundleType}
+                disabled={saveBundleTypesMutation.isPending}
+                className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-4 py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+              >
+                {saveBundleTypesMutation.isPending ? "Saving..." : "Add Type"}
+              </button>
+            </div>
           </div>
           <button
             onClick={() => handleOpenBundleModal()}
@@ -749,6 +847,7 @@ const BundleMgt = () => {
                 <tr className="border-b border-gray-200 bg-[#EBEBEB]">
                   <th className="px-6 py-4 text-left text-sm font-medium text-black">Title</th>
                   <th className="px-6 py-4 text-left text-sm font-medium text-black">Type</th>
+                  <th className="px-6 py-4 text-left text-sm font-medium text-black">Availability</th>
                   <th className="px-6 py-4 text-left text-sm font-medium text-black">Inverter Rating</th>
                   <th className="px-6 py-4 text-left text-sm font-medium text-black">Total Output</th>
                   <th className="px-6 py-4 text-left text-sm font-medium text-black">Total Load</th>
@@ -761,7 +860,7 @@ const BundleMgt = () => {
               <tbody className="bg-white">
                 {filteredBundles.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
                       No bundles found
                     </td>
                   </tr>
@@ -790,6 +889,13 @@ const BundleMgt = () => {
                             }`}
                           >
                             {bundle.bundle_type}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${
+                            bundle.is_available === false ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                          }`}>
+                            {bundle.is_available === false ? "Unavailable" : "Available"}
                           </span>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
@@ -899,8 +1005,9 @@ const BundleMgt = () => {
                       <select required value={bundleFormData.bundle_type}
                         onChange={(e) => setBundleFormData({ ...bundleFormData, bundle_type: e.target.value })}
                         className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                        <option value="Inverter + Battery">Inverter + Battery</option>
-                        <option value="Solar+Inverter+Battery">Solar+Inverter+Battery</option>
+                        {bundleTypeOptions.map((type) => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -924,6 +1031,17 @@ const BundleMgt = () => {
                         onChange={(e) => setBundleFormData({ ...bundleFormData, system_capacity_display: e.target.value })}
                         placeholder="e.g. 1.2kVA + 1.3kWh"
                         className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Availability</label>
+                      <select
+                        value={bundleFormData.is_available ? "available" : "unavailable"}
+                        onChange={(e) => setBundleFormData({ ...bundleFormData, is_available: e.target.value === "available" })}
+                        className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      >
+                        <option value="available">Available (show on public app)</option>
+                        <option value="unavailable">Unavailable (hide from public app)</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -1657,8 +1775,53 @@ const BundleMgt = () => {
                                     className="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
                                   />
                                 </td>
-                                <td className="px-4 py-2 text-sm text-center">1</td>
-                                <td className="px-4 py-2 text-sm text-center text-gray-600">Nos</td>
+                                <td className="px-4 py-2 text-sm text-center">
+                                  {item.quantityApplies ? (
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      value={item.quantity}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditOrderItems((prev) => prev.map((s, i) => i === idx ? { ...s, quantity: val } : s));
+                                        setOrderListDirty(true);
+                                      }}
+                                      className="w-16 border border-gray-300 rounded px-2 py-1 text-sm text-center focus:ring-1 focus:ring-blue-500 outline-none"
+                                    />
+                                  ) : (
+                                    <span className="text-gray-500 italic">NIL</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-center text-gray-600">
+                                  <div className="flex flex-col items-center gap-1">
+                                    <select
+                                      value={item.unit || "Nos"}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditOrderItems((prev) => prev.map((s, i) => i === idx ? { ...s, unit: val } : s));
+                                        setOrderListDirty(true);
+                                      }}
+                                      className="border border-gray-300 rounded px-2 py-1 text-xs"
+                                    >
+                                      <option value="Nos">Nos</option>
+                                      <option value="Lots">Lots</option>
+                                      <option value="Set">Set</option>
+                                      <option value="Unit">Unit</option>
+                                    </select>
+                                    <label className="flex items-center gap-1 text-[11px] text-gray-500">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.quantityApplies !== false}
+                                        onChange={(e) => {
+                                          const checked = e.target.checked;
+                                          setEditOrderItems((prev) => prev.map((s, i) => i === idx ? { ...s, quantityApplies: checked } : s));
+                                          setOrderListDirty(true);
+                                        }}
+                                      />
+                                      Qty applies
+                                    </label>
+                                  </div>
+                                </td>
                                 <td className="px-4 py-2">
                                   <input
                                     type="number"
@@ -1831,13 +1994,18 @@ const BundleMgt = () => {
                       {/* Order list items */}
                       {editOrderItems.filter(i => i.title.trim()).map((item, idx) => {
                         const rate = parseFloat(item.amount) || 0;
+                        const qtyApplies = item.quantityApplies !== false;
+                        const qty = qtyApplies ? Math.max(1, parseInt(item.quantity || "1", 10) || 1) : 1;
+                        const qtyDisplay = qtyApplies ? qty : "NIL";
+                        const unitDisplay = item.unit || "Nos";
+                        const total = rate * qty;
                         return (
                           <tr key={`inv-ol-${idx}`} className="border-b border-gray-100">
                             <td className="py-2 text-sm text-gray-800">{item.title}</td>
-                            <td className="py-2 text-sm text-center">1</td>
-                            <td className="py-2 text-sm text-center text-gray-600">Nos</td>
+                            <td className="py-2 text-sm text-center">{qtyDisplay}</td>
+                            <td className="py-2 text-sm text-center text-gray-600">{unitDisplay}</td>
                             <td className="py-2 text-sm text-right">{rate > 0 ? formatNaira(rate) : <span className="italic text-gray-400">Included</span>}</td>
-                            <td className="py-2 text-sm text-right font-medium">{rate > 0 ? formatNaira(rate) : <span className="italic text-gray-400">Included</span>}</td>
+                            <td className="py-2 text-sm text-right font-medium">{total > 0 ? formatNaira(total) : <span className="italic text-gray-400">Included</span>}</td>
                           </tr>
                         );
                       })}

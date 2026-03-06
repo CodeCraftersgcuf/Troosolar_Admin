@@ -6,19 +6,21 @@ import FinancingPartner from "./FinancingPartner.tsx";
 import Tools from "./Tools.tsx";
 import Notifications from "./Notifications.tsx";
 import Product from "./Product.tsx";
+import CalculatorSettings from "./CalculatorSettings.tsx";
+import PricingRewardsSettings from "./PricingRewardsSettings.tsx";
 
 
 
 const Settings = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabFromUrl = searchParams.get("tab") as "admins" | "tools" | "product" | "financing" | "notifications" | null;
+  const tabFromUrl = searchParams.get("tab") as "admins" | "tools" | "calculator" | "pricing-rewards" | "product" | "financing" | "notifications" | null;
   const isInternalUpdate = useRef(false);
   
   // Initialize activeTab from URL or default to "admins"
   const [activeTab, setActiveTab] = useState<
-    "admins" | "tools" | "product" | "financing" | "notifications"
+    "admins" | "tools" | "calculator" | "pricing-rewards" | "product" | "financing" | "notifications"
   >(() => {
-    if (tabFromUrl && ["admins", "tools", "product", "financing", "notifications"].includes(tabFromUrl)) {
+    if (tabFromUrl && ["admins", "tools", "calculator", "pricing-rewards", "product", "financing", "notifications"].includes(tabFromUrl)) {
       return tabFromUrl;
     }
     return "admins";
@@ -40,7 +42,7 @@ const Settings = () => {
       isInternalUpdate.current = false;
       return;
     }
-    if (tabFromUrl && ["admins", "tools", "product", "financing", "notifications"].includes(tabFromUrl) && tabFromUrl !== activeTab) {
+    if (tabFromUrl && ["admins", "tools", "calculator", "pricing-rewards", "product", "financing", "notifications"].includes(tabFromUrl) && tabFromUrl !== activeTab) {
       setActiveTab(tabFromUrl);
     }
   }, [tabFromUrl, activeTab]);
@@ -48,6 +50,8 @@ const Settings = () => {
   const tabs = [
     { id: "admins", label: "Admins" },
     { id: "tools", label: "Tools" },
+    { id: "calculator", label: "Calculator" },
+    { id: "pricing-rewards", label: "Pricing & Rewards" },
     { id: "product", label: "Product" },
     { id: "financing", label: "Financing Partner" },
     { id: "notifications", label: "Notifications" },
@@ -84,6 +88,8 @@ const Settings = () => {
         <div className={activeTab === "admins" ? "" : "px-6"}>
           {activeTab === "admins" && <Admin />}
           {activeTab === "tools" && <Tools />}
+          {activeTab === "calculator" && <CalculatorSettings />}
+          {activeTab === "pricing-rewards" && <PricingRewardsSettings />}
           {activeTab === "product" && <Product />}
           {activeTab === "financing" && <FinancingPartner />}
           {activeTab === "notifications" && <Notifications />}

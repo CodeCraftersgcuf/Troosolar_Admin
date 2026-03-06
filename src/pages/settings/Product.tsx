@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { productCategories, brands } from "./product";
 import type { ProductCategory, Brand } from "./product";
@@ -57,44 +57,21 @@ const Product = () => {
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("");
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Category options with customizable PNG paths
-  const categoryOptions = [
-    {
-      value: "",
-      label: "Categories",
-      icon: null,
-    },
-    {
-      value: "solar-panels",
-      label: "Solar Panels",
-      icon: "/assets/images/solarpanel.png",
-    },
-    {
-      value: "batteries",
-      label: "Batteries",
-      icon: "/assets/images/batteries.png",
-    },
-    {
-      value: "inverters",
-      label: "Inverters",
-      icon: "/assets/images/inverters.png",
-    },
-    {
-      value: "mttp-chargers",
-      label: "MTTP Chargers",
-      icon: "/assets/images/mttpcharger.png",
-    },
-    {
-      value: "led-bulbs",
-      label: "LED Bulbs",
-      icon: "/assets/images/bulb.png",
-    },
-    {
-      value: "solar-fans",
-      label: "Solar Fans",
-      icon: "/assets/images/solarfans.png",
-    },
-  ];
+  const categoryOptions = useMemo(
+    () => [
+      {
+        value: "",
+        label: "Categories",
+        icon: null,
+      },
+      ...apiCategories.map((category) => ({
+        value: String(category.id),
+        label: category.title,
+        icon: category.icon ? `${IMAGE_BASE_URL}${category.icon}` : null,
+      })),
+    ],
+    [apiCategories]
+  );
 
   // Custom dropdown handlers
   const handleCategorySelect = (category: {
@@ -110,13 +87,9 @@ const Product = () => {
     setIsCategoryDropdownOpen(!isCategoryDropdownOpen);
   };
 
-  const getSelectedCategoryOption = () => {
-    return (
-      categoryOptions.find(
-        (option) => option.value === selectedCategoryFilter
-      ) || categoryOptions[0]
-    );
-  };
+  const getSelectedCategoryOption = () =>
+    categoryOptions.find((option) => option.value === selectedCategoryFilter) ||
+    categoryOptions[0] || { value: "", label: "Categories", icon: null };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -365,8 +338,24 @@ const Product = () => {
   const allBrandsSelected = brandList.every((brand) => brand.isSelected);
   const someBrandsSelected = brandList.some((brand) => brand.isSelected);
 
-  // Pagination logic
-  const currentData = activeTab === "categories" ? categories : brandList;
+  const categoryTitleById = useMemo(
+    () =>
+      apiCategories.reduce<Record<string, string>>((acc, c) => {
+        acc[String(c.id)] = c.title;
+        return acc;
+      }, {}),
+    [apiCategories]
+  );
+
+  // Pagination logic with category heading filter
+  const currentData = useMemo(() => {
+    if (activeTab === "categories") {
+      if (!selectedCategoryFilter) return categories;
+      return categories.filter((category) => String(category.id) === selectedCategoryFilter);
+    }
+    if (!selectedCategoryFilter) return brandList;
+    return brandList.filter((brand) => String(brand.category) === selectedCategoryFilter);
+  }, [activeTab, categories, brandList, selectedCategoryFilter]);
   const totalPages = Math.ceil(currentData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -793,7 +782,7 @@ const Product = () => {
                     {/* Category */}
                     <td className="px-6 py-4 text-center">
                       <span className="text-sm text-gray-600">
-                        {brand.category}
+                        {categoryTitleById[String(brand.category)] || brand.category || "-"}
                       </span>
                     </td>
 

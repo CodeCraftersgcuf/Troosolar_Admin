@@ -23,6 +23,7 @@ type BundleMaterialDetail = {
 type BundleProductPayload = {
   title?: string;
   bundle_type?: string;
+  is_available?: boolean;
   brand_id?: number | null;
   total_price?: number;
   discount_price?: number;
@@ -57,6 +58,9 @@ export const addBundle = async (
 
   if (data.title) formData.append("title", data.title);
   if (data.bundle_type) formData.append("bundle_type", data.bundle_type);
+  if (data.is_available !== undefined) {
+    formData.append("is_available", data.is_available ? "1" : "0");
+  }
   if (data.brand_id != null) {
     formData.append("brand_id", String(data.brand_id));
   } else {
@@ -145,6 +149,9 @@ export const updateBundle = async (
 
   if (data.title) formData.append("title", data.title);
   if (data.bundle_type) formData.append("bundle_type", data.bundle_type);
+  if (data.is_available !== undefined) {
+    formData.append("is_available", data.is_available ? "1" : "0");
+  }
   if (data.brand_id != null) {
     formData.append("brand_id", String(data.brand_id));
   } else {

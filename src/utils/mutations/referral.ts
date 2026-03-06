@@ -6,6 +6,9 @@ export const updateReferralSettings = async (
   payload: {
     commission_percentage?: number;
     minimum_withdrawal?: number;
+    outright_discount_percentage?: number;
+    referral_reward_type?: "percentage" | "fixed";
+    referral_reward_value?: number;
   },
   token: string
 ): Promise<any> => {

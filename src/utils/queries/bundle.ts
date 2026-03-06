@@ -9,11 +9,12 @@ export const getAllBundles = async (
   }
 ): Promise<unknown> => {
   let url = API_ENDPOINTS.ADMIN.BundleList;
+  const queryParams = new URLSearchParams();
+  queryParams.append("include_unavailable", "1");
   if (params?.bundle_type) {
-    const queryParams = new URLSearchParams();
     queryParams.append("bundle_type", params.bundle_type);
-    url += `?${queryParams.toString()}`;
   }
+  url += `?${queryParams.toString()}`;
   return await apiCall(url, "GET", undefined, token);
 };
 

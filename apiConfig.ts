@@ -194,6 +194,10 @@ const API_ENDPOINTS = {
     SiteBannerUpload: API_DOMAIN + "/admin/site/banner", // POST multipart: banner
     SiteBannerDelete: API_DOMAIN + "/admin/site/banner", // DELETE
 
+    // --- Calculator Settings ---
+    CalculatorSettingsGet: API_DOMAIN + "/admin/calculator-settings", // GET
+    CalculatorSettingsUpdate: API_DOMAIN + "/admin/calculator-settings", // PUT
+
     // --- Buy Now Admin Endpoints ---
     BuyNowOrdersList: API_DOMAIN + "/admin/orders/buy-now", // GET
     BuyNowOrderShow: (id: number | string) =>

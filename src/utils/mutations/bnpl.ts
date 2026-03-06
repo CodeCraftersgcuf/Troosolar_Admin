@@ -286,6 +286,10 @@ export const updateAuditRequestStatus = async (
   payload: {
     status: "approved" | "rejected" | "completed";
     admin_notes?: string;
+    property_state?: string;
+    property_address?: string;
+    contact_name?: string;
+    contact_phone?: string;
   },
   token: string
 ): Promise<any> => {

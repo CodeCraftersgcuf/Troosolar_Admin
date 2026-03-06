@@ -51,6 +51,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
   const [existingFeaturedImage, setExistingFeaturedImage] = useState<string | null>(null);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [markAsComplimentary, setMarkAsComplimentary] = useState(false);
+  const [isAvailable, setIsAvailable] = useState(true);
+  const [productDescription, setProductDescription] = useState('');
+  const [productSpecifications, setProductSpecifications] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCategoryEmptyMessage, setShowCategoryEmptyMessage] = useState(false);
   const [showBrandEmptyMessage, setShowBrandEmptyMessage] = useState(false);
@@ -80,6 +83,16 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     () => (brandsResponse as { data?: ApiBrand[] })?.data || [],
     [brandsResponse]
   );
+
+  const selectedCategoryData = useMemo(
+    () => apiCategories.find((cat) => cat.title === productCategory),
+    [apiCategories, productCategory]
+  );
+
+  const filteredBrands = useMemo(() => {
+    if (!selectedCategoryData) return [];
+    return apiBrands.filter((brand) => brand.category_id === selectedCategoryData.id);
+  }, [apiBrands, selectedCategoryData]);
 
   // Extract base URL from API_DOMAIN (remove /api)
   const getBaseUrl = () => {
@@ -126,6 +139,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
         stock: string;
         top_deal: boolean;
         installation_compulsory: boolean;
+        is_available?: boolean;
+        description?: string;
+        specifications?: string;
         category_id: number;
         brand_id: number | null;
         details?: Array<{ detail: string }>;
@@ -145,6 +161,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       setStockQuantity(product.stock || "");
       setSaveAsTemplate(product.top_deal || false);
       setMarkAsComplimentary(product.installation_compulsory || false);
+      setIsAvailable(product.is_available !== false);
+      setProductDescription(product.description || "");
+      setProductSpecifications(product.specifications || "");
 
       const category = apiCategories.find((cat) => cat.id === product.category_id);
       const brand = product.brand_id != null ? apiBrands.find((b) => b.id === product.brand_id) : null;
@@ -184,6 +203,14 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       resetForm();
     }
   }, [editingProduct, apiCategories, apiBrands]);
+
+  useEffect(() => {
+    if (!productBrand || !filteredBrands.length) return;
+    const stillValid = filteredBrands.some((brand) => brand.title === productBrand);
+    if (!stillValid) {
+      setProductBrand("");
+    }
+  }, [filteredBrands, productBrand]);
 
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -225,9 +252,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
         // Build FormData for update, but ensure all values are strings and not undefined/null
         const updatePayload = new FormData();
         updatePayload.append("title", productName ?? "");
-        updatePayload.append("category_id", String(apiCategories.find(cat => cat.title === productCategory)?.id ?? ""));
+        updatePayload.append("category_id", String(selectedCategoryData?.id ?? ""));
         updatePayload.append("price", productPrice ?? "0");
-        const brandId = productBrand ? apiBrands.find(b => b.title === productBrand)?.id : null;
+        const brandId = productBrand ? filteredBrands.find(b => b.title === productBrand)?.id : null;
         updatePayload.append("brand_id", brandId != null ? String(brandId) : "");
         updatePayload.append("discount_price", discountPrice ? discountPrice : "0");
         if (discountEndDate) updatePayload.append("discount_end_date", discountEndDate);
@@ -235,6 +262,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
         updatePayload.append("installation_price", installationPrice ? installationPrice : "0");
         updatePayload.append("top_deal", saveAsTemplate ? "1" : "0");
         updatePayload.append("installation_compulsory", markAsComplimentary ? "1" : "0");
+        updatePayload.append("is_available", isAvailable ? "1" : "0");
+        updatePayload.append("description", productDescription ?? "");
+        updatePayload.append("specifications", productSpecifications ?? "");
         // Only append featured_image if a new one is selected
         if (featuredImage) updatePayload.append("featured_image", featuredImage);
         // Only append images if new ones are selected
@@ -308,8 +338,7 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     }
     setIsSubmitting(true);
 
-    const selectedCategoryData = apiCategories.find(cat => cat.title === productCategory);
-    const selectedBrandData = productBrand ? apiBrands.find(b => b.title === productBrand) : null;
+    const selectedBrandData = productBrand ? filteredBrands.find(b => b.title === productBrand) : null;
     if (!selectedCategoryData) {
       alert('Please select a valid category');
       setIsSubmitting(false);
@@ -327,6 +356,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       installation_price: installationPrice ? parseFloat(installationPrice) : 0,
       top_deal: saveAsTemplate,
       installation_compulsory: markAsComplimentary,
+      is_available: isAvailable,
+      description: productDescription,
+      specifications: productSpecifications,
       featured_image: featuredImage || undefined,
       images: selectedImages.length > 0 ? selectedImages : undefined,
       product_details: productDetails.filter(detail => detail.trim() !== '')
@@ -358,6 +390,9 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     setExistingFeaturedImage(null);
     setSaveAsTemplate(false);
     setMarkAsComplimentary(false);
+    setIsAvailable(true);
+    setProductDescription('');
+    setProductSpecifications('');
     setIsSubmitting(false);
   };
 
@@ -585,7 +620,7 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
                   setShowBrandEmptyMessage(false);
                 }}
                 onFocus={() => {
-                  if (!brandsLoading && apiBrands.length === 0) {
+                  if (productCategory && !brandsLoading && filteredBrands.length === 0) {
                     setShowBrandEmptyMessage(true);
                   }
                 }}
@@ -595,21 +630,23 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
                 className="w-full cursor-pointer px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
               >
                 <option value="">No brand</option>
-                {brandsLoading ? (
+                {!productCategory ? (
+                  <option value="" disabled>Select a category first</option>
+                ) : brandsLoading ? (
                   <option value="" disabled>Loading brands...</option>
-                ) : apiBrands.length === 0 ? (
-                  <option value="" disabled>No brands available</option>
+                ) : filteredBrands.length === 0 ? (
+                  <option value="" disabled>No brands available in selected category</option>
                 ) : (
-                  apiBrands.map((brand) => (
+                  filteredBrands.map((brand) => (
                     <option key={brand.id} value={brand.title}>
                       {brand.title}
                     </option>
                   ))
                 )}
               </select>
-              {showBrandEmptyMessage && !brandsLoading && apiBrands.length === 0 && (
+              {showBrandEmptyMessage && productCategory && !brandsLoading && filteredBrands.length === 0 && (
                 <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm text-yellow-800 mb-2">No brands available. Please add a brand first.</p>
+                  <p className="text-sm text-yellow-800 mb-2">No brands available for this category. Please add a brand first.</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -698,6 +735,33 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
             {/* Product Description */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                rows={3}
+                value={productDescription}
+                onChange={(e) => setProductDescription(e.target.value)}
+                placeholder="Enter product description"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Specifications
+              </label>
+              <textarea
+                rows={3}
+                value={productSpecifications}
+                onChange={(e) => setProductSpecifications(e.target.value)}
+                placeholder="Enter product specifications"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              />
+            </div>
+
+            {/* Product Details */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Product Details
               </label>
               <div className="space-y-2">
@@ -744,6 +808,19 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
 
           {/* Checkboxes */}
           <div className="mt-6 space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Availability
+              </label>
+              <select
+                value={isAvailable ? "available" : "unavailable"}
+                onChange={(e) => setIsAvailable(e.target.value === "available")}
+                className="w-full cursor-pointer px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+              >
+                <option value="available">Available (show on public app)</option>
+                <option value="unavailable">Unavailable (hide from public app)</option>
+              </select>
+            </div>
             <label className="flex items-center">
               <input
                 type="checkbox"

@@ -62,6 +62,7 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
   const [selectedProducts, setSelectedProducts] = useState<ApiProduct[]>([]);
   const [bundleName, setBundleName] = useState('');
   const [bundleType, setBundleType] = useState('');
+  const [isAvailable, setIsAvailable] = useState(true);
   const [totalPrice, setTotalPrice] = useState('');
   const [discountPrice, setDiscountPrice] = useState('');
   const [discountEndDate, setDiscountEndDate] = useState('');
@@ -161,6 +162,7 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
     if (editingBundle) {
       setBundleName(editingBundle.title || "");
       setBundleType(editingBundle.bundle_type || "");
+      setIsAvailable(editingBundle.is_available !== false);
       setTotalPrice(editingBundle.total_price ? String(editingBundle.total_price) : "");
       setDiscountPrice(editingBundle.discount_price ? String(editingBundle.discount_price) : "");
       setDiscountEndDate(editingBundle.discount_end_date || "");
@@ -203,6 +205,7 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
     const bundleData: Record<string, unknown> = {
       title: bundleName,
       bundle_type: bundleType,
+      is_available: isAvailable,
       total_price: parseFloat(totalPrice),
       discount_price: discountPrice ? parseFloat(discountPrice) : undefined,
       discount_end_date: discountEndDate || undefined,
@@ -239,6 +242,7 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
     setSelectedProducts([]);
     setBundleName('');
     setBundleType('');
+    setIsAvailable(true);
     setTotalPrice('');
     setDiscountPrice('');
     setDiscountEndDate('');
@@ -438,6 +442,19 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
                 <option value="inverter_package">Inverter Package</option>
                 <option value="battery_package">Battery Package</option>
                 <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Availability
+              </label>
+              <select
+                value={isAvailable ? "available" : "unavailable"}
+                onChange={(e) => setIsAvailable(e.target.value === "available")}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="available">Available (show on public app)</option>
+                <option value="unavailable">Unavailable (hide from public app)</option>
               </select>
             </div>
 

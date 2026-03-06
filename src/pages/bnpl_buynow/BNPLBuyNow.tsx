@@ -52,7 +52,7 @@ const DOCUMENT_BASE_URL = API_DOMAIN.replace(/\/api\/?$/, "") || "https://trooso
 const BNPLBuyNow: React.FC = () => {
   const [activeTab, setActiveTab] = useState("BNPL Applications");
   const [statusFilter, setStatusFilter] = useState("All");
-  const [auditTypeFilter, setAuditTypeFilter] = useState("All"); // For Audit Requests
+  const [auditTypeFilter, setAuditTypeFilter] = useState("All Types"); // For Audit Requests
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(15);
@@ -70,6 +70,10 @@ const BNPLBuyNow: React.FC = () => {
     admin_notes: "",
     counter_offer_min_deposit: "",
     counter_offer_min_tenor: "",
+    property_state: "",
+    property_address: "",
+    contact_name: "",
+    contact_phone: "",
   });
   // BNPL Assign beneficiary & adjust offer (like loan flow)
   const [beneficiaryForm, setBeneficiaryForm] = useState({
@@ -166,7 +170,7 @@ const BNPLBuyNow: React.FC = () => {
     if (statusFilter !== "All") {
       params.status = statusFilter.toLowerCase();
     }
-    if (activeTab === "Audit Requests" && auditTypeFilter !== "All") {
+    if (activeTab === "Audit Requests" && auditTypeFilter !== "All Types") {
       params.audit_type = auditTypeFilter.toLowerCase();
     }
     if (searchQuery) {
@@ -319,6 +323,10 @@ const BNPLBuyNow: React.FC = () => {
         admin_notes: "",
         counter_offer_min_deposit: "",
         counter_offer_min_tenor: "",
+        property_state: "",
+        property_address: "",
+        contact_name: "",
+        contact_phone: "",
       });
       alert("Status updated successfully.");
     },
@@ -343,6 +351,10 @@ const BNPLBuyNow: React.FC = () => {
         admin_notes: "",
         counter_offer_min_deposit: "",
         counter_offer_min_tenor: "",
+        property_state: "",
+        property_address: "",
+        contact_name: "",
+        contact_phone: "",
       });
     },
   });
@@ -360,6 +372,10 @@ const BNPLBuyNow: React.FC = () => {
         admin_notes: "",
         counter_offer_min_deposit: "",
         counter_offer_min_tenor: "",
+        property_state: "",
+        property_address: "",
+        contact_name: "",
+        contact_phone: "",
       });
     },
   });
@@ -436,10 +452,14 @@ const BNPLBuyNow: React.FC = () => {
 
   // Audit Request Status Update Mutation
   const updateAuditRequestStatusMutation = useMutation({
-    mutationFn: async (payload: { id: number; status: string; admin_notes?: string }) => {
+    mutationFn: async (payload: { id: number; status: string; admin_notes?: string; property_state?: string; property_address?: string; contact_name?: string; contact_phone?: string }) => {
       return await updateAuditRequestStatus(payload.id, {
         status: payload.status as "approved" | "rejected" | "completed",
         admin_notes: payload.admin_notes,
+        property_state: payload.property_state,
+        property_address: payload.property_address,
+        contact_name: payload.contact_name,
+        contact_phone: payload.contact_phone,
       }, token);
     },
     onSuccess: () => {
@@ -450,6 +470,10 @@ const BNPLBuyNow: React.FC = () => {
         admin_notes: "",
         counter_offer_min_deposit: "",
         counter_offer_min_tenor: "",
+        property_state: "",
+        property_address: "",
+        contact_name: "",
+        contact_phone: "",
       });
       alert("Audit request status updated successfully!");
     },
@@ -569,6 +593,10 @@ const BNPLBuyNow: React.FC = () => {
       admin_notes: "",
       counter_offer_min_deposit: existingPercent,
       counter_offer_min_tenor: item?.counter_offer_min_tenor ?? "",
+      property_state: item?.property_state || "",
+      property_address: item?.property_address || "",
+      contact_name: item?.contact_name || "",
+      contact_phone: item?.contact_phone || item?.user?.phone || "",
     });
     setShowStatusModal(true);
   };
@@ -629,6 +657,10 @@ const BNPLBuyNow: React.FC = () => {
         id: selectedItem.id,
         status: statusForm.status,
         admin_notes: statusForm.admin_notes,
+        property_state: statusForm.property_state || undefined,
+        property_address: statusForm.property_address || undefined,
+        contact_name: statusForm.contact_name || undefined,
+        contact_phone: statusForm.contact_phone || undefined,
       });
     }
   };
@@ -753,7 +785,7 @@ const BNPLBuyNow: React.FC = () => {
         <div className="mb-8">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
-              {["BNPL Applications", "BNPL Guarantors", "Guarantor Form", "Loan Settings", "Banner", "Buy Now Orders", "BNPL Orders", "Audit Requests", "Custom Orders"].map(
+              {["BNPL Applications", "Guarantor Form", "Loan Settings", "Banner", "Buy Now Orders", "BNPL Orders", "Audit Requests", "Custom Orders"].map(
                 (tab) => (
                   <button
                     key={tab}
@@ -2816,7 +2848,7 @@ const BNPLBuyNow: React.FC = () => {
                     )}
 
                     {/* Property Details */}
-                    {(selectedItem.property_address || selectedItem.property_state || selectedItem.property_floors || selectedItem.property_rooms !== undefined || selectedItem.is_gated_estate !== undefined) && (
+                    {(selectedItem.property_address || selectedItem.property_state || selectedItem.contact_name || selectedItem.contact_phone || selectedItem.property_floors || selectedItem.property_rooms !== undefined || selectedItem.is_gated_estate !== undefined) && (
                       <div className="bg-white rounded-lg border border-gray-200 p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                           <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2825,6 +2857,22 @@ const BNPLBuyNow: React.FC = () => {
                           Property Details
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {selectedItem.contact_name && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Contact Name</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {selectedItem.contact_name}
+                              </p>
+                            </div>
+                          )}
+                          {selectedItem.contact_phone && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Contact Phone</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {selectedItem.contact_phone}
+                              </p>
+                            </div>
+                          )}
                           {selectedItem.property_address && (
                             <div className="md:col-span-2">
                               <p className="text-xs text-gray-500 mb-1">Property Address</p>
@@ -2906,7 +2954,7 @@ const BNPLBuyNow: React.FC = () => {
                           const skipKeys = [
                             "id", "status", "audit_type", "customer_type", "user", "property_address",
                             "property_state", "property_floors", "property_rooms", "is_gated_estate",
-                            "has_property_details", "order_id", "created_at", "updated_at"
+                            "contact_name", "contact_phone", "has_property_details", "order_id", "created_at", "updated_at"
                           ];
                           if (skipKeys.includes(key) || !value || value === null || value === "null") {
                             return null;
@@ -3272,6 +3320,10 @@ const BNPLBuyNow: React.FC = () => {
                     admin_notes: "",
                     counter_offer_min_deposit: "",
                     counter_offer_min_tenor: "",
+                    property_state: "",
+                    property_address: "",
+                    contact_name: "",
+                    contact_phone: "",
                   });
                 }}
                 className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition-colors"
@@ -3398,6 +3450,48 @@ const BNPLBuyNow: React.FC = () => {
                 </>
               )}
 
+              {activeTab === "Audit Requests" && (
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-sm font-medium text-gray-800">Commercial/Home Audit Details</p>
+                  <input
+                    type="text"
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    value={statusForm.contact_name}
+                    onChange={(e) =>
+                      setStatusForm({ ...statusForm, contact_name: e.target.value })
+                    }
+                    placeholder="Contact name (optional)"
+                  />
+                  <input
+                    type="text"
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    value={statusForm.contact_phone}
+                    onChange={(e) =>
+                      setStatusForm({ ...statusForm, contact_phone: e.target.value })
+                    }
+                    placeholder="Contact phone (optional)"
+                  />
+                  <input
+                    type="text"
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    value={statusForm.property_state}
+                    onChange={(e) =>
+                      setStatusForm({ ...statusForm, property_state: e.target.value })
+                    }
+                    placeholder="Location state (optional)"
+                  />
+                  <textarea
+                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    rows={2}
+                    value={statusForm.property_address}
+                    onChange={(e) =>
+                      setStatusForm({ ...statusForm, property_address: e.target.value })
+                    }
+                    placeholder="Location/address (optional)"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Admin Notes (Optional)
@@ -3424,6 +3518,10 @@ const BNPLBuyNow: React.FC = () => {
                     admin_notes: "",
                     counter_offer_min_deposit: "",
                     counter_offer_min_tenor: "",
+                    property_state: "",
+                    property_address: "",
+                    contact_name: "",
+                    contact_phone: "",
                   });
                 }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
@@ -3586,19 +3684,14 @@ const BNPLBuyNow: React.FC = () => {
                   required
                 >
                   <option value="">Select a user</option>
-                  {auditUsersData?.data?.data
-                    ?.filter((user: any) => user.audit_requests?.some((req: any) => req.has_property_details))
-                    ?.map((user: any) => (
+                  {auditUsersData?.data?.data?.map((user: any) => (
                       <option key={user.id} value={user.id}>
                         {user.name} - {user.email}
                       </option>
                     ))}
-                  {(!auditUsersData?.data?.data ||
-                    auditUsersData.data.data.filter((user: any) =>
-                      user.audit_requests?.some((req: any) => req.has_property_details)
-                    ).length === 0) && (
+                  {(!auditUsersData?.data?.data || auditUsersData.data.data.length === 0) && (
                     <option value="" disabled>
-                      No users with shared property details available
+                      No users with audit requests available
                     </option>
                   )}
                 </select>
@@ -4419,25 +4512,23 @@ const BNPLBuyNow: React.FC = () => {
 
                         {/* Actions */}
                         <div className="flex space-x-3 pt-4 border-t">
-                          {selectedUser.audit_requests?.some((req: any) => req.has_property_details) && (
-                            <button
-                              onClick={() => {
-                                setShowUserDetailModal(false);
-                                setCreateOrderForm({
-                                  user_id: selectedUser.id.toString(),
-                                  order_type: "buy_now",
-                                  items: [],
-                                  send_email: true,
-                                  email_message: "",
-                                });
-                                setSelectedProducts([]);
-                                setShowCreateOrderModal(true);
-                              }}
-                              className="px-6 py-2 bg-[#273E8E] text-white rounded-lg text-sm font-medium hover:bg-[#1e3270]"
-                            >
-                              Add Items to Cart
-                            </button>
-                          )}
+                          <button
+                            onClick={() => {
+                              setShowUserDetailModal(false);
+                              setCreateOrderForm({
+                                user_id: selectedUser.id.toString(),
+                                order_type: "buy_now",
+                                items: [],
+                                send_email: true,
+                                email_message: "",
+                              });
+                              setSelectedProducts([]);
+                              setShowCreateOrderModal(true);
+                            }}
+                            className="px-6 py-2 bg-[#273E8E] text-white rounded-lg text-sm font-medium hover:bg-[#1e3270]"
+                          >
+                            Add Items to Cart
+                          </button>
                           <button
                             onClick={() => {
                               if (
@@ -4474,58 +4565,46 @@ const BNPLBuyNow: React.FC = () => {
                     ) : (
                       <div className="text-center py-8 text-gray-500 border border-gray-200 rounded-lg">
                         <p className="mb-4">This user's cart is currently empty.</p>
-                        {selectedUser.audit_requests?.some((req: any) => req.has_property_details) ? (
-                          <button
-                            onClick={() => {
-                              setShowUserDetailModal(false);
-                              setCreateOrderForm({
-                                user_id: selectedUser.id.toString(),
-                                order_type: "buy_now",
-                                items: [],
-                                send_email: true,
-                                email_message: "",
-                              });
-                              setSelectedProducts([]);
-                              setShowCreateOrderModal(true);
-                            }}
-                            className="px-6 py-2 bg-[#273E8E] text-white rounded-lg text-sm font-medium hover:bg-[#1e3270]"
-                          >
-                            Add Items to Cart
-                          </button>
-                        ) : (
-                          <p className="text-sm text-gray-600">
-                            User needs to share property details before items can be added to cart.
-                          </p>
-                        )}
+                        <button
+                          onClick={() => {
+                            setShowUserDetailModal(false);
+                            setCreateOrderForm({
+                              user_id: selectedUser.id.toString(),
+                              order_type: "buy_now",
+                              items: [],
+                              send_email: true,
+                              email_message: "",
+                            });
+                            setSelectedProducts([]);
+                            setShowCreateOrderModal(true);
+                          }}
+                          className="px-6 py-2 bg-[#273E8E] text-white rounded-lg text-sm font-medium hover:bg-[#1e3270]"
+                        >
+                          Add Items to Cart
+                        </button>
                       </div>
                     )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500 border border-gray-200 rounded-lg">
                     <p className="mb-4">No cart data available for this user.</p>
-                    {selectedUser.audit_requests?.some((req: any) => req.has_property_details) ? (
-                      <button
-                        onClick={() => {
-                          setShowUserDetailModal(false);
-                          setCreateOrderForm({
-                            user_id: selectedUser.id.toString(),
-                            order_type: "buy_now",
-                            items: [],
-                            send_email: true,
-                            email_message: "",
-                          });
-                          setSelectedProducts([]);
-                          setShowCreateOrderModal(true);
-                        }}
-                        className="px-6 py-2 bg-[#273E8E] text-white rounded-lg text-sm font-medium hover:bg-[#1e3270]"
-                      >
-                        Add Items to Cart
-                      </button>
-                    ) : (
-                      <p className="text-sm text-gray-600">
-                        User needs to share property details before items can be added to cart.
-                      </p>
-                    )}
+                    <button
+                      onClick={() => {
+                        setShowUserDetailModal(false);
+                        setCreateOrderForm({
+                          user_id: selectedUser.id.toString(),
+                          order_type: "buy_now",
+                          items: [],
+                          send_email: true,
+                          email_message: "",
+                        });
+                        setSelectedProducts([]);
+                        setShowCreateOrderModal(true);
+                      }}
+                      className="px-6 py-2 bg-[#273E8E] text-white rounded-lg text-sm font-medium hover:bg-[#1e3270]"
+                    >
+                      Add Items to Cart
+                    </button>
                   </div>
                 )}
               </>

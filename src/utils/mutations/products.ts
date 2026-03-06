@@ -14,6 +14,9 @@ export const addProduct = async (
     installation_price?: number;
     top_deal?: boolean;
     installation_compulsory?: boolean;
+    is_available?: boolean;
+    description?: string;
+    specifications?: string;
     featured_image?: File;
     images?: File[];
     product_details?: string[];
@@ -46,6 +49,15 @@ export const addProduct = async (
       "installation_compulsory",
       data.installation_compulsory ? "1" : "0"
     );
+  if (data.is_available !== undefined) {
+    formData.append("is_available", data.is_available ? "1" : "0");
+  }
+  if (data.description !== undefined) {
+    formData.append("description", data.description);
+  }
+  if (data.specifications !== undefined) {
+    formData.append("specifications", data.specifications);
+  }
 
   if (data.featured_image) {
     formData.append("featured_image", data.featured_image);
