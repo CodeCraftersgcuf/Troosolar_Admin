@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import Header from "../../component/Header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
@@ -170,11 +170,74 @@ const BundleMgt = () => {
 
   // Editable order list state — keyed by "mat-{id}"
   const [editMatRate, setEditMatRate] = useState<Record<string, string>>({});
-  const [editOrderItems, setEditOrderItems] = useState<{ id: number; title: string; amount: string; quantity: string; unit: string; quantityApplies: boolean }[]>([]);
-  const [editSvc, setEditSvc] = useState<{ id: number; title: string; amount: string }[]>([]);
+  const [editOrderItems, setEditOrderItems] = useState<{ id: number; title: string; amount: string; quantity: string; unit: string; quantityApplies: boolean; visibility: "both" | "troosolar" | "own" }[]>([]);
+  const [editSvc, setEditSvc] = useState<{ id: number; title: string; amount: string; visibility: "both" | "troosolar" | "own" }[]>([]);
   const [orderListDirty, setOrderListDirty] = useState(false);
   const [savingOrderList, setSavingOrderList] = useState(false);
+  /** Simulates customer dashboard: Troosolar vs own installer for read-only invoice preview */
+  const [invoicePreviewAsInstaller, setInvoicePreviewAsInstaller] = useState<"troosolar" | "own">("troosolar");
   const OL_PREFIX = "[OL]";
+  const OL_VIS_TROO_PREFIX = "[OL:TROOSOLAR]";
+  const OL_VIS_OWN_PREFIX = "[OL:OWN]";
+  const parseOrderItemVisibility = (title: string) => {
+    if (title.startsWith(OL_VIS_TROO_PREFIX)) return "troosolar" as const;
+    if (title.startsWith(OL_VIS_OWN_PREFIX)) return "own" as const;
+    if (title.startsWith(OL_PREFIX)) return "both" as const;
+    return "both" as const;
+  };
+
+  const stripOrderItemPrefix = (title: string) => {
+    if (title.startsWith(OL_VIS_TROO_PREFIX)) return title.slice(OL_VIS_TROO_PREFIX.length).trim();
+    if (title.startsWith(OL_VIS_OWN_PREFIX)) return title.slice(OL_VIS_OWN_PREFIX.length).trim();
+    if (title.startsWith(OL_PREFIX)) return title.slice(OL_PREFIX.length).trim();
+    return title;
+  };
+
+  const encodeOrderItemTitleWithVisibility = (title: string, visibility: "both" | "troosolar" | "own") => {
+    const clean = title.trim();
+    if (visibility === "troosolar") return `${OL_VIS_TROO_PREFIX}${clean}`;
+    if (visibility === "own") return `${OL_VIS_OWN_PREFIX}${clean}`;
+    return `${OL_PREFIX}${clean}`;
+  };
+
+  const FEE_VIS_TROO_PREFIX = "[FEE:TROOSOLAR]";
+  const FEE_VIS_OWN_PREFIX = "[FEE:OWN]";
+  /** Explicit "Both" for fees (order list uses [OL] for both; fees must not be saved plain or heuristics remap e.g. "installation fee" → troosolar). */
+  const FEE_VIS_BOTH_PREFIX = "[FEE]";
+
+  const parseFeeVisibility = (title: string) => {
+    if (title.startsWith(FEE_VIS_TROO_PREFIX)) return "troosolar" as const;
+    if (title.startsWith(FEE_VIS_OWN_PREFIX)) return "own" as const;
+    if (title.startsWith(FEE_VIS_BOTH_PREFIX)) return "both" as const;
+    const lower = title.toLowerCase();
+    // Backward-compatible defaults for existing untagged fee names (legacy rows only)
+    if (lower.includes("installation fee") || lower.includes("inspection fee")) return "troosolar" as const;
+    if (lower.includes("delivery fee") || lower.includes("delivery/logistics")) return "both" as const;
+    return "both" as const;
+  };
+
+  const stripFeeVisibilityPrefix = (title: string) => {
+    if (title.startsWith(FEE_VIS_TROO_PREFIX)) return title.slice(FEE_VIS_TROO_PREFIX.length).trim();
+    if (title.startsWith(FEE_VIS_OWN_PREFIX)) return title.slice(FEE_VIS_OWN_PREFIX.length).trim();
+    if (title.startsWith(FEE_VIS_BOTH_PREFIX)) return title.slice(FEE_VIS_BOTH_PREFIX.length).trim();
+    return title;
+  };
+
+  const rowVisibleForInvoicePreview = (
+    visibility: "both" | "troosolar" | "own",
+    previewAs: "troosolar" | "own"
+  ) => {
+    if (visibility === "troosolar") return previewAs === "troosolar";
+    if (visibility === "own") return previewAs === "own";
+    return true;
+  };
+
+  const encodeFeeTitleWithVisibility = (title: string, visibility: "both" | "troosolar" | "own") => {
+    const clean = title.trim();
+    if (visibility === "troosolar") return `${FEE_VIS_TROO_PREFIX}${clean}`;
+    if (visibility === "own") return `${FEE_VIS_OWN_PREFIX}${clean}`;
+    return `${FEE_VIS_BOTH_PREFIX}${clean}`;
+  };
 
   const token = Cookies.get("token") || "";
   const queryClient = useQueryClient();
@@ -260,6 +323,22 @@ const BundleMgt = () => {
 
   const bundleDetails: any = (bundleDetailsData as any)?.data || null;
 
+  /** Sum of bundle installation materials for invoice preview — hide grouped row when 0 (dummy “Included” line). */
+  const invoicePreviewMaterialsTotal = useMemo(() => {
+    if (!bundleDetails?.bundle_materials?.length) return 0;
+    let t = 0;
+    for (const bm of bundleDetails.bundle_materials as any[]) {
+      const mKey = `mat-${bm.material_id}`;
+      const qty = bm.quantity || 1;
+      const rate =
+        parseFloat(
+          editMatRate[mKey] ?? String(bm.rate_override ?? bm.material?.selling_rate ?? bm.material?.rate ?? 0)
+        ) || 0;
+      t += rate * qty;
+    }
+    return t;
+  }, [bundleDetails, editMatRate]);
+
   // Initialize editable state when bundle details load
   React.useEffect(() => {
     if (!bundleDetails) return;
@@ -274,12 +353,27 @@ const BundleMgt = () => {
 
     // ── 1. Parse custom_services → [OL] order items + invoice fees ──
     const allServices = (bundleDetails.custom_services || []) as any[];
-    const olItems: { id: number; title: string; amount: string; quantity: string; unit: string; quantityApplies: boolean }[] = [];
-    const feeItems: { id: number; title: string; amount: string }[] = [];
+    type OlEditRow = {
+      id: number;
+      title: string;
+      amount: string;
+      quantity: string;
+      unit: string;
+      quantityApplies: boolean;
+      visibility: "both" | "troosolar" | "own";
+    };
+    type FeeEditRow = {
+      id: number;
+      title: string;
+      amount: string;
+      visibility: "both" | "troosolar" | "own";
+    };
+    const olItems: OlEditRow[] = [];
+    const feeItems: FeeEditRow[] = [];
     allServices.forEach((svc: any) => {
       const rawTitle = svc.title || "";
-      if (rawTitle.startsWith(OL_PREFIX)) {
-        const stripped = rawTitle.slice(OL_PREFIX.length).trim();
+      if (rawTitle.startsWith(OL_PREFIX) || rawTitle.startsWith(OL_VIS_TROO_PREFIX) || rawTitle.startsWith(OL_VIS_OWN_PREFIX)) {
+        const stripped = stripOrderItemPrefix(rawTitle);
         if (stripped) {
           const qtyRaw = svc.quantity ?? 1;
           const qtyAppliesRaw = svc.quantity_applies ?? svc.quantity_applicable ?? svc.is_quantity_applicable;
@@ -293,10 +387,16 @@ const BundleMgt = () => {
             quantity: String(qtyRaw || 1),
             unit: String(svc.unit || "Nos"),
             quantityApplies: qtyApplies,
+            visibility: parseOrderItemVisibility(rawTitle),
           });
         }
       } else {
-        feeItems.push({ id: svc.id, title: rawTitle, amount: String(svc.service_amount || 0) });
+        feeItems.push({
+          id: svc.id,
+          title: stripFeeVisibilityPrefix(rawTitle),
+          amount: String(svc.service_amount || 0),
+          visibility: parseFeeVisibility(rawTitle),
+        });
       }
     });
 
@@ -314,12 +414,13 @@ const BundleMgt = () => {
             quantity: String(bi.quantity || 1),
             unit: "Nos",
             quantityApplies: true,
+            visibility: "both",
           });
         }
       });
       if (olItems.length === 0 && bundleDetails.product_model) {
         String(bundleDetails.product_model).split("/").map((s: string) => s.trim()).filter(Boolean)
-          .forEach((part: string, idx: number) => olItems.push({ id: Date.now() + idx, title: part, amount: "0", quantity: "1", unit: "Nos", quantityApplies: true }));
+          .forEach((part: string, idx: number) => olItems.push({ id: Date.now() + idx, title: part, amount: "0", quantity: "1", unit: "Nos", quantityApplies: true, visibility: "both" }));
       }
     }
 
@@ -344,11 +445,9 @@ const BundleMgt = () => {
   const updateBundleMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) =>
       updateBundle(id, data, token),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["bundles"] });
-      setShowBundleModal(false);
-      setEditingBundle(null);
-      resetBundleForm();
+      queryClient.invalidateQueries({ queryKey: ["bundle-details", variables.id] });
     },
   });
 
@@ -550,7 +649,17 @@ const BundleMgt = () => {
     if (featuredImage) payload.featured_image = featuredImage;
 
     if (editingBundle) {
-      updateBundleMutation.mutate({ id: editingBundle.id, data: payload });
+      const bundleId = editingBundle.id;
+      updateBundleMutation.mutate(
+        { id: bundleId, data: payload },
+        {
+          onSuccess: () => {
+            setShowBundleModal(false);
+            setEditingBundle(null);
+            resetBundleForm();
+          },
+        }
+      );
     } else {
       createBundleMutation.mutate(payload);
     }
@@ -660,14 +769,15 @@ const BundleMgt = () => {
         quantity: bm.quantity ?? 1,
         rate_override: parseFloat(editMatRate[`mat-${bm.material_id}`]) || null,
       }));
-    updateBundleMutation.mutate(
-      { id: orderListBundle.id, data: { materials_detail, total_price: orderListBundle.total_price, discount_price: orderListBundle.discount_price ?? orderListBundle.total_price, title: orderListBundle.title } as any },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ["bundle-details", orderListBundle.id] });
-        },
-      }
-    );
+    updateBundleMutation.mutate({
+      id: orderListBundle.id,
+      data: {
+        materials_detail,
+        total_price: orderListBundle.total_price,
+        discount_price: orderListBundle.discount_price ?? orderListBundle.total_price,
+        title: orderListBundle.title,
+      } as any,
+    });
   };
 
   const handleSaveOrderList = () => {
@@ -683,7 +793,7 @@ const BundleMgt = () => {
     const orderItems = editOrderItems
       .filter((s) => s.title.trim() !== "")
       .map((s) => ({
-        title: `${OL_PREFIX}${s.title.trim()}`,
+        title: encodeOrderItemTitleWithVisibility(s.title, s.visibility || "both"),
         service_amount: parseFloat(s.amount) || 0,
         quantity: Math.max(1, parseInt(s.quantity || "1", 10) || 1),
         unit: (s.unit || "Nos").trim() || "Nos",
@@ -693,7 +803,7 @@ const BundleMgt = () => {
     const feeItems = editSvc
       .filter((s) => s.title.trim() !== "")
       .map((s) => ({
-        title: s.title.trim(),
+        title: encodeFeeTitleWithVisibility(s.title, s.visibility || "both"),
         service_amount: parseFloat(s.amount) || 0,
       }));
 
@@ -714,17 +824,23 @@ const BundleMgt = () => {
       },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ["bundle-details", orderListBundle.id] });
-          queryClient.invalidateQueries({ queryKey: ["bundles"] });
           setEditOrderItems(orderItems.map((s, i) => ({
             id: Date.now() + i,
-            title: s.title.slice(OL_PREFIX.length),
+            title: stripOrderItemPrefix(s.title),
             amount: String(s.service_amount),
             quantity: String(s.quantity || 1),
             unit: String(s.unit || "Nos"),
             quantityApplies: s.quantity_applies !== false,
+            visibility: parseOrderItemVisibility(s.title),
           })));
-          setEditSvc(feeItems.map((s, i) => ({ id: Date.now() + 1000 + i, title: s.title, amount: String(s.service_amount) })));
+          setEditSvc(
+            feeItems.map((s, i) => ({
+              id: Date.now() + 1000 + i,
+              title: stripFeeVisibilityPrefix(s.title),
+              amount: String(s.service_amount),
+              visibility: parseFeeVisibility(s.title),
+            }))
+          );
           setOrderListDirty(false);
           setSavingOrderList(false);
           alert("Changes saved successfully!");
@@ -739,7 +855,7 @@ const BundleMgt = () => {
   };
 
   const handleAddOrderItem = () => {
-    setEditOrderItems((prev) => [...prev, { id: Date.now(), title: "", amount: "0", quantity: "1", unit: "Nos", quantityApplies: true }]);
+    setEditOrderItems((prev) => [...prev, { id: Date.now(), title: "", amount: "0", quantity: "1", unit: "Nos", quantityApplies: true, visibility: "both" }]);
     setOrderListDirty(true);
   };
 
@@ -749,7 +865,7 @@ const BundleMgt = () => {
   };
 
   const handleAddService = () => {
-    setEditSvc((prev) => [...prev, { id: Date.now(), title: "", amount: "0" }]);
+    setEditSvc((prev) => [...prev, { id: Date.now(), title: "", amount: "0", visibility: "both" }]);
     setOrderListDirty(true);
   };
 
@@ -1751,12 +1867,13 @@ const BundleMgt = () => {
                           <th className="px-4 py-3 text-center text-sm font-medium text-black w-16">QTY</th>
                           <th className="px-4 py-3 text-center text-sm font-medium text-black w-16">UNIT</th>
                           <th className="px-4 py-3 text-right text-sm font-medium text-black w-32">RATE (₦)</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black w-44">Show For</th>
                           <th className="px-4 py-3 text-center text-sm font-medium text-black w-24">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {editOrderItems.length === 0 ? (
-                          <tr><td colSpan={5} className="px-4 py-6 text-center text-gray-400">No order list items. Click &quot;+ Add Item&quot; to add items shown on the order summary.</td></tr>
+                          <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">No order list items. Click &quot;+ Add Item&quot; to add items shown on the order summary.</td></tr>
                         ) : (
                           editOrderItems.map((item, idx) => {
                             const rate = parseFloat(item.amount) || 0;
@@ -1838,6 +1955,21 @@ const BundleMgt = () => {
                                   />
                                   {rate === 0 && <span className="text-xs text-gray-400 ml-1 italic">Included</span>}
                                 </td>
+                                <td className="px-4 py-2">
+                                  <select
+                                    value={item.visibility || "both"}
+                                    onChange={(e) => {
+                                      const val = e.target.value as "both" | "troosolar" | "own";
+                                      setEditOrderItems((prev) => prev.map((s, i) => i === idx ? { ...s, visibility: val } : s));
+                                      setOrderListDirty(true);
+                                    }}
+                                    className="w-40 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                                  >
+                                    <option value="both">Both</option>
+                                    <option value="troosolar">Troosolar Installer Only</option>
+                                    <option value="own">Own Installer Only</option>
+                                  </select>
+                                </td>
                                 <td className="px-4 py-2 text-center">
                                   <button
                                     onClick={() => handleRemoveOrderItem(idx)}
@@ -1912,12 +2044,13 @@ const BundleMgt = () => {
                         <tr className="bg-[#EBEBEB] border-b">
                           <th className="px-4 py-3 text-left text-sm font-medium text-black">Fee Name</th>
                           <th className="px-4 py-3 text-left text-sm font-medium text-black w-40">Amount (₦)</th>
+                          <th className="px-4 py-3 text-left text-sm font-medium text-black w-44">Show For</th>
                           <th className="px-4 py-3 text-center text-sm font-medium text-black w-24">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {editSvc.length === 0 ? (
-                          <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-400">No fees. Click &quot;+ Add Fee&quot; to add invoice fees.</td></tr>
+                          <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400">No fees. Click &quot;+ Add Fee&quot; to add invoice fees.</td></tr>
                         ) : (
                           editSvc.map((svc, idx) => (
                             <tr key={svc.id} className={idx % 2 === 0 ? "bg-gray-50" : "bg-white"}>
@@ -1947,6 +2080,21 @@ const BundleMgt = () => {
                                   }}
                                   className="w-36 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
                                 />
+                              </td>
+                              <td className="px-4 py-2">
+                                <select
+                                  value={svc.visibility || "both"}
+                                  onChange={(e) => {
+                                    const val = e.target.value as "both" | "troosolar" | "own";
+                                    setEditSvc((prev) => prev.map((s, i) => i === idx ? { ...s, visibility: val } : s));
+                                    setOrderListDirty(true);
+                                  }}
+                                  className="w-40 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 outline-none"
+                                >
+                                  <option value="both">Both</option>
+                                  <option value="troosolar">Troosolar Installer Only</option>
+                                  <option value="own">Own Installer Only</option>
+                                </select>
                               </td>
                               <td className="px-4 py-2 text-center">
                                 <button
@@ -1979,7 +2127,20 @@ const BundleMgt = () => {
 
                 {/* ═══ FULL INVOICE PREVIEW (read-only combined view) ═══ */}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">Invoice Preview — {orderListBundle.title}</h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                    <h3 className="text-lg font-bold text-gray-800">Invoice Preview — {orderListBundle.title}</h3>
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <span className="whitespace-nowrap font-medium">Preview as:</span>
+                      <select
+                        value={invoicePreviewAsInstaller}
+                        onChange={(e) => setInvoicePreviewAsInstaller(e.target.value as "troosolar" | "own")}
+                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+                      >
+                        <option value="troosolar">Troosolar installer</option>
+                        <option value="own">Own installer</option>
+                      </select>
+                    </label>
+                  </div>
                   <table className="w-full">
                     <thead>
                       <tr className="border-b-2 border-gray-300">
@@ -1991,8 +2152,12 @@ const BundleMgt = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {/* Order list items */}
-                      {editOrderItems.filter(i => i.title.trim()).map((item, idx) => {
+                      {/* Order list items (filtered by Show For vs preview installer, same as customer dashboard) */}
+                      {editOrderItems.filter(
+                        (i) =>
+                          i.title.trim() &&
+                          rowVisibleForInvoicePreview(i.visibility || "both", invoicePreviewAsInstaller)
+                      ).map((item, idx) => {
                         const rate = parseFloat(item.amount) || 0;
                         const qtyApplies = item.quantityApplies !== false;
                         const qty = qtyApplies ? Math.max(1, parseInt(item.quantity || "1", 10) || 1) : 1;
@@ -2010,28 +2175,23 @@ const BundleMgt = () => {
                         );
                       })}
 
-                      {/* Grouped installation materials cost row */}
-                      {(bundleDetails?.bundle_materials || []).length > 0 && (() => {
-                        let matTotal = 0;
-                        (bundleDetails.bundle_materials || []).forEach((bm: any) => {
-                          const mKey = `mat-${bm.material_id}`;
-                          const qty = bm.quantity || 1;
-                          const rate = parseFloat(editMatRate[mKey] ?? String(bm.rate_override ?? bm.material?.selling_rate ?? bm.material?.rate ?? 0)) || 0;
-                          matTotal += rate * qty;
-                        });
-                        return (
-                          <tr className="border-b border-gray-100 bg-gray-50/50">
-                            <td className="py-2 text-sm text-gray-800">Installation Materials Cost</td>
-                            <td className="py-2 text-sm text-center">1</td>
-                            <td className="py-2 text-sm text-center text-gray-600">Lots</td>
-                            <td className="py-2 text-sm text-right">{matTotal > 0 ? formatNaira(matTotal) : <span className="italic text-gray-400">Included</span>}</td>
-                            <td className="py-2 text-sm text-right font-medium">{matTotal > 0 ? formatNaira(matTotal) : <span className="italic text-gray-400">Included</span>}</td>
-                          </tr>
-                        );
-                      })()}
+                      {/* Grouped installation materials cost row — only when total &gt; 0 (no dummy Included row) */}
+                      {invoicePreviewMaterialsTotal > 0 && (
+                        <tr className="border-b border-gray-100 bg-gray-50/50">
+                          <td className="py-2 text-sm text-gray-800">Installation Materials Cost</td>
+                          <td className="py-2 text-sm text-center">1</td>
+                          <td className="py-2 text-sm text-center text-gray-600">Lots</td>
+                          <td className="py-2 text-sm text-right">{formatNaira(invoicePreviewMaterialsTotal)}</td>
+                          <td className="py-2 text-sm text-right font-medium">{formatNaira(invoicePreviewMaterialsTotal)}</td>
+                        </tr>
+                      )}
 
                       {/* Invoice fee rows */}
-                      {editSvc.filter(s => s.title.trim()).map((svc, idx) => {
+                      {editSvc.filter(
+                        (s) =>
+                          s.title.trim() &&
+                          rowVisibleForInvoicePreview(s.visibility || "both", invoicePreviewAsInstaller)
+                      ).map((svc, idx) => {
                         const amt = parseFloat(svc.amount) || 0;
                         const isInspection = /inspection/i.test(svc.title);
                         return (
@@ -2045,8 +2205,18 @@ const BundleMgt = () => {
                         );
                       })}
 
-                      {editOrderItems.filter(i => i.title.trim()).length === 0 && (bundleDetails?.bundle_materials || []).length === 0 && editSvc.filter(s => s.title.trim()).length === 0 && (
-                        <tr><td colSpan={5} className="py-6 text-center text-gray-400">No items yet. Add order list items from the Order List tab and fees above.</td></tr>
+                      {editOrderItems.filter(
+                        (i) =>
+                          i.title.trim() &&
+                          rowVisibleForInvoicePreview(i.visibility || "both", invoicePreviewAsInstaller)
+                      ).length === 0 &&
+                        invoicePreviewMaterialsTotal <= 0 &&
+                        editSvc.filter(
+                          (s) =>
+                            s.title.trim() &&
+                            rowVisibleForInvoicePreview(s.visibility || "both", invoicePreviewAsInstaller)
+                        ).length === 0 && (
+                        <tr><td colSpan={5} className="py-6 text-center text-gray-400">No items yet for this preview. Add order list items from the Order List tab and fees above, or switch &quot;Preview as&quot;.</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -2054,7 +2224,15 @@ const BundleMgt = () => {
                   {/* Totals */}
                   {(() => {
                     const bundlePrice = orderListBundle.total_price;
-                    const feesTotal = editSvc.reduce((s: number, svc: { amount: string }) => s + (parseFloat(svc.amount) || 0), 0);
+                    const feesTotal = editSvc
+                      .filter((svc: { title: string; visibility?: string }) =>
+                        svc.title.trim() &&
+                        rowVisibleForInvoicePreview(
+                          (svc.visibility as "both" | "troosolar" | "own") || "both",
+                          invoicePreviewAsInstaller
+                        )
+                      )
+                      .reduce((s: number, svc: { amount: string }) => s + (parseFloat(svc.amount) || 0), 0);
                     const netTotal = bundlePrice + feesTotal;
                     const vat = netTotal * 0.075;
                     const grandTotal = netTotal + vat;
