@@ -62,12 +62,13 @@ export const Sidebar_links = [
     icon: images.ShopMgt,
     sublinks: [],
   },
-  {
-    name: "Material Mgt",
-    link: "/material-mgt",
-    icon: images.ShopMgt,
-    sublinks: [],
-  },
+  // Hidden from sidebar – uncomment to show
+  // {
+  //   name: "Material Mgt",
+  //   link: "/material-mgt",
+  //   icon: images.ShopMgt,
+  //   sublinks: [],
+  // },
   {
     name: "Bundle Mgt",
     link: "/bundle-mgt",

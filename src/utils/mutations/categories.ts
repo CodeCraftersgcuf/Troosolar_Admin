@@ -1,5 +1,25 @@
+import axios from "axios";
+import { API_DOMAIN, API_ENDPOINTS } from "../../../apiConfig";
+
+export const reorderCategories = async (
+  token: string,
+  orders: { id: number; sort_order: number }[]
+) => {
+  const url = `${API_DOMAIN}/categories/reorder`;
+  const response = await axios.post(
+    url,
+    { orders },
+    {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+  return response.data;
+};
+
 import { apiCall } from "../customApiCall";
-import { API_ENDPOINTS } from "../../../apiConfig";
 
 // Helper to create FormData from payload
 const buildCategoryFormData = (payload: {
@@ -43,7 +63,7 @@ export const updateCategory = async (
   );
 };
 
-// DELETE remains unchanged
+// DELETE category via admin API (existing behavior)
 export const deleteCategory = async (
   id: number | string,
   token: string

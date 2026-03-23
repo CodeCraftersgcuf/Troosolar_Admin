@@ -149,11 +149,13 @@ const BNPLBuyNow: React.FC = () => {
   const [loanSettingsForm, setLoanSettingsForm] = useState({
     interest_rate_percentage: "",
     min_down_percentage: "",
+    down_payment_options: [] as number[],
     management_fee_percentage: "",
     legal_fee_percentage: "",
     insurance_fee_percentage: "",
     minimum_loan_amount: "",
     loan_durations: [] as number[],
+    newDownPaymentOption: "",
     newDuration: "",
   });
   const [savingLoanSettings, setSavingLoanSettings] = useState(false);
@@ -270,6 +272,9 @@ const BNPLBuyNow: React.FC = () => {
         ...f,
         interest_rate_percentage: String(bnplSettings.interest_rate_percentage ?? ""),
         min_down_percentage: String(bnplSettings.min_down_percentage ?? ""),
+        down_payment_options: Array.isArray(bnplSettings.down_payment_options) && bnplSettings.down_payment_options.length
+          ? [...bnplSettings.down_payment_options].map((v: number | string) => Number(v)).filter((v: number) => !Number.isNaN(v))
+          : (bnplSettings.min_down_percentage != null ? [Number(bnplSettings.min_down_percentage)] : []),
         management_fee_percentage: String(bnplSettings.management_fee_percentage ?? ""),
         legal_fee_percentage: String(bnplSettings.legal_fee_percentage ?? ""),
         insurance_fee_percentage: String(bnplSettings.insurance_fee_percentage ?? ""),
@@ -947,7 +952,10 @@ const BNPLBuyNow: React.FC = () => {
                   try {
                     await updateBNPLSettings({
                       interest_rate_percentage: loanSettingsForm.interest_rate_percentage ? Number(loanSettingsForm.interest_rate_percentage) : undefined,
-                      min_down_percentage: loanSettingsForm.min_down_percentage ? Number(loanSettingsForm.min_down_percentage) : undefined,
+                      min_down_percentage: loanSettingsForm.down_payment_options.length
+                        ? Math.min(...loanSettingsForm.down_payment_options)
+                        : (loanSettingsForm.min_down_percentage ? Number(loanSettingsForm.min_down_percentage) : undefined),
+                      down_payment_options: loanSettingsForm.down_payment_options.length ? loanSettingsForm.down_payment_options : undefined,
                       management_fee_percentage: loanSettingsForm.management_fee_percentage ? Number(loanSettingsForm.management_fee_percentage) : undefined,
                       legal_fee_percentage: loanSettingsForm.legal_fee_percentage ? Number(loanSettingsForm.legal_fee_percentage) : undefined,
                       insurance_fee_percentage: loanSettingsForm.insurance_fee_percentage ? Number(loanSettingsForm.insurance_fee_percentage) : undefined,
@@ -970,8 +978,54 @@ const BNPLBuyNow: React.FC = () => {
                     <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2" value={loanSettingsForm.interest_rate_percentage} onChange={(e) => setLoanSettingsForm((f) => ({ ...f, interest_rate_percentage: e.target.value }))} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Minimum down (%)</label>
-                    <input type="number" step="0.01" min="0" max="100" className="w-full border border-gray-300 rounded-lg px-3 py-2" value={loanSettingsForm.min_down_percentage} onChange={(e) => setLoanSettingsForm((f) => ({ ...f, min_down_percentage: e.target.value }))} />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Minimum down options (%)</label>
+                    <p className="text-xs text-gray-500 mb-2">Add allowed down-payment percentages. The minimum is picked automatically from your list.</p>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      {loanSettingsForm.down_payment_options.map((p) => (
+                        <span key={p} className="inline-flex items-center px-3 py-1 rounded-full bg-[#273E8E] text-white text-sm">
+                          {p}%
+                          <button type="button" className="ml-2 hover:opacity-80" onClick={() => setLoanSettingsForm((f) => {
+                            const next = f.down_payment_options.filter((v) => v !== p);
+                            return { ...f, down_payment_options: next, min_down_percentage: next.length ? String(Math.min(...next)) : "" };
+                          })}>×</button>
+                        </span>
+                      ))}
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          placeholder="e.g. 30"
+                          className="w-24 border border-gray-300 rounded-lg px-2 py-1 text-sm"
+                          value={loanSettingsForm.newDownPaymentOption}
+                          onChange={(e) => setLoanSettingsForm((f) => ({ ...f, newDownPaymentOption: e.target.value }))}
+                        />
+                        <button
+                          type="button"
+                          className="px-3 py-1 bg-gray-200 rounded-lg text-sm hover:bg-gray-300"
+                          onClick={() => {
+                            const n = Number(loanSettingsForm.newDownPaymentOption);
+                            if (Number.isNaN(n) || n < 0 || n > 100) return;
+                            setLoanSettingsForm((f) => {
+                              if (f.down_payment_options.includes(n)) return { ...f, newDownPaymentOption: "" };
+                              const next = [...f.down_payment_options, n].sort((a, b) => a - b);
+                              return {
+                                ...f,
+                                down_payment_options: next,
+                                min_down_percentage: String(Math.min(...next)),
+                                newDownPaymentOption: "",
+                              };
+                            });
+                          }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                    {loanSettingsForm.down_payment_options.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-2">Minimum down (auto): {Math.min(...loanSettingsForm.down_payment_options)}%</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Management fee (%)</label>

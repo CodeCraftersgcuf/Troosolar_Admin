@@ -129,6 +129,7 @@ export const updateBNPLSettings = async (
   payload: {
     interest_rate_percentage?: number;
     min_down_percentage?: number;
+    down_payment_options?: number[];
     management_fee_percentage?: number;
     legal_fee_percentage?: number;
     insurance_fee_percentage?: number;

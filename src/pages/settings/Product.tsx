@@ -11,7 +11,7 @@ import LoadingSpinner from "../../components/common/LoadingSpinner";
 import { getAllCategories } from "../../utils/queries/categories";
 import Cookies from "js-cookie";
 import { useQuery } from "@tanstack/react-query";
-import { deleteCategory } from "../../utils/mutations/categories";
+import { deleteCategory, reorderCategories } from "../../utils/mutations/categories";
 import { useMutation } from "@tanstack/react-query";
 
 import { getAllBrands } from "../../utils/queries/brands";
@@ -21,6 +21,19 @@ import { deleteBrand } from "../../utils/mutations/brands";
 
 
 const IMAGE_BASE_URL = "https://troosolar.hmstech.org";
+
+interface ApiCategory {
+  id: number;
+  title: string;
+  icon?: string | null;
+  created_at?: string;
+  sort_order?: number | null;
+}
+
+interface ApiListResponse<T> {
+  status?: string;
+  data?: T[];
+}
 
 const Product = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -47,6 +60,9 @@ const Product = () => {
   const [brandToDelete, setBrandToDelete] = useState<Brand | null>(null);
   const [editBrandModalOpen, setEditBrandModalOpen] = useState(false);
   const [editBrandData, setEditBrandData] = useState<Brand | null>(null);
+
+  // Drag-and-drop state for categories
+  const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -56,22 +72,6 @@ const Product = () => {
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("");
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
-
-  const categoryOptions = useMemo(
-    () => [
-      {
-        value: "",
-        label: "Categories",
-        icon: null,
-      },
-      ...apiCategories.map((category) => ({
-        value: String(category.id),
-        label: category.title,
-        icon: category.icon ? `${IMAGE_BASE_URL}${category.icon}` : null,
-      })),
-    ],
-    [apiCategories]
-  );
 
   // Custom dropdown handlers
   const handleCategorySelect = (category: {
@@ -126,36 +126,68 @@ const Product = () => {
 
   // API integration for categories
   const token = Cookies.get("token");
-  const { data: apiCategories, isLoading: isCategoriesLoading, isError: isCategoriesError, refetch } = useQuery({
+  const {
+    data: apiCategoriesResponse,
+    isLoading: isCategoriesLoading,
+    isError: isCategoriesError,
+    refetch,
+  } = useQuery({
     queryKey: ["all-categories"],
     queryFn: () => getAllCategories(token || ""),
     enabled: !!token,
   });
 
+  const apiCategories = useMemo<ApiCategory[]>(() => {
+    const response = apiCategoriesResponse as ApiListResponse<ApiCategory> | undefined;
+    return Array.isArray(response?.data) ? response.data : [];
+  }, [apiCategoriesResponse]);
+
+  const categoryOptions = useMemo(
+    () => [
+      {
+        value: "",
+        label: "Categories",
+        icon: null,
+      },
+      ...apiCategories.map((category) => ({
+        value: String(category.id),
+        label: category.title,
+        icon: category.icon ? `${IMAGE_BASE_URL}${category.icon}` : null,
+      })),
+    ],
+    [apiCategories]
+  );
+
   // Map API response to categories
   useEffect(() => {
-    if (apiCategories && (apiCategories as any)?.status === "success" && Array.isArray((apiCategories as any).data)) {
-      setCategories(
-        (apiCategories as any).data.map((cat: any) => ({
-          id: String(cat.id),
-          categoryName: cat.title,
-          image: cat.icon ? `${IMAGE_BASE_URL}${cat.icon}` : "/assets/images/category.png",
-          dateCreated: cat.created_at
-            ? new Date(cat.created_at).toLocaleString("en-GB", {
+    setCategories(
+      apiCategories.map((cat, index) => ({
+        id: String(cat.id),
+        categoryName: cat.title,
+        image: cat.icon ? `${IMAGE_BASE_URL}${cat.icon}` : "/assets/images/category.png",
+        dateCreated: cat.created_at
+          ? new Date(cat.created_at).toLocaleString("en-GB", {
               day: "2-digit",
               month: "2-digit",
               year: "2-digit",
               hour: "2-digit",
               minute: "2-digit",
               hour12: true,
-            }).replace(/\//g, "-").replace(",", "/")
-            : "",
-          status: "Active", // API doesn't provide status, default to Active
-          isSelected: false,
-        }))
-      );
-    }
+            })
+              .replace(/\//g, "-")
+              .replace(",", "/")
+          : "",
+        status: "Active" as ProductCategory["status"],
+        isSelected: false,
+        // Preserve backend sort_order when present, otherwise fall back to index.
+        sortOrder: typeof cat.sort_order === "number" ? cat.sort_order : index + 1,
+      }))
+      // Always keep in sortOrder asc when loading.
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+    );
   }, [apiCategories]);
+
+  // (categories are sorted in currentData; no extra derived list needed)
 
   // Edit category logic
   const handleEdit = (id: string) => {
@@ -198,6 +230,46 @@ const Product = () => {
     setEditCategoryModalOpen(false);
     setEditCategoryData(null);
     refetch();
+  };
+
+  // Drag handlers
+  const handleDragStart = (id: string) => {
+    setDraggedCategoryId(id);
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLTableRowElement>) => {
+    event.preventDefault();
+  };
+
+  const handleDrop = (targetId: string) => {
+    if (!draggedCategoryId || draggedCategoryId === targetId) return;
+    setCategories((prev) => {
+      const current = [...prev];
+      const fromIndex = current.findIndex((c: any) => c.id === draggedCategoryId);
+      const toIndex = current.findIndex((c: any) => c.id === targetId);
+      if (fromIndex === -1 || toIndex === -1) return prev;
+      const [moved] = current.splice(fromIndex, 1);
+      current.splice(toIndex, 0, moved);
+      // Reassign sortOrder based on new position (1-based)
+      const reindexed = current.map((c: any, idx: number) => ({
+        ...c,
+        sortOrder: idx + 1,
+      }));
+
+      // Fire-and-forget save to backend
+      if (token) {
+        const payload = reindexed.map((c: any) => ({
+          id: Number(c.id),
+          sort_order: c.sortOrder,
+        }));
+        reorderCategories(token, payload).catch(() => {
+          // ignore error here; admin can refresh if something goes wrong
+        });
+      }
+
+      return reindexed;
+    });
+    setDraggedCategoryId(null);
   };
 
   const handleSelectBrand = (id: string) => {
@@ -350,8 +422,14 @@ const Product = () => {
   // Pagination logic with category heading filter
   const currentData = useMemo(() => {
     if (activeTab === "categories") {
-      if (!selectedCategoryFilter) return categories;
-      return categories.filter((category) => String(category.id) === selectedCategoryFilter);
+      const base =
+        !selectedCategoryFilter
+          ? categories
+          : categories.filter((category: any) => String(category.id) === selectedCategoryFilter);
+      // Always show categories in sortOrder asc for the table (including pagination).
+      return [...base].sort(
+        (a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0)
+      );
     }
     if (!selectedCategoryFilter) return brandList;
     return brandList.filter((brand) => String(brand.category) === selectedCategoryFilter);
@@ -538,8 +616,12 @@ const Product = () => {
                   return (
                   <tr
                     key={category.id}
+                    draggable
+                    onDragStart={() => handleDragStart(category.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={() => handleDrop(category.id)}
                     className={`${index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"
-                      } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 `}
+                      } transition-colors border-b border-gray-100 last:border-b-0 px-6 py-4 cursor-move`}
                   >
                     {/* Checkbox */}
                     <td className="px-6 py-4 text-center">
