@@ -24,6 +24,8 @@ type BundleProductPayload = {
   title?: string;
   bundle_type?: string;
   is_available?: boolean;
+  top_deal?: boolean;
+  is_most_popular?: boolean;
   brand_id?: number | null;
   total_price?: number;
   discount_price?: number;
@@ -60,6 +62,12 @@ export const addBundle = async (
   if (data.bundle_type) formData.append("bundle_type", data.bundle_type);
   if (data.is_available !== undefined) {
     formData.append("is_available", data.is_available ? "1" : "0");
+  }
+  if (data.top_deal !== undefined) {
+    formData.append("top_deal", data.top_deal ? "1" : "0");
+  }
+  if (data.is_most_popular !== undefined) {
+    formData.append("is_most_popular", data.is_most_popular ? "1" : "0");
   }
   if (data.brand_id != null) {
     formData.append("brand_id", String(data.brand_id));
@@ -151,6 +159,12 @@ export const updateBundle = async (
   if (data.bundle_type) formData.append("bundle_type", data.bundle_type);
   if (data.is_available !== undefined) {
     formData.append("is_available", data.is_available ? "1" : "0");
+  }
+  if (data.top_deal !== undefined) {
+    formData.append("top_deal", data.top_deal ? "1" : "0");
+  }
+  if (data.is_most_popular !== undefined) {
+    formData.append("is_most_popular", data.is_most_popular ? "1" : "0");
   }
   if (data.brand_id != null) {
     formData.append("brand_id", String(data.brand_id));

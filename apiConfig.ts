@@ -54,6 +54,14 @@ const API_ENDPOINTS = {
     ProductShow: (id: number | string) => `${API_DOMAIN}/products/${id}`, // GET
     ProductUpdate: (id: number | string) => `${API_DOMAIN}/products/${id}/update`, // POST
     ProductDelete: (id: number | string) => `${API_DOMAIN}/products/${id}`, // DELETE
+    ProductReviewsAdminList: (productId?: number | string) =>
+      `${API_DOMAIN}/admin/product-reviews${productId ? `?product_id=${productId}` : ""}`, // GET
+    ProductReviewAdminUpdate: (id: number | string) =>
+      `${API_DOMAIN}/admin/product-reviews/${id}`, // PUT
+    ProductReviewAdminReply: (id: number | string) =>
+      `${API_DOMAIN}/admin/product-reviews/${id}/reply`, // PUT
+    ProductReviewAdminDelete: (id: number | string) =>
+      `${API_DOMAIN}/admin/product-reviews/${id}`, // DELETE
 
     // --- Bundles (admin/shop) ---
     BundleCreate: API_DOMAIN + "/bundles", // POST
@@ -198,6 +206,10 @@ const API_ENDPOINTS = {
     CalculatorSettingsGet: API_DOMAIN + "/admin/calculator-settings", // GET
     CalculatorSettingsUpdate: API_DOMAIN + "/admin/calculator-settings", // PUT
 
+    // --- Shop checkout (delivery fee, estimates, installation copy) ---
+    CheckoutSettingsGet: API_DOMAIN + "/admin/checkout-settings", // GET
+    CheckoutSettingsUpdate: API_DOMAIN + "/admin/checkout-settings", // PUT
+
     // --- Buy Now Admin Endpoints ---
     BuyNowOrdersList: API_DOMAIN + "/admin/orders/buy-now", // GET
     BuyNowOrderShow: (id: number | string) =>
@@ -248,6 +260,7 @@ const API_ENDPOINTS = {
     // --- Referral Management Admin Endpoints ---
     ReferralSettings: API_DOMAIN + "/admin/referral/settings", // GET, PUT
     ReferralList: API_DOMAIN + "/admin/referral/list", // GET
+    ReferralReferredSignups: API_DOMAIN + "/admin/referral/referred-signups", // GET
     ReferralUserDetails: (userId: number | string) =>
       `${API_DOMAIN}/admin/referral/user/${userId}`, // GET
 

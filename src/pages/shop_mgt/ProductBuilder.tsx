@@ -63,6 +63,8 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
   const [bundleName, setBundleName] = useState('');
   const [bundleType, setBundleType] = useState('');
   const [isAvailable, setIsAvailable] = useState(true);
+  const [topDeal, setTopDeal] = useState(false);
+  const [highlyRecommended, setHighlyRecommended] = useState(false);
   const [totalPrice, setTotalPrice] = useState('');
   const [discountPrice, setDiscountPrice] = useState('');
   const [discountEndDate, setDiscountEndDate] = useState('');
@@ -163,6 +165,8 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
       setBundleName(editingBundle.title || "");
       setBundleType(editingBundle.bundle_type || "");
       setIsAvailable(editingBundle.is_available !== false);
+      setTopDeal(editingBundle.top_deal === true);
+      setHighlyRecommended(editingBundle.is_most_popular === true);
       setTotalPrice(editingBundle.total_price ? String(editingBundle.total_price) : "");
       setDiscountPrice(editingBundle.discount_price ? String(editingBundle.discount_price) : "");
       setDiscountEndDate(editingBundle.discount_end_date || "");
@@ -206,6 +210,8 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
       title: bundleName,
       bundle_type: bundleType,
       is_available: isAvailable,
+      top_deal: topDeal,
+      is_most_popular: highlyRecommended,
       total_price: parseFloat(totalPrice),
       discount_price: discountPrice ? parseFloat(discountPrice) : undefined,
       discount_end_date: discountEndDate || undefined,
@@ -243,6 +249,8 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
     setBundleName('');
     setBundleType('');
     setIsAvailable(true);
+    setTopDeal(false);
+    setHighlyRecommended(false);
     setTotalPrice('');
     setDiscountPrice('');
     setDiscountEndDate('');
@@ -456,6 +464,27 @@ const ProductBuilder = ({ isOpen, onClose, editingBundle }: ProductBuilderProps)
                 <option value="available">Available (show on public app)</option>
                 <option value="unavailable">Unavailable (hide from public app)</option>
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={topDeal}
+                  onChange={(e) => setTopDeal(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Mark as Top deal</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={highlyRecommended}
+                  onChange={(e) => setHighlyRecommended(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Highly recommended (show first in lists)</span>
+              </label>
             </div>
 
             {/* Featured Image */}

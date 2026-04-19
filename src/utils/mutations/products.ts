@@ -13,6 +13,7 @@ export const addProduct = async (
     stock?: string;
     installation_price?: number;
     top_deal?: boolean;
+    is_most_popular?: boolean;
     installation_compulsory?: boolean;
     is_available?: boolean;
     description?: string;
@@ -44,6 +45,8 @@ export const addProduct = async (
     formData.append("installation_price", data.installation_price.toString());
   if (data.top_deal !== undefined)
     formData.append("top_deal", data.top_deal ? "1" : "0");
+  if (data.is_most_popular !== undefined)
+    formData.append("is_most_popular", data.is_most_popular ? "1" : "0");
   if (data.installation_compulsory !== undefined)
     formData.append(
       "installation_compulsory",

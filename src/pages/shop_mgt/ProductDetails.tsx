@@ -8,7 +8,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import { deleteProduct } from "../../utils/mutations/products";
 import { getSingleProduct } from "../../utils/queries/product";
-import { API_DOMAIN } from "../../../apiConfig";
+import { API_DOMAIN, API_ENDPOINTS } from "../../../apiConfig";
+import { apiCall } from "../../utils/customApiCall";
 
 // API Response Interfaces
 interface ApiProductDetail {
@@ -50,6 +51,23 @@ interface ApiSingleProduct {
   reviews: unknown[];
 }
 
+interface ApiReview {
+  id?: number;
+  rating?: number;
+  review?: string;
+  comment?: string;
+  created_at?: string;
+  admin_reply?: string | null;
+  admin_replied_at?: string | null;
+  user_name?: string;
+  name?: string;
+  user?: {
+    name?: string;
+    first_name?: string;
+    sur_name?: string;
+  };
+}
+
 interface ProductDetailsProps {
   isOpen: boolean;
   onClose: () => void;
@@ -62,6 +80,11 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [editingReviewId, setEditingReviewId] = useState<number | null>(null);
+  const [editReviewText, setEditReviewText] = useState("");
+  const [editReviewRating, setEditReviewRating] = useState(5);
+  const [replyingToReviewId, setReplyingToReviewId] = useState<number | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
 
   // Get token from cookies
   const token = Cookies.get('token') || '';
@@ -95,6 +118,65 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
       console.error('Error deleting product:', error);
       setIsDeleting(false);
       alert('Error deleting product. Please try again.');
+    },
+  });
+
+  const updateReviewMutation = useMutation({
+    mutationFn: async ({
+      reviewId,
+      review,
+      rating,
+    }: {
+      reviewId: number;
+      review: string;
+      rating: number;
+    }) =>
+      apiCall(
+        API_ENDPOINTS.ADMIN.ProductReviewAdminUpdate(reviewId),
+        "PUT",
+        { review, rating },
+        token
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["singleProduct", product?.id] });
+      setEditingReviewId(null);
+      setEditReviewText("");
+      setEditReviewRating(5);
+    },
+    onError: (error) => {
+      console.error("Error updating review:", error);
+      alert("Failed to update review.");
+    },
+  });
+
+  const deleteReviewMutation = useMutation({
+    mutationFn: async (reviewId: number) =>
+      apiCall(API_ENDPOINTS.ADMIN.ProductReviewAdminDelete(reviewId), "DELETE", undefined, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["singleProduct", product?.id] });
+    },
+    onError: (error) => {
+      console.error("Error deleting review:", error);
+      alert("Failed to delete review.");
+    },
+  });
+
+  const saveAdminReplyMutation = useMutation({
+    mutationFn: async ({ reviewId, admin_reply }: { reviewId: number; admin_reply: string }) =>
+      apiCall(
+        API_ENDPOINTS.ADMIN.ProductReviewAdminReply(reviewId),
+        "PUT",
+        { admin_reply },
+        token
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["singleProduct", product?.id] });
+      setReplyingToReviewId(null);
+      setReplyDraft("");
+    },
+    onError: (error) => {
+      console.error("Error saving admin reply:", error);
+      alert("Failed to save reply.");
     },
   });
 
@@ -164,7 +246,59 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
   };
 
   const allImages = getAllProductImages();
+  const beginEditReview = (review: ApiReview) => {
+    setReplyingToReviewId(null);
+    setReplyDraft("");
+    setEditingReviewId(Number(review.id));
+    setEditReviewText(String(review.review || review.comment || ""));
+    setEditReviewRating(Number(review.rating || 5));
+  };
+
+  const beginAdminReply = (review: ApiReview) => {
+    if (!review.id) return;
+    setEditingReviewId(null);
+    setReplyingToReviewId(Number(review.id));
+    setReplyDraft(review.admin_reply != null && review.admin_reply !== "" ? String(review.admin_reply) : "");
+  };
+
+  const handleSaveAdminReply = () => {
+    if (!replyingToReviewId) return;
+    saveAdminReplyMutation.mutate({
+      reviewId: replyingToReviewId,
+      admin_reply: replyDraft.trim(),
+    });
+  };
+
+  const handleSaveReviewEdit = () => {
+    if (!editingReviewId) return;
+    if (editReviewRating < 1 || editReviewRating > 5) {
+      alert("Rating must be 1 to 5.");
+      return;
+    }
+    updateReviewMutation.mutate({
+      reviewId: editingReviewId,
+      review: editReviewText.trim(),
+      rating: editReviewRating,
+    });
+  };
   const totalImages = allImages.length;
+  const reviews = (apiProduct?.reviews || []) as ApiReview[];
+
+  const normalizeReviewRating = (r: ApiReview): number => {
+    const n = Number(r?.rating);
+    if (!Number.isFinite(n)) return 0;
+    return Math.min(5, Math.max(0, n));
+  };
+
+  const averageRating =
+    reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + normalizeReviewRating(r), 0) /
+        reviews.length
+      : 0;
+  const reviewCount = reviews.length;
+  const roundedAverage = reviewCount
+    ? Math.min(5, Math.max(0, Math.round(averageRating)))
+    : 0;
 
   // Navigate to next image
   const nextImage = () => {
@@ -333,20 +467,33 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
                   </div>
                 </div>
 
-                {/* Star Rating */}
-                <div className="flex items-center gap-2 mt-3">
+                {/* Star rating from real reviews (same source as Reviews tab) */}
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
                   <div className="flex">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <svg
                         key={star}
-                        className="w-4 h-4 text-yellow-400"
+                        className={`w-4 h-4 ${
+                          reviewCount && star <= roundedAverage
+                            ? "text-[#273E8E]"
+                            : "text-[#D9D9D9]"
+                        }`}
                         fill="currentColor"
                         viewBox="0 0 20 20"
+                        aria-hidden
                       >
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                       </svg>
                     ))}
                   </div>
+                  {reviewCount > 0 ? (
+                    <span className="text-sm text-gray-600">
+                      {averageRating.toFixed(1)} · {reviewCount}{" "}
+                      {reviewCount === 1 ? "review" : "reviews"}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-gray-500">No reviews yet</span>
+                  )}
                 </div>
               </div>
 
@@ -429,25 +576,18 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
                         <div className="flex items-center justify-between border border-[#00000080] rounded-2xl p-4">
                           <div className="flex items-center gap-2">
                             <div className="flex">
-                              {[1, 2, 3, 4].map((star) => (
+                              {[1, 2, 3, 4, 5].map((star) => (
                                 <svg
                                   key={star}
-                                  className="w-5 h-5 text-[#273E8E]"
+                                  className={`w-5 h-5 ${star <= Math.round(averageRating) ? "text-[#273E8E]" : "text-[#D9D9D9]"}`}
                                   fill="currentColor"
                                   viewBox="0 0 20 20"
                                 >
                                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                 </svg>
                               ))}
-                              <svg
-                                className="w-5 h-5 text-[#D9D9D9]"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                              >
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
                             </div>
-                            <span className="font-semibold text-gray-900">4.8</span>
+                            <span className="font-semibold text-gray-900">{averageRating.toFixed(1)}</span>
                           </div>
                           <span className="text-sm text-gray-600">{apiProduct.reviews.length} Reviews</span>
                         </div>
@@ -456,25 +596,35 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
                       {/* Individual Reviews */}
                       <div className="space-y-4">
                         {apiProduct.reviews.map((review: unknown, index: number) => {
-                          const reviewData = review as { user_name?: string; rating?: number; created_at?: string; comment?: string };
+                          const reviewData = review as ApiReview;
+                          const rid = Number(reviewData.id);
+                          const reviewerName =
+                            reviewData.user_name ||
+                            reviewData.name ||
+                            reviewData.user?.name ||
+                            [reviewData.user?.first_name, reviewData.user?.sur_name].filter(Boolean).join(" ") ||
+                            "Anonymous";
+                          const reviewText =
+                            (reviewData.review || reviewData.comment || "").trim() ||
+                            "No written comment (rating only)";
                           return (
-                          <div key={index} className="border border-[#00000080] rounded-2xl p-4">
+                          <div key={rid || index} className="border border-[#00000080] rounded-2xl p-4">
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
                                   <span className="text-gray-600 font-medium text-sm">
-                                    {reviewData.user_name ? reviewData.user_name.charAt(0).toUpperCase() : 'U'}
+                                    {reviewerName ? reviewerName.charAt(0).toUpperCase() : 'U'}
                                   </span>
                                 </div>
                                 <div>
                                   <h5 className="font-medium text-gray-900 text-sm">
-                                    {reviewData.user_name || 'Anonymous'}
+                                    {reviewerName}
                                   </h5>
                                   <div className="flex items-center gap-1 mt-1">
                                     {[1, 2, 3, 4, 5].map((star) => (
                                       <svg
                                         key={star}
-                                        className={`w-3 h-3 ${star <= (reviewData.rating || 4) ? 'text-[#273E8E]' : 'text-[#D9D9D9]'}`}
+                                        className={`w-3 h-3 ${star <= normalizeReviewRating(reviewData) ? 'text-[#273E8E]' : 'text-[#D9D9D9]'}`}
                                         fill="currentColor"
                                         viewBox="0 0 20 20"
                                       >
@@ -484,18 +634,138 @@ const ProductDetails = ({ isOpen, onClose, product, onEdit }: ProductDetailsProp
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
                                 <span className="text-xs text-gray-400">
                                   {reviewData.created_at ? new Date(reviewData.created_at).toLocaleDateString() : 'N/A'}
                                 </span>
-                                <button className="text-red-500 text-xs hover:text-red-700 cursor-pointer">
+                                <button
+                                  type="button"
+                                  onClick={() => beginEditReview(reviewData)}
+                                  className="text-blue-600 text-xs hover:text-blue-800 cursor-pointer"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => beginAdminReply(reviewData)}
+                                  className="text-[#273E8E] text-xs font-medium hover:underline cursor-pointer"
+                                >
+                                  {reviewData.admin_reply?.trim() ? "Edit reply" : "Reply"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!reviewData.id) return;
+                                    if (window.confirm("Delete this review?")) {
+                                      deleteReviewMutation.mutate(Number(reviewData.id));
+                                    }
+                                  }}
+                                  className="text-red-500 text-xs hover:text-red-700 cursor-pointer"
+                                >
                                   Delete
                                 </button>
                               </div>
                             </div>
                             <p className="text-sm text-gray-700 mt-2">
-                              {reviewData.comment || 'No comment provided'}
+                              {reviewText}
                             </p>
+                            {reviewData.admin_reply?.trim() && replyingToReviewId !== rid && (
+                              <div className="mt-3 rounded-xl border border-[#273E8E]/30 bg-[#F5F7FF] p-3">
+                                <p className="text-xs font-semibold text-[#273E8E] mb-1">Troosolar</p>
+                                <p className="text-sm text-gray-800 whitespace-pre-wrap">{reviewData.admin_reply}</p>
+                                {reviewData.admin_replied_at && (
+                                  <p className="text-xs text-gray-500 mt-2">
+                                    {new Date(reviewData.admin_replied_at).toLocaleString()}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {editingReviewId === rid && (
+                              <div className="mt-3 border border-gray-200 rounded-xl p-3 bg-gray-50">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <label className="text-xs text-gray-700">Rating:</label>
+                                  <select
+                                    value={editReviewRating}
+                                    onChange={(e) => setEditReviewRating(Number(e.target.value))}
+                                    className="border border-gray-300 rounded px-2 py-1 text-xs"
+                                  >
+                                    {[1, 2, 3, 4, 5].map((n) => (
+                                      <option key={n} value={n}>
+                                        {n}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <textarea
+                                  value={editReviewText}
+                                  onChange={(e) => setEditReviewText(e.target.value)}
+                                  className="w-full border border-gray-300 rounded p-2 text-sm mb-3"
+                                  rows={3}
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingReviewId(null)}
+                                    className="px-3 py-1 text-xs rounded border border-gray-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleSaveReviewEdit}
+                                    disabled={updateReviewMutation.isPending}
+                                    className="px-3 py-1 text-xs rounded bg-[#273E8E] text-white disabled:opacity-60"
+                                  >
+                                    {updateReviewMutation.isPending ? "Saving..." : "Save"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                            {replyingToReviewId === rid && (
+                              <div className="mt-3 border border-[#273E8E]/40 rounded-xl p-3 bg-[#f8faff]">
+                                <p className="text-xs font-medium text-gray-700 mb-2">Your public reply (visible to customers)</p>
+                                <textarea
+                                  value={replyDraft}
+                                  onChange={(e) => setReplyDraft(e.target.value)}
+                                  className="w-full border border-gray-300 rounded p-2 text-sm mb-3"
+                                  rows={4}
+                                  placeholder="Thank the customer, address feedback, or share next steps..."
+                                />
+                                <div className="flex flex-wrap justify-end gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setReplyingToReviewId(null);
+                                      setReplyDraft("");
+                                    }}
+                                    className="px-3 py-1 text-xs rounded border border-gray-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      saveAdminReplyMutation.mutate({
+                                        reviewId: rid,
+                                        admin_reply: "",
+                                      })
+                                    }
+                                    disabled={saveAdminReplyMutation.isPending || !reviewData.admin_reply?.trim()}
+                                    className="px-3 py-1 text-xs rounded border border-red-200 text-red-600 disabled:opacity-40"
+                                  >
+                                    Remove reply
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleSaveAdminReply}
+                                    disabled={saveAdminReplyMutation.isPending}
+                                    className="px-3 py-1 text-xs rounded bg-[#273E8E] text-white disabled:opacity-60"
+                                  >
+                                    {saveAdminReplyMutation.isPending ? "Saving..." : "Save reply"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                           );
                         })}

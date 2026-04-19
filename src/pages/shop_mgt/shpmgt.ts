@@ -6,7 +6,29 @@ export interface ShopOrderData {
   amount: string;
   date: string;
   time: string;
-  status: "Pending" | "Ordered" | "Delivered";
+  status: string;
+}
+
+/** Maps API order_status to table / filter labels. */
+export function formatOrderStatusLabel(raw: string | null | undefined): string {
+  const k = (raw ?? "").toLowerCase().trim();
+  switch (k) {
+    case "pending":
+      return "Pending";
+    case "processing":
+      return "Processing";
+    case "shipped":
+      return "Shipped";
+    case "delivered":
+    case "completed":
+      return "Delivered";
+    case "cancelled":
+      return "Cancelled";
+    case "refunded":
+      return "Refunded";
+    default:
+      return k ? k.charAt(0).toUpperCase() + k.slice(1) : "—";
+  }
 }
 
 // Product data interface
@@ -166,29 +188,48 @@ export const shopOrderData: ShopOrderData[] = [
 // Helper function for status colors
 export const getOrderStatusColor = (status: string) => {
   switch (status.toLowerCase()) {
-    case 'delivered':
+    case "delivered":
+    case "completed":
       return {
-        backgroundColor: '#E6F7FF',
-        color: '#008000',
-        borderColor: '#008000'
+        backgroundColor: "#E6F7FF",
+        color: "#008000",
+        borderColor: "#008000",
       };
-    case 'pending':
+    case "pending":
       return {
-        backgroundColor: '#FFF4E6',
-        color: '#FF8C00',
-        borderColor: '#FF8C00'
+        backgroundColor: "#FFF4E6",
+        color: "#FF8C00",
+        borderColor: "#FF8C00",
       };
-    case 'ordered':
+    case "processing":
       return {
-        backgroundColor: '#E6E6FF',
-        color: '#5A67D8',
-        borderColor: '#5A67D8'
+        backgroundColor: "#EEF2FF",
+        color: "#4338CA",
+        borderColor: "#4338CA",
+      };
+    case "shipped":
+      return {
+        backgroundColor: "#ECFDF5",
+        color: "#047857",
+        borderColor: "#047857",
+      };
+    case "cancelled":
+      return {
+        backgroundColor: "#FEF2F2",
+        color: "#B91C1C",
+        borderColor: "#B91C1C",
+      };
+    case "refunded":
+      return {
+        backgroundColor: "#F3F4F6",
+        color: "#4B5563",
+        borderColor: "#4B5563",
       };
     default:
       return {
-        backgroundColor: '#F5F5F5',
-        color: '#6B7280',
-        borderColor: '#6B7280'
+        backgroundColor: "#F5F5F5",
+        color: "#6B7280",
+        borderColor: "#6B7280",
       };
   }
 };

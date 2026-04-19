@@ -47,7 +47,320 @@ import { getAllFinance } from "../../utils/queries/finance";
 import { API_DOMAIN } from "../../../apiConfig";
 
 // Base URL for document links (backend stores paths like "loan_applications/xxx.pdf")
-const DOCUMENT_BASE_URL = API_DOMAIN.replace(/\/api\/?$/, "") || "https://troosolar.hmstech.org";
+const DOCUMENT_BASE_URL = API_DOMAIN.replace(/\/api\/?$/, "") || "https://app.troosolar.io";
+
+function siteBannerSlotPreview(slot?: { url?: string | null; path?: string | null } | null): string | null {
+  if (!slot) return null;
+  const url = slot.url;
+  const path = slot.path;
+  if (url && /^https?:\/\//i.test(String(url))) return String(url);
+  if (path && /^https?:\/\//i.test(String(path))) return String(path);
+  if (path) {
+    const base = DOCUMENT_BASE_URL.replace(/\/$/, "");
+    return `${base}/${String(path).replace(/^\//, "")}`;
+  }
+  return url ? String(url) : null;
+}
+
+/** Estate name/address from loan_application row, with fallbacks (snapshot / audit_request on order). */
+function bnplLoanAppEstateText(
+  la: Record<string, unknown> | null | undefined,
+  which: "name" | "address",
+  auditFallback?: Record<string, unknown> | null
+): string {
+  const key = which === "name" ? "estate_name" : "estate_address";
+  const altKey = which === "name" ? "estateName" : "estateAddress";
+
+  const pick = (row: Record<string, unknown> | null | undefined): string | null => {
+    if (!row) return null;
+    const v = row[key] ?? row[altKey];
+    if (v != null && String(v).trim() !== "") return String(v).trim();
+    return null;
+  };
+
+  const fromLa = pick(la ?? null);
+  if (fromLa) return fromLa;
+
+  const snap = la?.loan_plan_snapshot;
+  if (snap && typeof snap === "object" && !Array.isArray(snap)) {
+    const o = snap as Record<string, unknown>;
+    const fromRoot = pick(o);
+    if (fromRoot) return fromRoot;
+    const pd = o.property_details;
+    if (pd && typeof pd === "object" && !Array.isArray(pd)) {
+      const nested = pick(pd as Record<string, unknown>);
+      if (nested) return nested;
+    }
+  }
+
+  const fromAudit = pick(auditFallback ?? null);
+  if (fromAudit) return fromAudit;
+
+  return "—";
+}
+
+/** BVN from BNPL application row first, then user profile (both filled on submit after backend fix). */
+function bnplDisplayBvn(
+  app: { bvn?: string | null },
+  user?: { bvn?: string | null } | null
+): string | null {
+  if (app?.bvn != null && String(app.bvn).trim() !== "") {
+    return String(app.bvn).trim();
+  }
+  if (user?.bvn != null && String(user.bvn).trim() !== "") {
+    return String(user.bvn).trim();
+  }
+  return null;
+}
+
+/** Submitted personal rows merged into loan_plan_snapshot.final_application_personal (BNPL Final Application step). */
+function bnplFinalApplicationPersonalFromSnapshot(snapshot: unknown): {
+  full_name: string | null;
+  bvn: string | null;
+  phone: string | null;
+  email: string | null;
+  social_media: string | null;
+} | null {
+  if (snapshot == null || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    return null;
+  }
+  const fa = (snapshot as Record<string, unknown>).final_application_personal;
+  if (fa == null || typeof fa !== "object" || Array.isArray(fa)) {
+    return null;
+  }
+  const p = fa as Record<string, unknown>;
+  const s = (v: unknown): string | null =>
+    v != null && String(v).trim() !== "" ? String(v).trim() : null;
+  return {
+    full_name: s(p.full_name),
+    bvn: s(p.bvn),
+    phone: s(p.phone),
+    email: s(p.email),
+    social_media: s(p.social_media),
+  };
+}
+
+function bnplDash(v: string | null | undefined): string {
+  if (v == null || String(v).trim() === "") return "—";
+  return String(v).trim();
+}
+
+/**
+ * Gated estate: Yes only if they chose “in a gated estate”; otherwise N/A (not gated or unknown).
+ * API often sends 0/1 instead of booleans.
+ */
+function bnplGatedEstateLabel(value: unknown): string {
+  if (value === true || value === 1 || value === "1" || value === "true") return "Yes";
+  return "N/A";
+}
+
+/** Skip empty scalar rows in Additional Information — do not treat false/0 as “missing” (fixes gated estate row). */
+function bnplSkipAdditionalInfoScalar(key: string, value: unknown): boolean {
+  if (value === null || value === "null") return true;
+  if (typeof value === "object" || Array.isArray(value)) return true;
+  if (key === "is_gated_estate") return false;
+  if (value === false || value === 0) return false;
+  if (value === undefined || value === "") return true;
+  if (!value) return true;
+  return false;
+}
+
+/** --- BNPL counter offer: same math as customer “Review Your Loan Plan” (bundle % + admin fees + interest) --- */
+function bnplParseAmountCounter(v: unknown): number {
+  if (v == null || v === "") return 0;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  const n = parseFloat(String(v).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Same “bundle” as LoanCalculator.jsx `totalAmount`: cart grand total (principal + equity), not net of admin fees.
+ * Prefer principal + baseDepositAmount from the stored snapshot (authoritative); else totalAmount − admin fees.
+ */
+function bnplBundlePriceFromSnapshotForCounter(snap: Record<string, unknown> | null | undefined): number {
+  if (!snap || typeof snap !== "object") return 0;
+  const principal = bnplParseAmountCounter(snap.principal ?? snap.totalLoanAmount);
+  const baseDep = bnplParseAmountCounter(snap.baseDepositAmount);
+  if (principal > 0 && baseDep >= 0) {
+    return Math.max(principal + baseDep, 0);
+  }
+  const totalAmount = bnplParseAmountCounter(snap.totalAmount);
+  let adminFees = bnplParseAmountCounter(snap.adminFeesTotal);
+  if (adminFees <= 0) {
+    adminFees =
+      bnplParseAmountCounter(snap.insuranceFee) +
+      bnplParseAmountCounter(snap.managementFee) +
+      bnplParseAmountCounter(snap.legalFee);
+  }
+  if (totalAmount > 0) return Math.max(totalAmount - adminFees, 0);
+  return 0;
+}
+
+function bnplFeePctsForCounter(snap: Record<string, unknown> | null | undefined): {
+  insurance: number;
+  management: number;
+  legal: number;
+} {
+  const fp = snap?.feePercentages as Record<string, unknown> | undefined;
+  if (fp && typeof fp === "object") {
+    return {
+      insurance: bnplParseAmountCounter(fp.insurance) || 3,
+      management: bnplParseAmountCounter(fp.management) || 1,
+      legal: bnplParseAmountCounter(fp.legal) || 1,
+    };
+  }
+  return {
+    insurance: bnplParseAmountCounter(snap?.insurancePct ?? snap?.insurance_fee_percentage) || 3,
+    management: bnplParseAmountCounter(snap?.managementPct ?? snap?.management_fee_percentage) || 1,
+    legal: bnplParseAmountCounter(snap?.legalPct ?? snap?.legal_fee_percentage) || 1,
+  };
+}
+
+function bnplInterestMonthlyForCounter(snap: Record<string, unknown> | null | undefined, fallback: number): number {
+  if (!snap) return fallback;
+  const a = snap.interestRate ?? snap.interest_rate;
+  if (a != null && a !== "" && Number.isFinite(Number(a))) return Number(a);
+  return fallback;
+}
+
+type BnplCounterPlan = {
+  bundlePrice: number;
+  depositPercent: number;
+  baseDeposit: number;
+  baseLoanAmount: number;
+  insuranceFee: number;
+  managementFee: number;
+  legalFee: number;
+  adminFeesTotal: number;
+  upfrontDepositTotal: number;
+  totalLoanAmount: number;
+  totalInterestAmount: number;
+  totalRepaymentAmount: number;
+  monthlyRepaymentAmount: number;
+};
+
+function bnplComputeCounterOfferPlan(
+  bundlePrice: number,
+  depositPercentOfBundle: number,
+  tenorMonths: number,
+  interestMonthlyPercent: number,
+  feePcts: { insurance: number; management: number; legal: number }
+): BnplCounterPlan | null {
+  if (bundlePrice <= 0 || tenorMonths <= 0) return null;
+  const i = feePcts.insurance / 100;
+  const m = feePcts.management / 100;
+  const l = feePcts.legal / 100;
+  // LoanCalculator.jsx: depositAmount = (totalAmount * depositPercent) / 100; principal = totalAmount - depositAmount
+  const baseDeposit = (bundlePrice * depositPercentOfBundle) / 100;
+  const baseLoanAmount = Math.max(bundlePrice - baseDeposit, 0);
+  const insuranceFee = Math.round(bundlePrice * i * 100) / 100;
+  const managementFee = Math.round(baseLoanAmount * m * 100) / 100;
+  const legalFee = Math.round(baseLoanAmount * l * 100) / 100;
+  const adminFeesTotal = Math.round((insuranceFee + managementFee + legalFee) * 100) / 100;
+  const upfrontDepositTotal = Math.round((baseDeposit + adminFeesTotal) * 100) / 100;
+  const totalLoanAmount = baseLoanAmount;
+  const totalInterestAmount =
+    Math.round(totalLoanAmount * (interestMonthlyPercent / 100) * tenorMonths * 100) / 100;
+  const totalRepaymentAmount = Math.round((totalLoanAmount + totalInterestAmount) * 100) / 100;
+  const monthlyRepaymentAmount =
+    tenorMonths > 0 ? Math.round((totalRepaymentAmount / tenorMonths) * 100) / 100 : 0;
+  return {
+    bundlePrice,
+    depositPercent: depositPercentOfBundle,
+    baseDeposit,
+    baseLoanAmount,
+    insuranceFee,
+    managementFee,
+    legalFee,
+    adminFeesTotal,
+    upfrontDepositTotal,
+    totalLoanAmount,
+    totalInterestAmount,
+    totalRepaymentAmount,
+    monthlyRepaymentAmount,
+  };
+}
+
+function bnplPlanFromSnapshotForCounter(
+  snap: Record<string, unknown> | null | undefined
+): BnplCounterPlan | null {
+  if (!snap || typeof snap !== "object") return null;
+  const bundle = bnplBundlePriceFromSnapshotForCounter(snap);
+  const depositPercent = bnplParseAmountCounter(snap.depositPercent);
+  const baseDeposit = bnplParseAmountCounter(snap.baseDepositAmount);
+  const totalLoanAmount = bnplParseAmountCounter(snap.totalLoanAmount ?? snap.principal);
+  const insuranceFee = bnplParseAmountCounter(snap.insuranceFee);
+  const managementFee = bnplParseAmountCounter(snap.managementFee);
+  const legalFee = bnplParseAmountCounter(snap.legalFee);
+  const adminFeesTotal = bnplParseAmountCounter(snap.adminFeesTotal);
+  const upfrontDepositTotal = bnplParseAmountCounter(snap.depositAmount);
+  const totalInterestAmount = bnplParseAmountCounter(snap.totalInterestAmount ?? snap.totalInterest);
+  const totalRepaymentAmount = bnplParseAmountCounter(snap.totalRepaymentAmount ?? snap.totalRepayment);
+  const monthlyRepaymentAmount = bnplParseAmountCounter(snap.monthlyRepaymentAmount ?? snap.monthlyRepayment);
+  if (
+    bundle <= 0 ||
+    totalLoanAmount <= 0 ||
+    totalRepaymentAmount <= 0 ||
+    monthlyRepaymentAmount <= 0 ||
+    upfrontDepositTotal <= 0
+  ) {
+    return null;
+  }
+  return {
+    bundlePrice: bundle,
+    depositPercent,
+    baseDeposit,
+    baseLoanAmount: totalLoanAmount,
+    insuranceFee,
+    managementFee,
+    legalFee,
+    adminFeesTotal,
+    upfrontDepositTotal,
+    totalLoanAmount,
+    totalInterestAmount,
+    totalRepaymentAmount,
+    monthlyRepaymentAmount,
+  };
+}
+
+function bnplDepositPercentFromUpfrontTotal(
+  bundlePrice: number,
+  upfrontTotal: number,
+  feePcts: { insurance: number; management: number; legal: number }
+): number {
+  if (bundlePrice <= 0 || upfrontTotal <= 0) return 0;
+  const i = feePcts.insurance / 100;
+  const m = feePcts.management / 100;
+  const l = feePcts.legal / 100;
+  const denom = 1 - m - l;
+  if (denom <= 0.0001) return 0;
+  const baseDeposit = (upfrontTotal - bundlePrice * (i + m + l)) / denom;
+  if (baseDeposit <= 0) return 0;
+  return Math.min(100, (baseDeposit / bundlePrice) * 100);
+}
+
+/** Bundle/product lines from API ordered_items or product_category fallback. */
+function bnplApplicationOrderSummary(app: Record<string, unknown> | null | undefined): string | null {
+  if (!app) return null;
+  const oi = app.ordered_items as
+    | { display?: string; lines?: Array<{ title?: string; quantity?: number }> }
+    | undefined;
+  if (oi?.display && String(oi.display).trim() !== "") return String(oi.display).trim();
+  if (Array.isArray(oi?.lines) && oi.lines.length > 0) {
+    return oi.lines
+      .map((l) => {
+        const t = l.title || "Item";
+        const q = l.quantity && l.quantity > 1 ? ` (×${l.quantity})` : "";
+        return `${t}${q}`;
+      })
+      .join(", ");
+  }
+  const cat = app.product_category;
+  if (cat != null && String(cat).trim() !== "") {
+    return `Category only: ${String(cat).replace(/-/g, " ")}`;
+  }
+  return null;
+}
 
 const BNPLBuyNow: React.FC = () => {
   const [activeTab, setActiveTab] = useState("BNPL Applications");
@@ -141,9 +454,12 @@ const BNPLBuyNow: React.FC = () => {
   const [uploadingGuarantorForm, setUploadingGuarantorForm] = useState(false);
 
   // Home Banner (dashboard promo)
-  const [bannerFile, setBannerFile] = useState<File | null>(null);
-  const [uploadingBanner, setUploadingBanner] = useState(false);
-  const [removingBanner, setRemovingBanner] = useState(false);
+  const [bannerFileHome, setBannerFileHome] = useState<File | null>(null);
+  const [bannerFileSidebar, setBannerFileSidebar] = useState<File | null>(null);
+  const [uploadingHomeBanner, setUploadingHomeBanner] = useState(false);
+  const [uploadingSidebarBanner, setUploadingSidebarBanner] = useState(false);
+  const [removingHomeBanner, setRemovingHomeBanner] = useState(false);
+  const [removingSidebarBanner, setRemovingSidebarBanner] = useState(false);
 
   // Loan Settings (global BNPL config)
   const [loanSettingsForm, setLoanSettingsForm] = useState({
@@ -285,12 +601,19 @@ const BNPLBuyNow: React.FC = () => {
   }, [activeTab, bnplSettings]);
 
   // Site banner (home promo) - for Banner tab
-  const { data: siteBannerData, isLoading: siteBannerLoading, refetch: refetchSiteBanner } = useQuery({
-    queryKey: ["site-banner"],
-    queryFn: () => getSiteBanner(token),
+  const { data: siteBannerData, isLoading: siteBannerLoading, refetch: refetchSiteBanners } = useQuery({
+    queryKey: ["site-banners"],
+    queryFn: () => getSiteBanner(token!),
     enabled: activeTab === "Banner" && !!token,
   });
-  const bannerUrl = siteBannerData?.data?.url ?? siteBannerData?.data?.path ?? null;
+  const bannerPayload = siteBannerData?.data;
+  const homeSlot = bannerPayload?.home ?? {
+    url: bannerPayload?.url,
+    path: bannerPayload?.path,
+  };
+  const sidebarSlot = bannerPayload?.sidebar ?? {};
+  const homeBannerPreview = siteBannerSlotPreview(homeSlot);
+  const sidebarBannerPreview = siteBannerSlotPreview(sidebarSlot);
 
   // Cart Products Query
   const {
@@ -587,16 +910,36 @@ const BNPLBuyNow: React.FC = () => {
 
   const handleUpdateStatus = (item: any) => {
     setSelectedItem(item);
-    const loanAmount = Number(item?.loan_amount ?? item?.mono?.loan_amount ?? 0);
-    const existingDeposit = Number(item?.counter_offer_min_deposit ?? 0);
-    const existingPercent =
-      loanAmount > 0 && existingDeposit > 0
-        ? String(Math.round((existingDeposit / loanAmount) * 100))
-        : "";
+    const snap =
+      item?.loan_plan_snapshot && typeof item.loan_plan_snapshot === "object"
+        ? (item.loan_plan_snapshot as Record<string, unknown>)
+        : null;
+    const bundle = bnplBundlePriceFromSnapshotForCounter(snap ?? undefined);
+    const feePcts = bnplFeePctsForCounter(snap ?? undefined);
+    const existingUpfront = Number(item?.counter_offer_min_deposit ?? 0);
+    let depositPercentStr = "";
+    if (existingUpfront > 0 && bundle > 0) {
+      const pct = bnplDepositPercentFromUpfrontTotal(bundle, existingUpfront, feePcts);
+      depositPercentStr = pct > 0 ? String(Math.round(pct * 100) / 100) : "";
+    } else if (snap) {
+      const upfrontOrig = bnplParseAmountCounter(snap.depositAmount);
+      if (upfrontOrig > 0 && bundle > 0) {
+        const p = bnplDepositPercentFromUpfrontTotal(bundle, upfrontOrig, feePcts);
+        if (p > 0) {
+          depositPercentStr = String(Math.round(p * 100) / 100);
+        } else {
+          const dp = bnplParseAmountCounter(snap.depositPercent);
+          if (dp > 0) depositPercentStr = String(Math.round(dp * 100) / 100);
+        }
+      } else {
+        const dp = bnplParseAmountCounter(snap.depositPercent);
+        if (dp > 0) depositPercentStr = String(Math.round(dp * 100) / 100);
+      }
+    }
     setStatusForm({
       status: item.status || item.order_status || "",
       admin_notes: "",
-      counter_offer_min_deposit: existingPercent,
+      counter_offer_min_deposit: depositPercentStr,
       counter_offer_min_tenor: item?.counter_offer_min_tenor ?? "",
       property_state: item?.property_state || "",
       property_address: item?.property_address || "",
@@ -639,12 +982,37 @@ const BNPLBuyNow: React.FC = () => {
         alert(`Please select a valid Counter Offer Min Tenor (${allowedDurations.join(", ")} months).`);
         return;
       }
-      const loanAmount = Number(selectedItem?.loan_amount ?? selectedItem?.mono?.loan_amount ?? 0);
-      if (loanAmount <= 0) {
-        alert("Cannot set counter offer: loan amount is missing for this application. Try opening the application details first, then use Update Status again.");
+      const snap =
+        selectedItem?.loan_plan_snapshot && typeof selectedItem.loan_plan_snapshot === "object"
+          ? (selectedItem.loan_plan_snapshot as Record<string, unknown>)
+          : null;
+      const bundle = bnplBundlePriceFromSnapshotForCounter(snap ?? undefined);
+      if (bundle <= 0) {
+        alert(
+          "Cannot set counter offer: bundle price could not be read from the application loan plan snapshot. Open application details to refresh data, or ensure the customer applied via the current BNPL flow."
+        );
         return;
       }
-      payload.counter_offer_min_deposit = Math.round((loanAmount * percent) / 100);
+      const feePcts = bnplFeePctsForCounter(snap ?? undefined);
+      const interestM = bnplInterestMonthlyForCounter(
+        snap ?? undefined,
+        Number(selectedItem?.mono?.interest_rate) || 4
+      );
+      const snapPlan = bnplPlanFromSnapshotForCounter(snap ?? undefined);
+      const snapPct = bnplParseAmountCounter(snap?.depositPercent);
+      const snapTenor = bnplParseAmountCounter(snap?.tenor);
+      const shouldUseSnapshotPlan =
+        !!snapPlan &&
+        Math.abs(percent - snapPct) < 0.01 &&
+        Math.abs(tenor - snapTenor) < 0.01;
+      const plan = shouldUseSnapshotPlan
+        ? snapPlan
+        : bnplComputeCounterOfferPlan(bundle, percent, tenor, interestM, feePcts);
+      if (!plan) {
+        alert("Could not compute counter-offer amounts. Check deposit % and tenor.");
+        return;
+      }
+      payload.counter_offer_min_deposit = plan.upfrontDepositTotal;
       payload.counter_offer_min_tenor = tenor;
     }
 
@@ -741,6 +1109,16 @@ const BNPLBuyNow: React.FC = () => {
     return `₦${Number(amount).toLocaleString()}`;
   };
 
+  /** Match dashboard BNPL loan summary (2 decimal places). */
+  const formatCurrencyLoanSummary = (amount: number | string | null | undefined) => {
+    const n =
+      typeof amount === "string"
+        ? parseFloat(String(amount).replace(/,/g, ""))
+        : Number(amount);
+    if (!Number.isFinite(n)) return "₦0.00";
+    return `₦${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-GB", {
@@ -748,6 +1126,54 @@ const BNPLBuyNow: React.FC = () => {
       month: "2-digit",
       year: "numeric",
     });
+  };
+
+  const isBnplDeliveryPlaceholder = (title: string | null | undefined) =>
+    !String(title ?? "").trim() || /^bnpl\s*delivery$/i.test(String(title).trim());
+
+  const deliverySiteContactDisplay = (
+    addr: { title?: string } | null | undefined,
+    user: { first_name?: string; sur_name?: string } | null | undefined
+  ) => {
+    const raw = String(addr?.title ?? "").trim();
+    if (raw && !isBnplDeliveryPlaceholder(raw)) return raw;
+    const name = `${user?.first_name || ""} ${user?.sur_name || ""}`.trim();
+    return name || raw || "—";
+  };
+
+  const getOrderBundleOrProductTitle = (item: any, summary?: any): string | null => {
+    if (!item && !summary) return null;
+    if (item?.bundle?.title) return String(item.bundle.title);
+    if (item?.product?.title) return String(item.product.title);
+    if (summary?.bundle_title) return String(summary.bundle_title);
+    if (summary?.product_title) return String(summary.product_title);
+    const firstItem = item?.items?.[0];
+    if (firstItem) {
+      if (firstItem.item?.title) return String(firstItem.item.title);
+      if (firstItem.title) return String(firstItem.title);
+      if (firstItem.name) return String(firstItem.name);
+    }
+    return null;
+  };
+
+  const getRequestedServiceDate = (item: any, summary?: any) => {
+    return (
+      item?.installation_requested_date ||
+      item?.installation_date ||
+      item?.delivery_requested_date ||
+      item?.delivery_date ||
+      item?.requested_date ||
+      item?.preferred_date ||
+      item?.delivery_address?.preferred_date ||
+      summary?.installation_requested_date ||
+      summary?.installation_date ||
+      summary?.delivery_requested_date ||
+      summary?.delivery_date ||
+      summary?.requested_date ||
+      summary?.preferred_date ||
+      summary?.delivery_address?.preferred_date ||
+      null
+    );
   };
 
   const currentData = getCurrentData();
@@ -1117,100 +1543,208 @@ const BNPLBuyNow: React.FC = () => {
             </form>
           </div>
         ) : activeTab === "Banner" ? (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 max-w-2xl">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Home Promotion Banner</h2>
-            <p className="text-sm text-gray-600 mb-6">
-              This banner is shown on the user dashboard home. Upload an image to set or replace it; remove it to hide the banner.
-            </p>
+          <div className="flex flex-col gap-8 max-w-2xl">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard banners</h1>
+              <p className="text-sm text-gray-600">
+                Two placements: the large promo on the user home dashboard, and the image at the bottom of the desktop sidebar.
+              </p>
+            </div>
             {siteBannerLoading ? (
-              <LoadingSpinner message="Loading banner..." />
+              <LoadingSpinner message="Loading banners..." />
             ) : (
               <>
-                {bannerUrl && (
-                  <div className="mb-6">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Current banner</p>
-                    <img
-                      src={bannerUrl}
-                      alt="Current promotion banner"
-                      className="max-w-full h-auto max-h-[243px] rounded-lg object-cover border border-gray-200"
-                    />
-                  </div>
-                )}
-                {!bannerUrl && (
-                  <p className="text-sm text-gray-500 mb-6">No banner set. Upload an image below to show a promotion on the dashboard.</p>
-                )}
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!bannerFile || !token) return;
-                    setUploadingBanner(true);
-                    try {
-                      const res = await uploadSiteBanner(bannerFile, token);
-                      if (res?.status === "success") {
-                        alert(res?.message || "Banner updated successfully.");
-                        setBannerFile(null);
-                        refetchSiteBanner();
-                      } else {
-                        alert(res?.message || "Upload failed.");
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8">
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Home promotion banner</h2>
+                  <p className="text-sm text-gray-600 mb-6">
+                    Shown on the user dashboard home (main promo area). Upload to set or replace; remove to hide.
+                  </p>
+                  {homeBannerPreview && (
+                    <div className="mb-6">
+                      <p className="text-sm font-medium text-gray-700 mb-2">Current banner</p>
+                      <img
+                        src={homeBannerPreview}
+                        alt="Home promotion banner preview"
+                        className="max-w-full h-auto max-h-[243px] rounded-lg object-cover border border-gray-200"
+                      />
+                    </div>
+                  )}
+                  {!homeBannerPreview && (
+                    <p className="text-sm text-gray-500 mb-6">No banner set.</p>
+                  )}
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!bannerFileHome || !token) return;
+                      setUploadingHomeBanner(true);
+                      try {
+                        const res = await uploadSiteBanner(bannerFileHome, token, "home");
+                        if (res?.status === "success") {
+                          alert(res?.message || "Home banner updated.");
+                          setBannerFileHome(null);
+                          queryClient.invalidateQueries({ queryKey: ["site-banners"] });
+                          refetchSiteBanners();
+                        } else {
+                          alert(res?.message || "Upload failed.");
+                        }
+                      } catch (err: any) {
+                        const msg = err?.response?.data?.message || err?.message || "Failed to upload banner.";
+                        const errors = err?.response?.data?.errors;
+                        alert(errors ? Object.values(errors).flat().join("\n") : msg);
+                      } finally {
+                        setUploadingHomeBanner(false);
                       }
-                    } catch (err: any) {
-                      const msg = err?.response?.data?.message || err?.message || "Failed to upload banner.";
-                      const errors = err?.response?.data?.errors;
-                      alert(errors ? Object.values(errors).flat().join("\n") : msg);
-                    } finally {
-                      setUploadingBanner(false);
-                    }
-                  }}
-                  className="space-y-4"
-                >
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Select image (JPEG, PNG, GIF, WebP – max 5MB)</label>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                      onChange={(e) => setBannerFile(e.target.files?.[0] || null)}
-                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#273E8E] file:text-white hover:file:bg-[#1e3270]"
-                    />
-                    {bannerFile && (
-                      <p className="mt-2 text-sm text-gray-600">Selected: {bannerFile.name}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="submit"
-                      disabled={!bannerFile || uploadingBanner}
-                      className="bg-[#273E8E] hover:bg-[#1e3270] disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
-                    >
-                      {uploadingBanner ? "Uploading..." : "Upload / Replace Banner"}
-                    </button>
-                    {bannerUrl && (
+                    }}
+                    className="space-y-4"
+                  >
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select image (JPEG, PNG, GIF, WebP – max 5MB)
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        onChange={(e) => setBannerFileHome(e.target.files?.[0] || null)}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#273E8E] file:text-white hover:file:bg-[#1e3270]"
+                      />
+                      {bannerFileHome && (
+                        <p className="mt-2 text-sm text-gray-600">Selected: {bannerFileHome.name}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-3">
                       <button
-                        type="button"
-                        disabled={removingBanner}
-                        onClick={async () => {
-                          if (!token || !confirm("Remove the home banner? It will no longer show on the dashboard.")) return;
-                          setRemovingBanner(true);
-                          try {
-                            const res = await deleteSiteBanner(token);
-                            if (res?.status === "success") {
-                              alert(res?.message || "Banner removed.");
-                              refetchSiteBanner();
-                            } else {
-                              alert(res?.message || "Failed to remove banner.");
-                            }
-                          } catch (err: any) {
-                            alert(err?.response?.data?.message || err?.message || "Failed to remove banner.");
-                          } finally {
-                            setRemovingBanner(false);
-                          }
-                        }}
-                        className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                        type="submit"
+                        disabled={!bannerFileHome || uploadingHomeBanner}
+                        className="bg-[#273E8E] hover:bg-[#1e3270] disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
                       >
-                        {removingBanner ? "Removing..." : "Remove Banner"}
+                        {uploadingHomeBanner ? "Uploading..." : "Upload / replace home banner"}
                       </button>
-                    )}
-                  </div>
-                </form>
+                      {homeBannerPreview && (
+                        <button
+                          type="button"
+                          disabled={removingHomeBanner}
+                          onClick={async () => {
+                            if (!token || !confirm("Remove the home banner? It will no longer show on the dashboard.")) return;
+                            setRemovingHomeBanner(true);
+                            try {
+                              const res = await deleteSiteBanner(token, "home");
+                              if (res?.status === "success") {
+                                alert(res?.message || "Banner removed.");
+                                queryClient.invalidateQueries({ queryKey: ["site-banners"] });
+                                refetchSiteBanners();
+                              } else {
+                                alert(res?.message || "Failed to remove banner.");
+                              }
+                            } catch (err: any) {
+                              alert(err?.response?.data?.message || err?.message || "Failed to remove banner.");
+                            } finally {
+                              setRemovingHomeBanner(false);
+                            }
+                          }}
+                          className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                        >
+                          {removingHomeBanner ? "Removing..." : "Remove home banner"}
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+
+                <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8">
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Sidebar banner</h2>
+                  <p className="text-sm text-gray-600 mb-6">
+                    Shown at the bottom of the desktop dashboard sidebar. If unset, the default graphic is used.
+                  </p>
+                  {sidebarBannerPreview && (
+                    <div className="mb-6">
+                      <p className="text-sm font-medium text-gray-700 mb-2">Current banner</p>
+                      <img
+                        src={sidebarBannerPreview}
+                        alt="Sidebar banner preview"
+                        className="max-w-full h-auto max-h-[280px] rounded-lg object-cover border border-gray-200"
+                      />
+                    </div>
+                  )}
+                  {!sidebarBannerPreview && (
+                    <p className="text-sm text-gray-500 mb-6">No custom sidebar banner — users see the default image.</p>
+                  )}
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!bannerFileSidebar || !token) return;
+                      setUploadingSidebarBanner(true);
+                      try {
+                        const res = await uploadSiteBanner(bannerFileSidebar, token, "sidebar");
+                        if (res?.status === "success") {
+                          alert(res?.message || "Sidebar banner updated.");
+                          setBannerFileSidebar(null);
+                          queryClient.invalidateQueries({ queryKey: ["site-banners"] });
+                          refetchSiteBanners();
+                        } else {
+                          alert(res?.message || "Upload failed.");
+                        }
+                      } catch (err: any) {
+                        const msg = err?.response?.data?.message || err?.message || "Failed to upload banner.";
+                        const errors = err?.response?.data?.errors;
+                        alert(errors ? Object.values(errors).flat().join("\n") : msg);
+                      } finally {
+                        setUploadingSidebarBanner(false);
+                      }
+                    }}
+                    className="space-y-4"
+                  >
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select image (JPEG, PNG, GIF, WebP – max 5MB)
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        onChange={(e) => setBannerFileSidebar(e.target.files?.[0] || null)}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#273E8E] file:text-white hover:file:bg-[#1e3270]"
+                      />
+                      {bannerFileSidebar && (
+                        <p className="mt-2 text-sm text-gray-600">Selected: {bannerFileSidebar.name}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="submit"
+                        disabled={!bannerFileSidebar || uploadingSidebarBanner}
+                        className="bg-[#273E8E] hover:bg-[#1e3270] disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                      >
+                        {uploadingSidebarBanner ? "Uploading..." : "Upload / replace sidebar banner"}
+                      </button>
+                      {sidebarBannerPreview && (
+                        <button
+                          type="button"
+                          disabled={removingSidebarBanner}
+                          onClick={async () => {
+                            if (!token || !confirm("Remove the sidebar banner? The default sidebar image will show again.")) return;
+                            setRemovingSidebarBanner(true);
+                            try {
+                              const res = await deleteSiteBanner(token, "sidebar");
+                              if (res?.status === "success") {
+                                alert(res?.message || "Banner removed.");
+                                queryClient.invalidateQueries({ queryKey: ["site-banners"] });
+                                refetchSiteBanners();
+                              } else {
+                                alert(res?.message || "Failed to remove banner.");
+                              }
+                            } catch (err: any) {
+                              alert(err?.response?.data?.message || err?.message || "Failed to remove banner.");
+                            } finally {
+                              setRemovingSidebarBanner(false);
+                            }
+                          }}
+                          className="bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+                        >
+                          {removingSidebarBanner ? "Removing..." : "Remove sidebar banner"}
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
               </>
             )}
           </div>
@@ -1970,6 +2504,41 @@ const BNPLBuyNow: React.FC = () => {
                             </p>
                           </div>
                         )}
+                        {(activeTab === "Buy Now Orders" || activeTab === "BNPL Orders") &&
+                          (() => {
+                            const bundleProductTitle = getOrderBundleOrProductTitle(selectedItem, orderSummary);
+                            return bundleProductTitle ? (
+                              <div className="md:col-span-2">
+                                <p className="text-xs text-gray-500 mb-1">Selected bundle / product</p>
+                                <p className="text-sm font-semibold text-gray-900">{bundleProductTitle}</p>
+                              </div>
+                            ) : null;
+                          })()}
+                        {activeTab === "BNPL Orders" && selectedItem.loan_application?.product_category && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Product Category</p>
+                            <p className="text-sm font-semibold text-gray-900 capitalize">
+                              {String(selectedItem.loan_application.product_category).replace(/-/g, " ")}
+                            </p>
+                          </div>
+                        )}
+                        {activeTab === "BNPL Orders" && selectedItem.mono_calculation?.repayment_duration && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Loan Tenor</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {selectedItem.mono_calculation.repayment_duration} months
+                            </p>
+                          </div>
+                        )}
+                        {(activeTab === "Buy Now Orders" || activeTab === "BNPL Orders") &&
+                          getRequestedServiceDate(selectedItem, orderSummary) && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Requested installation / delivery date</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {formatDate(getRequestedServiceDate(selectedItem, orderSummary))}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -2005,6 +2574,147 @@ const BNPLBuyNow: React.FC = () => {
                             <div>
                               <p className="text-xs text-gray-500 mb-1">User ID</p>
                               <p className="text-sm font-medium text-gray-900">#{selectedItem.user.id}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {(activeTab === "Buy Now Orders" || activeTab === "BNPL Orders") && selectedItem.delivery_address && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                          <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          Installation / delivery site
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-3">
+                          Address and contact used for this order (may differ from account phone).
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {(selectedItem.delivery_address.title || selectedItem.user) && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Contact name (at site)</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {deliverySiteContactDisplay(selectedItem.delivery_address, selectedItem.user)}
+                              </p>
+                            </div>
+                          )}
+                          {selectedItem.delivery_address.phone_number && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Phone (at site)</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.delivery_address.phone_number}</p>
+                            </div>
+                          )}
+                          {selectedItem.delivery_address.state && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">State</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.delivery_address.state}</p>
+                            </div>
+                          )}
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-gray-500 mb-1">Full address</p>
+                            <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
+                              {selectedItem.delivery_address.address || "—"}
+                            </p>
+                          </div>
+                          {getRequestedServiceDate(selectedItem, orderSummary) && (
+                            <div className="md:col-span-2">
+                              <p className="text-xs text-gray-500 mb-1">Requested installation / delivery date</p>
+                              <p className="text-sm font-semibold text-gray-900">
+                                {formatDate(getRequestedServiceDate(selectedItem, orderSummary))}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "BNPL Orders" && selectedItem.loan_application && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">BNPL Application Details</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {selectedItem.loan_application.credit_check_method && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Credit Check Method</p>
+                              <p className="text-sm font-medium text-gray-900 capitalize">{selectedItem.loan_application.credit_check_method}</p>
+                            </div>
+                          )}
+                          {selectedItem.loan_application.social_media_handle && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Social Media Handle</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.loan_application.social_media_handle}</p>
+                            </div>
+                          )}
+                          {selectedItem.loan_application.customer_type && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Customer Type</p>
+                              <p className="text-sm font-medium text-gray-900 capitalize">{selectedItem.loan_application.customer_type}</p>
+                            </div>
+                          )}
+                          {selectedItem.loan_application.repayment_duration && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Repayment Duration</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.loan_application.repayment_duration} months</p>
+                            </div>
+                          )}
+                          {selectedItem.loan_application.property_state && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Property State</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.loan_application.property_state}</p>
+                            </div>
+                          )}
+                          {selectedItem.loan_application.property_landmark && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Current power sources</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.loan_application.property_landmark}</p>
+                            </div>
+                          )}
+                          {(selectedItem.loan_application.property_floors !== null && selectedItem.loan_application.property_floors !== undefined) && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Floors</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.loan_application.property_floors}</p>
+                            </div>
+                          )}
+                          {(selectedItem.loan_application.property_rooms !== null && selectedItem.loan_application.property_rooms !== undefined) && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Rooms</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.loan_application.property_rooms}</p>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Gated Estate</p>
+                            <p className="text-sm font-medium text-gray-900">{selectedItem.loan_application.is_gated_estate ? "Yes" : "No"}</p>
+                          </div>
+                          {selectedItem.loan_application.is_gated_estate ? (
+                            <>
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">Estate name</p>
+                                <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
+                                  {bnplLoanAppEstateText(
+                                    selectedItem.loan_application as Record<string, unknown>,
+                                    "name",
+                                    selectedItem.audit_request as Record<string, unknown> | undefined
+                                  )}
+                                </p>
+                              </div>
+                              <div className="md:col-span-2">
+                                <p className="text-xs text-gray-500 mb-1">Estate address / directions</p>
+                                <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
+                                  {bnplLoanAppEstateText(
+                                    selectedItem.loan_application as Record<string, unknown>,
+                                    "address",
+                                    selectedItem.audit_request as Record<string, unknown> | undefined
+                                  )}
+                                </p>
+                              </div>
+                            </>
+                          ) : null}
+                          {selectedItem.loan_application.property_address && (
+                            <div className="md:col-span-2">
+                              <p className="text-xs text-gray-500 mb-1">Property Address</p>
+                              <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">{selectedItem.loan_application.property_address}</p>
                             </div>
                           )}
                         </div>
@@ -2055,91 +2765,244 @@ const BNPLBuyNow: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Order Items */}
-                    {selectedItem.items && Array.isArray(selectedItem.items) && selectedItem.items.length > 0 && (
-                      <div className="bg-white rounded-lg border border-gray-200 p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                          <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                          </svg>
-                          Order Items ({selectedItem.items.length})
-                        </h3>
-                        <div className="space-y-3">
-                          {selectedItem.items.map((item: any, idx: number) => (
-                            <div key={idx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <h4 className="font-medium text-gray-900">
-                                    {item.name || item.title || `Item ${idx + 1}`}
-                                  </h4>
-                                  {item.description && (
-                                    <p className="text-sm text-gray-600 mt-1">{item.description}</p>
-                                  )}
-                                  <div className="flex items-center gap-4 mt-2">
-                                    {item.quantity && (
-                                      <span className="text-xs text-gray-500">
-                                        Quantity: <span className="font-medium text-gray-900">{item.quantity}</span>
-                                      </span>
-                                    )}
-                                    {item.type && (
-                                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                                        {item.type}
-                                      </span>
-                                    )}
-                                  </div>
+                    {activeTab === "BNPL Orders" && (() => {
+                      const rs = selectedItem.repayment_summary;
+                      const schedule: any[] = Array.isArray(selectedItem.repayment_schedule)
+                        ? selectedItem.repayment_schedule
+                        : [];
+                      const history: any[] = Array.isArray(selectedItem.repayment_history)
+                        ? selectedItem.repayment_history
+                        : [];
+                      const paidInstallments = schedule.filter(
+                        (i) => i.status === "paid" || i.computed_status === "paid"
+                      );
+                      const customerName =
+                        rs?.order_customer_name ||
+                        `${selectedItem.user?.first_name || ""} ${selectedItem.user?.sur_name || ""}`.trim() ||
+                        "—";
+                      const customerEmail =
+                        rs?.order_customer_email || selectedItem.user?.email || null;
+                      const customerId = rs?.order_customer_id ?? selectedItem.user?.id;
+
+                      return (
+                        <div className="space-y-6">
+                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                              <svg className="w-5 h-5 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                              </svg>
+                              Customer repayment summary
+                            </h3>
+                            <p className="text-sm text-gray-600 mb-4">
+                              Payments on this BNPL order are attributed to the customer below. When a linked transaction exists, the payer shown is taken from that payment record.
+                            </p>
+                            <div className="bg-white/80 rounded-lg border border-blue-100 p-4 mb-4">
+                              <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Order customer</p>
+                              <p className="text-base font-semibold text-gray-900">{customerName}</p>
+                              <div className="mt-1 text-sm text-gray-600 flex flex-wrap gap-x-3 gap-y-1">
+                                {customerId != null && <span>User ID: #{customerId}</span>}
+                                {customerEmail && <span>{customerEmail}</span>}
+                              </div>
+                            </div>
+                            {rs ? (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="bg-white rounded-lg p-4 border border-blue-100">
+                                  <p className="text-xs text-gray-500 mb-1">Total repayment</p>
+                                  <p className="text-xl font-bold text-gray-900">{formatCurrency(rs.total_amount ?? 0)}</p>
                                 </div>
-                                {(item.price || item.unit_price) && (
-                                  <div className="text-right">
-                                    <p className="text-sm font-semibold text-[#273E8E]">
-                                      {formatCurrency(item.price || item.unit_price)}
-                                    </p>
-                                    {item.quantity && (item.price || item.unit_price) && (
-                                      <p className="text-xs text-gray-500 mt-1">
-                                        Subtotal: {formatCurrency((item.price || item.unit_price) * item.quantity)}
-                                      </p>
-                                    )}
+                                <div className="bg-white rounded-lg p-4 border border-blue-100">
+                                  <p className="text-xs text-gray-500 mb-1">Paid</p>
+                                  <p className="text-xl font-bold text-green-700">{formatCurrency(rs.paid_amount ?? 0)}</p>
+                                </div>
+                                <div className="bg-white rounded-lg p-4 border border-blue-100">
+                                  <p className="text-xs text-gray-500 mb-1">Pending</p>
+                                  <p className="text-xl font-bold text-amber-700">{formatCurrency(rs.pending_amount ?? 0)}</p>
+                                </div>
+                                <div className="bg-white rounded-lg p-4 border border-blue-100">
+                                  <p className="text-xs text-gray-500 mb-1">Overdue (installments)</p>
+                                  <p className="text-xl font-bold text-red-700">{formatCurrency(rs.overdue_amount ?? 0)}</p>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-600">No repayment summary available for this order.</p>
+                            )}
+                            {rs && (
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-center text-sm">
+                                <div className="bg-white/90 rounded-lg py-2 px-2 border border-blue-50">
+                                  <span className="text-gray-500 block text-xs">Installments</span>
+                                  <span className="font-bold text-gray-900">{rs.total_installments ?? 0}</span>
+                                </div>
+                                <div className="bg-white/90 rounded-lg py-2 px-2 border border-blue-50">
+                                  <span className="text-gray-500 block text-xs">Paid</span>
+                                  <span className="font-bold text-green-700">{rs.paid_installments ?? 0}</span>
+                                </div>
+                                <div className="bg-white/90 rounded-lg py-2 px-2 border border-blue-50">
+                                  <span className="text-gray-500 block text-xs">Pending</span>
+                                  <span className="font-bold text-amber-700">{rs.pending_installments ?? 0}</span>
+                                </div>
+                                <div className="bg-white/90 rounded-lg py-2 px-2 border border-blue-50">
+                                  <span className="text-gray-500 block text-xs">Overdue</span>
+                                  <span className="font-bold text-red-700">{rs.overdue_installments ?? 0}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Payments recorded</h3>
+                            <p className="text-sm text-gray-600 mb-4">
+                              Installments marked paid and repayment log entries. Payer name uses the linked transaction user when available; otherwise the order customer is shown.
+                            </p>
+                            {paidInstallments.length === 0 && history.length === 0 ? (
+                              <p className="text-sm text-gray-500 italic">No payments recorded yet.</p>
+                            ) : (
+                              <div className="space-y-4">
+                                {paidInstallments.length > 0 && (
+                                  <div>
+                                    <h4 className="text-sm font-semibold text-gray-800 mb-2">Paid installments</h4>
+                                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                      <table className="min-w-full text-sm">
+                                        <thead className="bg-gray-50 text-left text-gray-600">
+                                          <tr>
+                                            <th className="px-3 py-2 font-medium">#</th>
+                                            <th className="px-3 py-2 font-medium">Amount</th>
+                                            <th className="px-3 py-2 font-medium">Paid at</th>
+                                            <th className="px-3 py-2 font-medium">Recorded payer</th>
+                                            <th className="px-3 py-2 font-medium">Method / ref</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                          {paidInstallments.map((inst: any) => (
+                                            <tr key={inst.id ?? `${inst.installment_number}-${inst.paid_at}`}>
+                                              <td className="px-3 py-2">{inst.installment_number ?? "—"}</td>
+                                              <td className="px-3 py-2 font-medium">{formatCurrency(inst.amount)}</td>
+                                              <td className="px-3 py-2 text-gray-700">
+                                                {inst.paid_at ? formatDate(inst.paid_at) : "—"}
+                                              </td>
+                                              <td className="px-3 py-2">
+                                                <span className="font-medium text-gray-900">
+                                                  {inst.paid_by_display ||
+                                                    inst.transaction?.payer_name ||
+                                                    customerName}
+                                                </span>
+                                                {inst.transaction?.payer_email && (
+                                                  <span className="block text-xs text-gray-500">{inst.transaction.payer_email}</span>
+                                                )}
+                                              </td>
+                                              <td className="px-3 py-2 text-gray-700">
+                                                {inst.transaction?.method || "—"}
+                                                {inst.transaction?.tx_id && (
+                                                  <span className="block text-xs text-gray-500 truncate max-w-[140px]" title={inst.transaction.tx_id}>
+                                                    {inst.transaction.tx_id}
+                                                  </span>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                                {history.length > 0 && (
+                                  <div>
+                                    <h4 className="text-sm font-semibold text-gray-800 mb-2">Repayment log</h4>
+                                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                      <table className="min-w-full text-sm">
+                                        <thead className="bg-gray-50 text-left text-gray-600">
+                                          <tr>
+                                            <th className="px-3 py-2 font-medium">Amount</th>
+                                            <th className="px-3 py-2 font-medium">Status</th>
+                                            <th className="px-3 py-2 font-medium">When</th>
+                                            <th className="px-3 py-2 font-medium">Recorded payer</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                          {history.map((h: any) => (
+                                            <tr key={h.id}>
+                                              <td className="px-3 py-2 font-medium">{formatCurrency(h.amount)}</td>
+                                              <td className="px-3 py-2 capitalize">{h.status || "—"}</td>
+                                              <td className="px-3 py-2 text-gray-700">{h.created_at ? formatDate(h.created_at) : "—"}</td>
+                                              <td className="px-3 py-2">
+                                                <span className="font-medium text-gray-900">{h.payer_name || customerName}</span>
+                                                {h.payer_email && (
+                                                  <span className="block text-xs text-gray-500">{h.payer_email}</span>
+                                                )}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                            )}
+                          </div>
 
-                    {/* Additional Information */}
-                    <div className="bg-white rounded-lg border border-gray-200 p-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h3>
-                      <div className="space-y-3">
-                        {Object.entries(selectedItem).map(([key, value]: [string, any]) => {
-                          // Skip already displayed fields
-                          const skipKeys = [
-                            "id", "user", "items", "total_price", "payment_method", "payment_status",
-                            "order_status", "created_at", "updated_at", "user_id"
-                          ];
-                          if (skipKeys.includes(key) || !value || value === null || value === "null") {
-                            return null;
-                          }
-                          if (typeof value === "object" || Array.isArray(value)) {
-                            return null;
-                          }
-                          return (
-                            <div key={key} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
-                              <span className="text-sm font-medium text-gray-700 capitalize">
-                                {key.replace(/_/g, " ")}:
-                              </span>
-                              <span className="text-sm text-gray-900">
-                                {key.includes("amount") || key.includes("price") || key.includes("fee")
-                                  ? formatCurrency(value)
-                                  : key.includes("date") || key.includes("_at")
-                                  ? formatDate(value)
-                                  : String(value)}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-2">Repayment schedule</h3>
+                            <p className="text-sm text-gray-600 mb-4">
+                              Full installment plan for this order (same data customers see on the dashboard).
+                            </p>
+                            {schedule.length === 0 ? (
+                              <p className="text-sm text-gray-500 italic">
+                                No installments found. The schedule may appear after the loan is activated and installments are generated.
+                              </p>
+                            ) : (
+                              <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                <table className="min-w-full text-sm">
+                                  <thead className="bg-gray-50 text-left text-gray-600">
+                                    <tr>
+                                      <th className="px-3 py-2 font-medium">#</th>
+                                      <th className="px-3 py-2 font-medium">Due date</th>
+                                      <th className="px-3 py-2 font-medium">Amount</th>
+                                      <th className="px-3 py-2 font-medium">Status</th>
+                                      <th className="px-3 py-2 font-medium">Paid at</th>
+                                      <th className="px-3 py-2 font-medium">Payer (if paid)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {schedule.map((inst: any) => {
+                                      const st = inst.computed_status || inst.status;
+                                      const isPaid = inst.status === "paid" || st === "paid";
+                                      return (
+                                        <tr key={inst.id ?? `${inst.installment_number}-${inst.payment_date}`}>
+                                          <td className="px-3 py-2">{inst.installment_number ?? "—"}</td>
+                                          <td className="px-3 py-2">{inst.payment_date ? formatDate(inst.payment_date) : "—"}</td>
+                                          <td className="px-3 py-2 font-medium">{formatCurrency(inst.amount)}</td>
+                                          <td className="px-3 py-2">
+                                            <span
+                                              className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                                                isPaid
+                                                  ? "bg-green-100 text-green-800"
+                                                  : inst.is_overdue || st === "overdue"
+                                                    ? "bg-red-100 text-red-800"
+                                                    : "bg-amber-100 text-amber-800"
+                                              }`}
+                                            >
+                                              {String(st || "pending").replace(/_/g, " ")}
+                                            </span>
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-700">
+                                            {inst.paid_at ? formatDate(inst.paid_at) : "—"}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-800">
+                                            {isPaid
+                                              ? inst.paid_by_display || inst.transaction?.payer_name || customerName
+                                              : "—"}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </>
                 ) : activeTab === "BNPL Applications" ? (
                   <>
@@ -2183,42 +3046,490 @@ const BNPLBuyNow: React.FC = () => {
                             </p>
                           </div>
                         )}
-                      </div>
-                    </div>
-
-                    {/* User Information */}
-                    {selectedItem.user && (
-                      <div className="bg-white rounded-lg border border-gray-200 p-6">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                          <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                          Customer Information
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {selectedItem.prior_application_id && (
                           <div>
-                            <p className="text-xs text-gray-500 mb-1">Full Name</p>
-                            <p className="text-sm font-medium text-gray-900">
-                              {selectedItem.user.first_name} {selectedItem.user.sur_name}
+                            <p className="text-xs text-gray-500 mb-1">Re-application</p>
+                            <p className="text-sm font-semibold text-amber-700">
+                              Yes — from Application #{selectedItem.prior_application_id}
                             </p>
                           </div>
-                          {selectedItem.user.email && (
-                            <div>
-                              <p className="text-xs text-gray-500 mb-1">Email</p>
-                              <p className="text-sm font-medium text-gray-900">{selectedItem.user.email}</p>
+                        )}
+                        {getRequestedServiceDate(selectedItem) && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Requested installation / delivery date</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {formatDate(getRequestedServiceDate(selectedItem))}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      {(() => {
+                        const orderLabel = bnplApplicationOrderSummary(selectedItem as Record<string, unknown>);
+                        if (!orderLabel) return null;
+                        return (
+                          <div className="mt-4 pt-4 border-t border-blue-200">
+                            <p className="text-xs text-gray-500 mb-1">Bundle / product ordered</p>
+                            <p className="text-sm font-semibold text-gray-900">{orderLabel}</p>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {selectedItem.loan_plan_snapshot &&
+                      typeof selectedItem.loan_plan_snapshot === "object" &&
+                      (() => {
+                        const snap = selectedItem.loan_plan_snapshot as Record<string, unknown>;
+                        const ld = snap;
+                        const loanCalc = selectedItem.mono as Record<string, unknown> | null | undefined;
+                        const loanApp = selectedItem;
+                        const DEFAULT_BNPL_INTEREST_RATE_PERCENT = 4;
+
+                        const parseAmount = (amount: unknown): number => {
+                          if (amount == null || amount === "") return 0;
+                          if (typeof amount === "number" && Number.isFinite(amount)) return amount;
+                          const n = parseFloat(String(amount).replace(/,/g, ""));
+                          return Number.isFinite(n) ? n : 0;
+                        };
+                        const toNum = (v: unknown): number | null => {
+                          if (v === null || v === undefined || v === "") return null;
+                          const n = parseAmount(v);
+                          return Number.isFinite(n) ? n : null;
+                        };
+                        const pickNum = (...vals: unknown[]): number => {
+                          for (const v of vals) {
+                            const n = toNum(v);
+                            if (n !== null) return n;
+                          }
+                          return 0;
+                        };
+                        const parseInterestRate = (v: unknown): number | null => {
+                          if (v === null || v === undefined || v === "") return null;
+                          const n = parseFloat(String(v).replace(/,/g, ""));
+                          return Number.isFinite(n) ? n : null;
+                        };
+
+                        const statusLower = String(selectedItem?.status ?? selectedItem?.order_status ?? "").toLowerCase();
+                        const isCounterOfferAccepted = statusLower === "counter_offer_accepted";
+                        const acceptedMinDeposit = pickNum(
+                          selectedItem?.counter_offer_min_deposit,
+                          (selectedItem as Record<string, unknown>)?.counter_offer_details &&
+                            (selectedItem as Record<string, unknown>).counter_offer_details &&
+                            ((selectedItem as Record<string, unknown>).counter_offer_details as Record<string, unknown>)
+                              .down_payment
+                        );
+                        const acceptedMinTenor = pickNum(
+                          selectedItem?.counter_offer_min_tenor,
+                          (selectedItem as Record<string, unknown>)?.counter_offer_details &&
+                            (selectedItem as Record<string, unknown>).counter_offer_details &&
+                            ((selectedItem as Record<string, unknown>).counter_offer_details as Record<string, unknown>)
+                              .repayment_duration
+                        );
+                        const feePcts = bnplFeePctsForCounter(ld);
+                        const iPct = feePcts.insurance / 100;
+                        const mPct = feePcts.management / 100;
+                        const lPct = feePcts.legal / 100;
+                        const totalAmount = pickNum(ld.totalAmount, loanCalc?.total_amount);
+                        const adminFeesTotal = pickNum(
+                          ld.adminFeesTotal,
+                          pickNum(ld.insuranceFee, 0) +
+                            pickNum(ld.managementFee, 0) +
+                            pickNum(ld.legalFee, 0)
+                        );
+                        const initialDepositWithFees = isCounterOfferAccepted && acceptedMinDeposit > 0
+                          ? acceptedMinDeposit
+                          : pickNum(ld.depositAmount, loanCalc?.down_payment);
+                        const baseDepositFromSnap = pickNum(ld.baseDepositAmount);
+                        const bundlePriceApprox =
+                          pickNum(ld.principal, ld.totalLoanAmount) > 0 && baseDepositFromSnap >= 0
+                            ? Math.max(pickNum(ld.principal, ld.totalLoanAmount) + baseDepositFromSnap, 0)
+                            : totalAmount > 0 && adminFeesTotal >= 0
+                              ? Math.max(totalAmount - adminFeesTotal, 0)
+                              : 0;
+
+                        let explicitLoanAmount = pickNum(
+                          ld.totalLoanAmount,
+                          ld.principal,
+                          loanCalc?.principal_amount
+                        );
+                        const monoLoanAmt = pickNum(loanCalc?.loan_amount);
+                        const monoTotalAmt = pickNum(loanCalc?.total_amount);
+                        if (explicitLoanAmount <= 0 && monoLoanAmt > 0) {
+                          const looksLikeDuplicatePrincipal =
+                            monoTotalAmt > 0 && Math.abs(monoLoanAmt - monoTotalAmt) < 1;
+                          const tr = pickNum(ld.totalRepaymentAmount, ld.totalRepayment);
+                          const looksLikeTotalRepayment =
+                            tr > 0 && Math.abs(monoLoanAmt - tr) < 1;
+                          if (!looksLikeDuplicatePrincipal && !looksLikeTotalRepayment) {
+                            explicitLoanAmount = monoLoanAmt;
+                          }
+                        }
+                        let totalLoanAmount =
+                          explicitLoanAmount > 0
+                            ? explicitLoanAmount
+                            : Math.max(totalAmount - initialDepositWithFees, 0);
+
+                        const depositPercentRaw = pickNum(ld.depositPercent);
+                        let depositPercentForLabel = depositPercentRaw;
+                        if (!depositPercentForLabel || depositPercentForLabel <= 0) {
+                          const baseDep = pickNum(ld.baseDepositAmount);
+                          if (baseDep > 0 && bundlePriceApprox > 0) {
+                            depositPercentForLabel = Math.round((baseDep / bundlePriceApprox) * 100);
+                          } else if (initialDepositWithFees > 0 && bundlePriceApprox > 0) {
+                            const baseOnly = Math.max(initialDepositWithFees - adminFeesTotal, 0);
+                            if (baseOnly > 0) {
+                              depositPercentForLabel = Math.round((baseOnly / bundlePriceApprox) * 100);
+                            }
+                          }
+                        }
+                        const interestRatePercent =
+                          parseInterestRate(ld.interestRate) ??
+                          parseInterestRate(ld.interest_rate) ??
+                          parseInterestRate(loanCalc?.interest_rate) ??
+                          DEFAULT_BNPL_INTEREST_RATE_PERCENT;
+                        const tenor =
+                          Number(
+                            (isCounterOfferAccepted && acceptedMinTenor > 0 ? acceptedMinTenor : null) ??
+                              ld.tenor ??
+                              loanApp?.repayment_duration ??
+                              loanCalc?.repayment_duration ??
+                              loanCalc?.tenor ??
+                              12
+                          ) || 12;
+                        const totalInterestFromApi = pickNum(
+                          ld.totalInterestAmount,
+                          ld.totalInterest,
+                          loanCalc?.total_interest_amount
+                        );
+                        let totalInterestAmount =
+                          totalInterestFromApi > 0
+                            ? totalInterestFromApi
+                            : (interestRatePercent / 100) * totalLoanAmount * tenor;
+                        let totalRepaymentAmount =
+                          pickNum(ld.totalRepaymentAmount, ld.totalRepayment, loanCalc?.total_repayment) ||
+                          totalLoanAmount + totalInterestAmount;
+                        let monthlyRepaymentAmount =
+                          pickNum(
+                            ld.monthlyRepaymentAmount,
+                            ld.monthlyRepayment,
+                            loanCalc?.monthly_repayment,
+                            loanCalc?.monthly_payment
+                          ) || (tenor > 0 ? totalRepaymentAmount / tenor : 0);
+
+                        if (isCounterOfferAccepted && acceptedMinDeposit > 0 && bundlePriceApprox > 0) {
+                          const denom = 1 - mPct - lPct;
+                          const baseDeposit =
+                            denom > 0.0001
+                              ? Math.max((acceptedMinDeposit - bundlePriceApprox * (iPct + mPct + lPct)) / denom, 0)
+                              : 0;
+                          const baseLoanAmount = Math.max(bundlePriceApprox - baseDeposit, 0);
+                          totalLoanAmount = baseLoanAmount;
+                          totalInterestAmount = (interestRatePercent / 100) * baseLoanAmount * tenor;
+                          totalRepaymentAmount = baseLoanAmount + totalInterestAmount;
+                          monthlyRepaymentAmount = tenor > 0 ? totalRepaymentAmount / tenor : 0;
+                          depositPercentForLabel =
+                            bundlePriceApprox > 0 ? Math.round((baseDeposit / bundlePriceApprox) * 100) : depositPercentForLabel;
+                        }
+                        const depositLabelPct =
+                          depositPercentForLabel > 0 ? `${depositPercentForLabel}%` : "—";
+
+                        const summaryRows: {
+                          num: number;
+                          label: string;
+                          value: number;
+                          bold: boolean;
+                        }[] = [
+                          {
+                            num: 1,
+                            label: `Initial Deposit (${depositLabelPct}) + Total Administrative Fees`,
+                            value: initialDepositWithFees,
+                            bold: true,
+                          },
+                          {
+                            num: 2,
+                            label: "Total Loan Amount",
+                            value: totalLoanAmount,
+                            bold: false,
+                          },
+                          {
+                            num: 3,
+                            label: `Total Interest Amount (${interestRatePercent}% × ${tenor} mo)`,
+                            value: totalInterestAmount,
+                            bold: false,
+                          },
+                          {
+                            num: 4,
+                            label: "Total Repayment Amount",
+                            value: totalRepaymentAmount,
+                            bold: false,
+                          },
+                          {
+                            num: 5,
+                            label: "Monthly Repayment Amount",
+                            value: monthlyRepaymentAmount,
+                            bold: true,
+                          },
+                        ];
+
+                        return (
+                          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl shadow-sm border border-green-200 p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                              <span className="text-[#273E8E] text-2xl font-bold" aria-hidden="true">
+                                ₦
+                              </span>
+                              <h3 className="text-xl font-semibold text-gray-800">Loan Summary</h3>
                             </div>
-                          )}
-                          {selectedItem.user.phone && (
-                            <div>
-                              <p className="text-xs text-gray-500 mb-1">Phone</p>
-                              <p className="text-sm font-medium text-gray-900">{selectedItem.user.phone}</p>
+                            <div className="space-y-3">
+                              {summaryRows.map((row) => (
+                                <div
+                                  key={row.num}
+                                  className="bg-white rounded-lg p-4 border border-green-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"
+                                >
+                                  <p
+                                    className={`text-sm text-gray-800 ${
+                                      row.bold ? "font-bold" : "font-medium"
+                                    }`}
+                                  >
+                                    {row.num}. {row.label}
+                                  </p>
+                                  <p
+                                    className={`text-xl tabular-nums ${
+                                      row.num === 5
+                                        ? "font-bold text-[#273E8E]"
+                                        : row.bold
+                                          ? "font-bold text-gray-800"
+                                          : "font-medium text-gray-800"
+                                    }`}
+                                  >
+                                    {formatCurrencyLoanSummary(row.value)}
+                                  </p>
+                                </div>
+                              ))}
+                              <div className="border-t border-green-200 pt-3 mt-1">
+                                <div className="bg-white rounded-lg p-4 border border-green-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                  <p className="text-sm font-medium text-gray-800">6. Loan Tenor</p>
+                                  <p className="text-xl font-bold text-[#273E8E]">
+                                    {tenor} {tenor === 1 ? "month" : "months"}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
-                          )}
-                          {selectedItem.user.id && (
-                            <div>
-                              <p className="text-xs text-gray-500 mb-1">User ID</p>
-                              <p className="text-sm font-medium text-gray-900">#{selectedItem.user.id}</p>
+                            {/* {showAdminFees && (
+                              <div className="mt-4 bg-white rounded-lg p-4 border border-green-100">
+                                <h4 className="text-sm font-semibold text-gray-800 mb-2">
+                                  Administrative Fees
+                                </h4>
+                                <p className="text-xs text-gray-600 mb-3">
+                                  Insurance is calculated on the bundle price only. Management and legal fees
+                                  are calculated on the loan amount.
+                                </p>
+                                <div className="space-y-2 text-sm">
+                                  {snap.insuranceFee != null && (
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-700">1. Insurance Fee</span>
+                                      <span className="font-medium">
+                                        {formatCurrencyLoanSummary(snap.insuranceFee as number)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {snap.managementFee != null && (
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-700">2. Management Fee</span>
+                                      <span className="font-medium">
+                                        {formatCurrencyLoanSummary(snap.managementFee as number)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {snap.legalFee != null && (
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-700">3. Legal Fee</span>
+                                      <span className="font-medium">
+                                        {formatCurrencyLoanSummary(snap.legalFee as number)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {snap.adminFeesTotal != null && (
+                                    <div className="flex justify-between font-semibold border-t border-green-100 pt-2 mt-2">
+                                      <span>Total Administrative Fees</span>
+                                      <span>{formatCurrencyLoanSummary(snap.adminFeesTotal as number)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )} */}
+                          </div>
+                        );
+                      })()}
+
+                    {/* Final Application — same field order as customer BNPL flow (Personal + credit step) */}
+                    {selectedItem.user &&
+                      (() => {
+                        const u = selectedItem.user as {
+                          id?: number;
+                          first_name?: string;
+                          sur_name?: string;
+                          email?: string;
+                          phone?: string;
+                          bvn?: string | null;
+                        };
+                        const snapP = bnplFinalApplicationPersonalFromSnapshot(selectedItem.loan_plan_snapshot);
+                        const nameLine =
+                          snapP?.full_name ||
+                          [u.first_name, u.sur_name].filter(Boolean).join(" ").trim() ||
+                          null;
+                        const bvnLine = snapP?.bvn || bnplDisplayBvn(selectedItem, u) || null;
+                        const phoneLine = snapP?.phone || u.phone || null;
+                        const emailLine = snapP?.email || u.email || null;
+                        const socialLine =
+                          snapP?.social_media ||
+                          (selectedItem.social_media_handle != null
+                            ? String(selectedItem.social_media_handle).trim()
+                            : null) ||
+                          null;
+                        return (
+                          <div className="bg-white rounded-lg border border-gray-200 p-6">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center">
+                              <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Final application
+                            </h3>
+                            <p className="text-xs text-gray-500 mb-4">
+                              Personal and property details as collected in the BNPL flow (snapshot + profile fallbacks when older applications have no stored form copy).
+                            </p>
+
+                            <h4 className="text-sm font-semibold text-gray-800 mb-3">Personal details</h4>
+                            <p className="text-xs text-gray-500 mb-3">
+                              Full name, BVN, phone, email, and social handle — same labels as the customer &quot;Final Application&quot; step.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">Full name</p>
+                                <p className="text-sm font-medium text-gray-900">{bnplDash(nameLine)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">BVN</p>
+                                <p className="text-sm font-medium text-gray-900 font-mono tracking-wide">{bnplDash(bvnLine)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">Phone number</p>
+                                <p className="text-sm font-medium text-gray-900">{bnplDash(phoneLine)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">Email address</p>
+                                <p className="text-sm font-medium text-gray-900 break-all">{bnplDash(emailLine)}</p>
+                              </div>
+                              <div className="md:col-span-2">
+                                <p className="text-xs text-gray-500 mb-1">Social media handle</p>
+                                <p className="text-sm font-medium text-gray-900">{bnplDash(socialLine)}</p>
+                                <p className="text-xs text-gray-400 mt-1">
+                                  Required for verification on the customer flow (e.g. @username or facebook.com/username).
+                                </p>
+                              </div>
                             </div>
+
+                            <div className="mt-6 pt-4 border-t border-gray-100">
+                              <h4 className="text-sm font-semibold text-gray-800 mb-3">Credit check</h4>
+                              <p className="text-xs text-gray-500 mb-2">After personal details, the customer continues to credit check with this method.</p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-1">Credit check method</p>
+                                  <p className="text-sm font-medium text-gray-900 capitalize">
+                                    {bnplDash(
+                                      selectedItem.credit_check_method != null
+                                        ? String(selectedItem.credit_check_method)
+                                        : null
+                                    )}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-1">User ID (account)</p>
+                                  <p className="text-sm font-medium text-gray-900">{u.id != null ? `#${u.id}` : "—"}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                    {/* Property details — same labels/order as customer BNPL “Final Application” form */}
+                    {selectedItem && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-1 flex items-center">
+                          <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                          </svg>
+                          Property details
+                        </h3>
+                        <p className="text-xs text-gray-500 mb-4">
+                          State, address, current power sources, floors, rooms, and gated estate — matching the customer flow (estate name/address required when gated).
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">State</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {bnplDash(selectedItem.property_state != null ? String(selectedItem.property_state) : null)}
+                            </p>
+                          </div>
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-gray-500 mb-1">Address</p>
+                            <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
+                              {bnplDash(selectedItem.property_address != null ? String(selectedItem.property_address) : null)}
+                            </p>
+                          </div>
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-gray-500 mb-1">Current power sources</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {bnplDash(selectedItem.property_landmark != null ? String(selectedItem.property_landmark) : null)}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Floors</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {selectedItem.property_floors != null && selectedItem.property_floors !== ""
+                                ? String(selectedItem.property_floors)
+                                : "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Rooms</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {selectedItem.property_rooms != null && selectedItem.property_rooms !== ""
+                                ? String(selectedItem.property_rooms)
+                                : "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Is this in a gated estate?</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {bnplGatedEstateLabel(selectedItem.is_gated_estate)}
+                            </p>
+                          </div>
+                          {selectedItem.is_gated_estate ? (
+                            <>
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">Estate name</p>
+                                <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
+                                  {bnplLoanAppEstateText(selectedItem as Record<string, unknown>, "name")}
+                                </p>
+                              </div>
+                              <div className="md:col-span-2">
+                                <p className="text-xs text-gray-500 mb-1">Estate address</p>
+                                <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
+                                  {bnplLoanAppEstateText(selectedItem as Record<string, unknown>, "address")}
+                                </p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div>
+                                <p className="text-xs text-gray-500 mb-1">Estate name</p>
+                                <p className="text-sm font-medium text-gray-400">—</p>
+                              </div>
+                              <div className="md:col-span-2">
+                                <p className="text-xs text-gray-500 mb-1">Estate address</p>
+                                <p className="text-sm font-medium text-gray-400">—</p>
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
@@ -2607,7 +3918,7 @@ const BNPLBuyNow: React.FC = () => {
                     </div>
 
                     {/* Loan Details */}
-                    <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    {/* <div className="bg-white rounded-lg border border-gray-200 p-6">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -2648,7 +3959,7 @@ const BNPLBuyNow: React.FC = () => {
                           </div>
                         )}
                       </div>
-                    </div>
+                    </div> */}
 
                     {/* Beneficiary Information */}
                     {(selectedItem.beneficiary_name || selectedItem.beneficiary_email || selectedItem.beneficiary_phone || selectedItem.beneficiary_relationship) && (
@@ -2796,21 +4107,19 @@ const BNPLBuyNow: React.FC = () => {
                             "upload_document", "bank_statement_path", "live_photo_path",
                             "created_at", "updated_at", "guarantors", "loan_configuration"
                           ];
-                          if (skipKeys.includes(key) || !value || value === null || value === "null") {
-                            return null;
-                          }
-                          if (typeof value === "object" || Array.isArray(value)) {
-                            return null;
-                          }
+                          if (skipKeys.includes(key)) return null;
+                          if (bnplSkipAdditionalInfoScalar(key, value)) return null;
                           return (
                             <div key={key} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                               <span className="text-sm font-medium text-gray-700 capitalize">
                                 {key.replace(/_/g, " ")}:
                               </span>
                               <span className="text-sm text-gray-900">
-                                {key.includes("amount") || key.includes("price") || key.includes("fee")
-                                  ? formatCurrency(value)
-                                  : String(value)}
+                                {key === "is_gated_estate"
+                                  ? bnplGatedEstateLabel(value)
+                                  : key.includes("amount") || key.includes("price") || key.includes("fee")
+                                    ? formatCurrency(value)
+                                    : String(value)}
                               </span>
                             </div>
                           );
@@ -2840,7 +4149,11 @@ const BNPLBuyNow: React.FC = () => {
                           <div>
                             <p className="text-xs text-gray-500 mb-1">Audit Type</p>
                             <p className="text-sm font-semibold text-gray-900 capitalize">
-                              {selectedItem.audit_type.replace("-", "/")}
+                              {selectedItem.audit_type === "home-office" && selectedItem.audit_subtype
+                                ? selectedItem.audit_subtype === "office"
+                                  ? "Home–Office (Office)"
+                                  : "Home–Office (Home)"
+                                : String(selectedItem.audit_type).replace("-", "/")}
                             </p>
                           </div>
                         )}
@@ -2860,6 +4173,18 @@ const BNPLBuyNow: React.FC = () => {
                             </p>
                           </div>
                         )}
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Request source</p>
+                          <p className="text-sm font-semibold text-gray-900">
+                            {selectedItem.source === "buy_now"
+                              ? "Buy Now"
+                              : selectedItem.source === "bnpl"
+                                ? "BNPL"
+                                : selectedItem.source
+                                  ? String(selectedItem.source)
+                                  : "Not specified (legacy)"}
+                          </p>
+                        </div>
                       </div>
                     </div>
 
@@ -2902,15 +4227,21 @@ const BNPLBuyNow: React.FC = () => {
                     )}
 
                     {/* Property Details */}
-                    {(selectedItem.property_address || selectedItem.property_state || selectedItem.contact_name || selectedItem.contact_phone || selectedItem.property_floors || selectedItem.property_rooms !== undefined || selectedItem.is_gated_estate !== undefined) && (
+                    {(selectedItem.property_address || selectedItem.property_state || selectedItem.contact_name || selectedItem.contact_phone || selectedItem.company_name || selectedItem.facility_description || selectedItem.building_type || selectedItem.property_floors || selectedItem.property_rooms !== undefined || selectedItem.is_gated_estate !== undefined) && (
                       <div className="bg-white rounded-lg border border-gray-200 p-6">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                           <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                           </svg>
-                          Property Details
+                          Property / facility details
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {selectedItem.company_name && (
+                            <div className="md:col-span-2">
+                              <p className="text-xs text-gray-500 mb-1">Company Name</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.company_name}</p>
+                            </div>
+                          )}
                           {selectedItem.contact_name && (
                             <div>
                               <p className="text-xs text-gray-500 mb-1">Contact Name</p>
@@ -2929,7 +4260,7 @@ const BNPLBuyNow: React.FC = () => {
                           )}
                           {selectedItem.property_address && (
                             <div className="md:col-span-2">
-                              <p className="text-xs text-gray-500 mb-1">Property Address</p>
+                              <p className="text-xs text-gray-500 mb-1">Address</p>
                               <p className="text-sm font-medium text-gray-900">
                                 {selectedItem.property_address}
                               </p>
@@ -2943,6 +4274,26 @@ const BNPLBuyNow: React.FC = () => {
                               </p>
                             </div>
                           )}
+                          {selectedItem.property_landmark && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Current power sources</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.property_landmark}</p>
+                            </div>
+                          )}
+                          {selectedItem.building_type && (
+                            <div>
+                              <p className="text-xs text-gray-500 mb-1">Type of building</p>
+                              <p className="text-sm font-medium text-gray-900">{selectedItem.building_type}</p>
+                            </div>
+                          )}
+                          {selectedItem.facility_description && (
+                            <div className="md:col-span-2">
+                              <p className="text-xs text-gray-500 mb-1">Description of facility</p>
+                              <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
+                                {selectedItem.facility_description}
+                              </p>
+                            </div>
+                          )}
                           {selectedItem.property_floors !== undefined && selectedItem.property_floors !== null && (
                             <div>
                               <p className="text-xs text-gray-500 mb-1">Number of Floors</p>
@@ -2953,7 +4304,9 @@ const BNPLBuyNow: React.FC = () => {
                           )}
                           {selectedItem.property_rooms !== undefined && selectedItem.property_rooms !== null && (
                             <div>
-                              <p className="text-xs text-gray-500 mb-1">Number of Rooms</p>
+                              <p className="text-xs text-gray-500 mb-1">
+                                {selectedItem.audit_subtype === "office" ? "Number of office spaces" : "Number of Rooms"}
+                              </p>
                               <p className="text-sm font-medium text-gray-900">
                                 {selectedItem.property_rooms}
                               </p>
@@ -3006,23 +4359,20 @@ const BNPLBuyNow: React.FC = () => {
                         {Object.entries(selectedItem).map(([key, value]: [string, any]) => {
                           // Skip already displayed fields
                           const skipKeys = [
-                            "id", "status", "audit_type", "customer_type", "user", "property_address",
-                            "property_state", "property_floors", "property_rooms", "is_gated_estate",
+                            "id", "status", "audit_type", "audit_subtype", "customer_type", "user", "property_address",
+                            "property_state", "property_landmark", "building_type", "facility_description",
+                            "property_floors", "property_rooms", "company_name", "is_gated_estate",
                             "contact_name", "contact_phone", "has_property_details", "order_id", "created_at", "updated_at"
                           ];
-                          if (skipKeys.includes(key) || !value || value === null || value === "null") {
-                            return null;
-                          }
-                          if (typeof value === "object" || Array.isArray(value)) {
-                            return null;
-                          }
+                          if (skipKeys.includes(key)) return null;
+                          if (bnplSkipAdditionalInfoScalar(key, value)) return null;
                           return (
                             <div key={key} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                               <span className="text-sm font-medium text-gray-700 capitalize">
                                 {key.replace(/_/g, " ")}:
                               </span>
                               <span className="text-sm text-gray-900">
-                                {String(value)}
+                                {key === "is_gated_estate" ? bnplGatedEstateLabel(value) : String(value)}
                               </span>
                             </div>
                           );
@@ -3100,9 +4450,11 @@ const BNPLBuyNow: React.FC = () => {
                               {key.replace(/_/g, " ")}:
                             </span>
                             <span className="text-sm text-gray-900">
-                              {key.includes("amount") || key.includes("price") || key.includes("fee")
-                                ? formatCurrency(value)
-                                : String(value)}
+                              {key === "is_gated_estate"
+                                ? bnplGatedEstateLabel(value)
+                                : key.includes("amount") || key.includes("price") || key.includes("fee")
+                                  ? formatCurrency(value)
+                                  : String(value)}
                             </span>
                           </div>
                         </div>
@@ -3132,6 +4484,50 @@ const BNPLBuyNow: React.FC = () => {
                             {formatCurrency(orderSummary.total_price || selectedItem.total_price)}
                           </span>
                         </div>
+                        {(orderSummary.bundle_title || selectedItem.bundle?.title) && (
+                          <div className="col-span-2">
+                            <span className="text-gray-600">Bundle:</span>
+                            <span className="ml-2 font-medium text-gray-900">
+                              {orderSummary.bundle_title || selectedItem.bundle?.title}
+                            </span>
+                          </div>
+                        )}
+                        {(orderSummary.product_title || selectedItem.product?.title) && !orderSummary.bundle_title && !selectedItem.bundle?.title && (
+                          <div className="col-span-2">
+                            <span className="text-gray-600">Product:</span>
+                            <span className="ml-2 font-medium text-gray-900">
+                              {orderSummary.product_title || selectedItem.product?.title}
+                            </span>
+                          </div>
+                        )}
+                        {orderSummary.installation_requested_date && (
+                          <div className="col-span-2">
+                            <span className="text-gray-600">Requested installation date:</span>
+                            <span className="ml-2 font-medium text-gray-900">
+                              {formatDate(orderSummary.installation_requested_date)}
+                            </span>
+                          </div>
+                        )}
+                        {orderSummary.delivery_address && (
+                          <div className="col-span-2 space-y-1 border-t border-gray-200 pt-3 mt-1">
+                            <p className="text-gray-600 font-medium">Installation / delivery site</p>
+                            <p className="text-gray-800">
+                              {[orderSummary.delivery_address.address, orderSummary.delivery_address.state]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Site phone: {orderSummary.delivery_address.phone_number || "—"}
+                              {(() => {
+                                const c = deliverySiteContactDisplay(
+                                  orderSummary.delivery_address,
+                                  selectedItem?.user
+                                );
+                                return c && c !== "—" ? ` · Contact: ${c}` : "";
+                              })()}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -3163,19 +4559,24 @@ const BNPLBuyNow: React.FC = () => {
                       </div>
                     )}
 
-                    {orderSummary.appliances && (
+                    {orderSummary.appliances &&
+                      !(
+                        orderSummary.bundle_title ||
+                        selectedItem.bundle?.title ||
+                        (orderSummary.items && orderSummary.items.length > 0)
+                      ) && (
                       <div className="mb-4">
                         <h3 className="font-semibold text-gray-900 mb-2">Appliances</h3>
                         <p className="text-gray-600">{orderSummary.appliances}</p>
                       </div>
                     )}
 
-                    {orderSummary.backup_time && (
+                    {/* {orderSummary.backup_time && (
                       <div className="mb-4">
                         <h3 className="font-semibold text-gray-900 mb-2">Backup Time</h3>
                         <p className="text-gray-600">{orderSummary.backup_time}</p>
                       </div>
-                    )}
+                    )} */}
                   </>
                 ) : (
                   <div className="text-center text-gray-500 py-8">
@@ -3209,65 +4610,116 @@ const BNPLBuyNow: React.FC = () => {
 
                     {orderInvoice.invoice && (
                       <div className="space-y-4">
-                        {/* Product Breakdown */}
-                        {(orderInvoice.invoice.solar_inverter || orderInvoice.invoice.solar_panels || orderInvoice.invoice.batteries) && (
-                          <div className="mb-4">
-                            <h3 className="font-semibold text-gray-900 mb-3">Product Breakdown</h3>
-                            <div className="space-y-3">
-                              {orderInvoice.invoice.solar_inverter && (
-                                <div className="border border-gray-200 rounded-lg p-4">
-                                  <div className="flex justify-between items-center">
-                                    <div>
-                                      <h4 className="font-medium text-gray-900">
-                                        {orderInvoice.invoice.solar_inverter.description || "Solar Inverter"}
-                                      </h4>
-                                      <p className="text-sm text-gray-600 mt-1">
-                                        Quantity: {orderInvoice.invoice.solar_inverter.quantity}
-                                      </p>
-                                    </div>
-                                    <div className="font-semibold text-[#273E8E]">
-                                      {formatCurrency(orderInvoice.invoice.solar_inverter.price)}
+                        {/* Product breakdown: prefer per-line bundle materials from API; else legacy 3-bucket summary */}
+                        {(() => {
+                          const lineItems = orderInvoice.invoice.bundle_line_items;
+                          const hasLineItems = Array.isArray(lineItems) && lineItems.length > 0;
+                          const invoiceTypeLabel = (t: string) => {
+                            if (t === "inverter") return "Inverter";
+                            if (t === "panels") return "Panels";
+                            if (t === "batteries") return "Battery";
+                            return "Other / accessory";
+                          };
+
+                          if (hasLineItems) {
+                            return (
+                              <div className="mb-4">
+                                <h3 className="font-semibold text-gray-900 mb-2">Product breakdown</h3>
+                                <p className="text-sm text-gray-600 mb-3">
+                                  Each row is a catalog item in the bundle. Amounts are scaled to match the order
+                                  subtotal using each line&apos;s share of the bundle catalog total (no fake panel
+                                  line for inverter-only systems).
+                                </p>
+                                <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                                  <table className="min-w-full text-sm">
+                                    <thead className="bg-gray-50 text-left text-gray-600">
+                                      <tr>
+                                        <th className="px-3 py-2 font-medium">Type</th>
+                                        <th className="px-3 py-2 font-medium">Description</th>
+                                        <th className="px-3 py-2 font-medium">Qty</th>
+                                        <th className="px-3 py-2 font-medium text-right">Amount</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {lineItems.map((row: { type?: string; description?: string; quantity?: number; price?: number }, idx: number) => (
+                                        <tr key={idx}>
+                                          <td className="px-3 py-2 text-gray-700">{invoiceTypeLabel(String(row.type || "other"))}</td>
+                                          <td className="px-3 py-2 font-medium text-gray-900">{row.description || "—"}</td>
+                                          <td className="px-3 py-2">{row.quantity ?? 1}</td>
+                                          <td className="px-3 py-2 text-right font-semibold text-[#273E8E]">
+                                            {formatCurrency(row.price ?? 0)}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          const inv = orderInvoice.invoice.solar_inverter;
+                          const pan = orderInvoice.invoice.solar_panels;
+                          const bat = orderInvoice.invoice.batteries;
+                          const lineHasAmount = (line: { price?: number | string } | null | undefined) =>
+                            line != null && Number(line.price) > 0;
+                          const showInv = lineHasAmount(inv);
+                          const showPan = lineHasAmount(pan);
+                          const showBat = lineHasAmount(bat);
+                          if (!showInv && !showPan && !showBat) return null;
+                          return (
+                            <div className="mb-4">
+                              <h3 className="font-semibold text-gray-900 mb-3">Product Breakdown</h3>
+                              <div className="space-y-3">
+                                {showInv && (
+                                  <div className="border border-gray-200 rounded-lg p-4">
+                                    <div className="flex justify-between items-center">
+                                      <div>
+                                        <h4 className="font-medium text-gray-900">
+                                          {inv?.description || "Solar Inverter"}
+                                        </h4>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                          Quantity: {inv?.quantity ?? 1}
+                                        </p>
+                                      </div>
+                                      <div className="font-semibold text-[#273E8E]">{formatCurrency(inv?.price)}</div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
-                              {orderInvoice.invoice.solar_panels && (
-                                <div className="border border-gray-200 rounded-lg p-4">
-                                  <div className="flex justify-between items-center">
-                                    <div>
-                                      <h4 className="font-medium text-gray-900">
-                                        {orderInvoice.invoice.solar_panels.description || "Solar Panels"}
-                                      </h4>
-                                      <p className="text-sm text-gray-600 mt-1">
-                                        Quantity: {orderInvoice.invoice.solar_panels.quantity}
-                                      </p>
-                                    </div>
-                                    <div className="font-semibold text-[#273E8E]">
-                                      {formatCurrency(orderInvoice.invoice.solar_panels.price)}
+                                )}
+                                {showPan && (
+                                  <div className="border border-gray-200 rounded-lg p-4">
+                                    <div className="flex justify-between items-center">
+                                      <div>
+                                        <h4 className="font-medium text-gray-900">
+                                          {pan?.description || "Solar Panels"}
+                                        </h4>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                          Quantity: {pan?.quantity ?? 1}
+                                        </p>
+                                      </div>
+                                      <div className="font-semibold text-[#273E8E]">{formatCurrency(pan?.price)}</div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
-                              {orderInvoice.invoice.batteries && (
-                                <div className="border border-gray-200 rounded-lg p-4">
-                                  <div className="flex justify-between items-center">
-                                    <div>
-                                      <h4 className="font-medium text-gray-900">
-                                        {orderInvoice.invoice.batteries.description || "Batteries"}
-                                      </h4>
-                                      <p className="text-sm text-gray-600 mt-1">
-                                        Quantity: {orderInvoice.invoice.batteries.quantity}
-                                      </p>
-                                    </div>
-                                    <div className="font-semibold text-[#273E8E]">
-                                      {formatCurrency(orderInvoice.invoice.batteries.price)}
+                                )}
+                                {showBat && (
+                                  <div className="border border-gray-200 rounded-lg p-4">
+                                    <div className="flex justify-between items-center">
+                                      <div>
+                                        <h4 className="font-medium text-gray-900">
+                                          {bat?.description || "Batteries"}
+                                        </h4>
+                                        <p className="text-sm text-gray-600 mt-1">
+                                          Quantity: {bat?.quantity ?? 1}
+                                        </p>
+                                      </div>
+                                      <div className="font-semibold text-[#273E8E]">{formatCurrency(bat?.price)}</div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* Fees Breakdown */}
                         <div className="mb-4">
@@ -3439,10 +4891,14 @@ const BNPLBuyNow: React.FC = () => {
                     <>
                       <option value="approved">Approved</option>
                       <option value="rejected">Rejected</option>
-                      <option value="completed">Completed</option>
                     </>
                   )}
                 </select>
+                {activeTab === "Audit Requests" && (
+                  <p className="mt-2 text-xs text-gray-600">
+                    Approved sends a confirmation email to the customer. Rejected sends an update email. Completed is not used here.
+                  </p>
+                )}
               </div>
 
               {statusForm.status === "approved" && activeTab === "BNPL Applications" && (
@@ -3455,13 +4911,13 @@ const BNPLBuyNow: React.FC = () => {
                 <>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Counter Offer Min Deposit (%)
+                      Counter offer — minimum deposit (% of bundle price)
                     </label>
                     <input
                       type="number"
                       min={0}
                       max={100}
-                      step={5}
+                      step={1}
                       className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                       value={statusForm.counter_offer_min_deposit}
                       onChange={(e) =>
@@ -3473,17 +4929,12 @@ const BNPLBuyNow: React.FC = () => {
                       placeholder="e.g. 40"
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      Percentage of loan amount. The equivalent amount in ₦ will be calculated when you save.
-                      {selectedItem?.loan_amount && statusForm.counter_offer_min_deposit && Number(statusForm.counter_offer_min_deposit) > 0 && (
-                        <span className="block mt-1 font-medium text-gray-700">
-                          ≈ {formatCurrency(Math.round((Number(selectedItem.loan_amount) * Number(statusForm.counter_offer_min_deposit)) / 100))} minimum deposit
-                        </span>
-                      )}
+                      Same meaning as the customer &quot;Initial Deposit (X%)&quot; — percent of <strong>bundle price</strong>, not total repayment. Admin fees (insurance on bundle; management/legal on loan amount) are added to that equity deposit to get the full upfront due (stored as counter-offer minimum deposit in ₦).
                     </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Counter Offer Min Tenor (months)
+                      Counter offer — minimum tenor (months)
                     </label>
                     <select
                       className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
@@ -3501,49 +4952,103 @@ const BNPLBuyNow: React.FC = () => {
                       ))}
                     </select>
                   </div>
+                  {(() => {
+                    const snap =
+                      selectedItem?.loan_plan_snapshot && typeof selectedItem.loan_plan_snapshot === "object"
+                        ? (selectedItem.loan_plan_snapshot as Record<string, unknown>)
+                        : null;
+                    const bundle = bnplBundlePriceFromSnapshotForCounter(snap ?? undefined);
+                    const pct = Number(statusForm.counter_offer_min_deposit);
+                    const tenor = Number(statusForm.counter_offer_min_tenor);
+                    const feePcts = bnplFeePctsForCounter(snap ?? undefined);
+                    const interestM = bnplInterestMonthlyForCounter(
+                      snap ?? undefined,
+                      Number(selectedItem?.mono?.interest_rate) || 4
+                    );
+                    const snapPlan = bnplPlanFromSnapshotForCounter(snap ?? undefined);
+                    const snapPct = bnplParseAmountCounter(snap?.depositPercent);
+                    const snapTenor = bnplParseAmountCounter(snap?.tenor);
+                    const shouldUseSnapshotPlan =
+                      !!snapPlan &&
+                      pct > 0 &&
+                      tenor > 0 &&
+                      Math.abs(pct - snapPct) < 0.01 &&
+                      Math.abs(tenor - snapTenor) < 0.01;
+                    const plan = shouldUseSnapshotPlan
+                      ? snapPlan
+                      : bundle > 0 && pct > 0 && pct <= 100 && tenor > 0
+                        ? bnplComputeCounterOfferPlan(bundle, pct, tenor, interestM, feePcts)
+                        : null;
+                    if (!plan) {
+                      return (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                          {bundle <= 0
+                            ? "Bundle price not found on this application (missing loan plan snapshot). Counter offer math cannot be previewed."
+                            : "Enter a deposit % (1–100) and select a tenor to preview the plan (matches customer BNPL loan summary)."}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm space-y-2">
+                        <p className="font-semibold text-gray-800">Preview (matches BNPL “Review Your Loan Plan”)</p>
+                        <p className="text-xs text-gray-600">
+                          Loan calculator total (principal + equity):{" "}
+                          <strong>{formatCurrency(plan.bundlePrice)}</strong> · Interest: {interestM}% × {tenor} mo ·
+                          Insurance {feePcts.insurance}% of this total; management {feePcts.management}% and legal{" "}
+                          {feePcts.legal}% of the loan amount after equity deposit.
+                        </p>
+                        <ul className="space-y-1 text-gray-800 border-t border-green-200 pt-2 mt-2">
+                          <li className="flex justify-between gap-2">
+                            <span>1. Initial Deposit ({plan.depositPercent}%) + total administrative fees</span>
+                            <span className="font-semibold tabular-nums">{formatCurrency(plan.upfrontDepositTotal)}</span>
+                          </li>
+                          <li className="flex justify-between gap-2">
+                            <span>2. Total loan amount</span>
+                            <span className="tabular-nums">{formatCurrency(plan.totalLoanAmount)}</span>
+                          </li>
+                          <li className="flex justify-between gap-2">
+                            <span>3. Total interest ({interestM}% × {tenor} mo)</span>
+                            <span className="tabular-nums">{formatCurrency(plan.totalInterestAmount)}</span>
+                          </li>
+                          <li className="flex justify-between gap-2">
+                            <span>4. Total repayment amount</span>
+                            <span className="tabular-nums">{formatCurrency(plan.totalRepaymentAmount)}</span>
+                          </li>
+                          <li className="flex justify-between gap-2 font-semibold text-[#273E8E]">
+                            <span>5. Monthly repayment amount</span>
+                            <span className="tabular-nums">{formatCurrency(plan.monthlyRepaymentAmount)}</span>
+                          </li>
+                        </ul>
+                        <div className="mt-3 pt-3 border-t border-green-200 text-xs text-gray-700">
+                          <p className="font-semibold text-gray-800 mb-1">Administrative fees</p>
+                          <ul className="space-y-0.5">
+                            <li className="flex justify-between gap-2">
+                              <span>Insurance ({feePcts.insurance}% of loan calculator total)</span>
+                              <span className="tabular-nums">{formatCurrency(plan.insuranceFee)}</span>
+                            </li>
+                            <li className="flex justify-between gap-2">
+                              <span>Management ({feePcts.management}% of loan amount)</span>
+                              <span className="tabular-nums">{formatCurrency(plan.managementFee)}</span>
+                            </li>
+                            <li className="flex justify-between gap-2">
+                              <span>Legal ({feePcts.legal}% of loan amount)</span>
+                              <span className="tabular-nums">{formatCurrency(plan.legalFee)}</span>
+                            </li>
+                            <li className="flex justify-between gap-2 font-medium border-t border-green-200 pt-1 mt-1">
+                              <span>Total administrative fees</span>
+                              <span className="tabular-nums">{formatCurrency(plan.adminFeesTotal)}</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <p className="text-xs text-gray-600 pt-1">
+                          Stored counter-offer minimum (₦):{" "}
+                          <strong className="text-gray-900">{formatCurrency(plan.upfrontDepositTotal)}</strong> — equity
+                          deposit ({formatCurrency(plan.baseDeposit)}) + admin fees ({formatCurrency(plan.adminFeesTotal)}).
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </>
-              )}
-
-              {activeTab === "Audit Requests" && (
-                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                  <p className="text-sm font-medium text-gray-800">Commercial/Home Audit Details</p>
-                  <input
-                    type="text"
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    value={statusForm.contact_name}
-                    onChange={(e) =>
-                      setStatusForm({ ...statusForm, contact_name: e.target.value })
-                    }
-                    placeholder="Contact name (optional)"
-                  />
-                  <input
-                    type="text"
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    value={statusForm.contact_phone}
-                    onChange={(e) =>
-                      setStatusForm({ ...statusForm, contact_phone: e.target.value })
-                    }
-                    placeholder="Contact phone (optional)"
-                  />
-                  <input
-                    type="text"
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    value={statusForm.property_state}
-                    onChange={(e) =>
-                      setStatusForm({ ...statusForm, property_state: e.target.value })
-                    }
-                    placeholder="Location state (optional)"
-                  />
-                  <textarea
-                    className="w-full border border-[#CDCDCD] rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                    rows={2}
-                    value={statusForm.property_address}
-                    onChange={(e) =>
-                      setStatusForm({ ...statusForm, property_address: e.target.value })
-                    }
-                    placeholder="Location/address (optional)"
-                  />
-                </div>
               )}
 
               <div>
@@ -3633,7 +5138,9 @@ const BNPLBuyNow: React.FC = () => {
               </button>
             </div>
             <p className="text-sm text-gray-500 mb-4">
-              Send this BNPL application details to a financing partner before approving. The partner will receive an email.
+              Sends this BNPL application (the one you have open) to the partner: full customer and property details,
+              loan plan snapshot, order lines, beneficiary, guarantor summary, and attachments when files exist on the
+              server (bank statement, live selfie, KYC uploads, signed guarantor form).
             </p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Select Partner</label>
@@ -3672,7 +5179,15 @@ const BNPLBuyNow: React.FC = () => {
                   if (!userId || !selectedPartnerIdForSend) return;
                   setSendingToPartner(true);
                   try {
-                    await sendToPartnerDetail(userId, { partner_id: Number(selectedPartnerIdForSend) }, token);
+                    await sendToPartnerDetail(
+                      userId,
+                      {
+                        partner_id: Number(selectedPartnerIdForSend),
+                        loan_application_id:
+                          selectedItem?.id != null ? Number(selectedItem.id) : undefined,
+                      },
+                      token
+                    );
                     setShowSendToPartnerModal(false);
                     setSelectedPartnerIdForSend("");
                     alert("Email sent to partner successfully.");
@@ -4424,7 +5939,13 @@ const BNPLBuyNow: React.FC = () => {
                           <div className="flex justify-between items-start mb-2">
                             <div>
                               <span className="font-medium">
-                                {request.audit_type === "commercial" ? "Commercial" : "Home/Office"}
+                                {request.audit_type === "commercial"
+                                  ? "Commercial / Industrial"
+                                  : request.audit_subtype === "office"
+                                    ? "Office"
+                                    : request.audit_subtype === "home"
+                                      ? "Home"
+                                      : "Home / Office"}
                               </span>
                               <span
                                 className={`ml-2 px-2 py-1 rounded text-xs ${
@@ -4449,6 +5970,11 @@ const BNPLBuyNow: React.FC = () => {
                           {request.has_property_details && request.property_address && (
                             <div className="text-gray-600 mt-2 bg-green-50 p-2 rounded">
                               <div className="font-medium text-green-800 mb-1">Shared Property Details:</div>
+                              {request.company_name && (
+                                <div>
+                                  <span className="font-medium">Company:</span> {request.company_name}
+                                </div>
+                              )}
                               <div>
                                 <span className="font-medium">Address:</span> {request.property_address}
                               </div>
@@ -4462,9 +5988,12 @@ const BNPLBuyNow: React.FC = () => {
                                   <span className="font-medium">Floors:</span> {request.property_floors}
                                 </div>
                               )}
-                              {request.property_rooms && (
+                              {request.property_rooms != null && request.property_rooms !== "" && (
                                 <div>
-                                  <span className="font-medium">Rooms:</span> {request.property_rooms}
+                                  <span className="font-medium">
+                                    {request.audit_subtype === "office" ? "Office spaces:" : "Rooms:"}
+                                  </span>{" "}
+                                  {request.property_rooms}
                                 </div>
                               )}
                               {request.is_gated_estate !== undefined && (

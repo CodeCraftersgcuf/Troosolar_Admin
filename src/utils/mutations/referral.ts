@@ -5,6 +5,8 @@ import { API_ENDPOINTS } from "../../../apiConfig";
 export const updateReferralSettings = async (
   payload: {
     commission_percentage?: number;
+    referral_percentage?: number;
+    referral_fixed_ngn?: number;
     minimum_withdrawal?: number;
     outright_discount_percentage?: number;
     referral_reward_type?: "percentage" | "fixed";

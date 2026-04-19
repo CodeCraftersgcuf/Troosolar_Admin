@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import Header from "../../component/Header";
-import { getOrderStatusColor } from "./shpmgt";
+import { formatOrderStatusLabel, getOrderStatusColor } from "./shpmgt";
 import type { ShopOrderData } from "./shpmgt";
 import OrderDetailModal from "./OrderDetailModal";
 import Product from "./Product";
@@ -10,10 +10,11 @@ import CustomDropdown from "./CustomDropdown";
 import images from "../../constants/images";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 import StatsLoadingSkeleton from "../../components/common/StatsLoadingSkeleton";
+import CheckoutShopSettings from "./CheckoutShopSettings";
 
 //Code Related to the Integration
 import { getAllOrders } from "../../utils/queries/orders";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
 import { updateOrderStatus } from "../../utils/mutations/orders";
 import { useMutation } from "@tanstack/react-query";
@@ -72,6 +73,7 @@ interface ApiOrder {
 
 
 const Shop_mgt = () => {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("Shop Orders");
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
@@ -121,7 +123,7 @@ const Shop_mgt = () => {
       return await updateOrderStatus(orderId, { order_status: status }, token || "");
     },
     onSuccess: () => {
-      // Close modal and reset state
+      void queryClient.invalidateQueries({ queryKey: ["all-orders"] });
       setShowStatusModal(false);
       setSelectedOrderForStatus(null);
       setSelectedStatus("");
@@ -184,8 +186,7 @@ const Shop_mgt = () => {
       amount: `₦${Number(order.total_price).toLocaleString()}`,
       date: formattedDate,
       time: formattedTime,
-      status: order.order_status === "pending" ? "Pending" :
-        order.order_status === "completed" ? "Delivered" : "Ordered"
+      status: formatOrderStatusLabel(order.order_status),
     };
   }) || [];
 
@@ -236,7 +237,8 @@ const Shop_mgt = () => {
       apiOrder.id.toString() === order.id
     );
     setSelectedOrderForStatus(originalOrder || null);
-    setSelectedStatus(order.status);
+    const rawStatus = (originalOrder?.order_status ?? "").toLowerCase().trim();
+    setSelectedStatus(rawStatus === "completed" ? "delivered" : rawStatus);
     setShowStatusModal(true);
   };
 
@@ -351,6 +353,15 @@ const Shop_mgt = () => {
                   onClick={() => setActiveTab("Products")}
                 >
                   Products
+                </button>
+                <button
+                  className={`py-2 px-1 border-b-4 font-medium text-md cursor-pointer ${activeTab === "Checkout settings"
+                    ? "border-[#273E8E] text-black"
+                    : "border-transparent text-[#00000080]"
+                    }`}
+                  onClick={() => setActiveTab("Checkout settings")}
+                >
+                  Checkout settings
                 </button>
               </nav>
 
@@ -515,7 +526,15 @@ const Shop_mgt = () => {
 
                   {/* Status Filter */}
                   <CustomDropdown
-                    options={["Status", "Ordered", "Pending", "Delivered"]}
+                    options={[
+                      "Status",
+                      "Pending",
+                      "Processing",
+                      "Shipped",
+                      "Delivered",
+                      "Cancelled",
+                      "Refunded",
+                    ]}
                     selected={statusFilter}
                     onSelect={setStatusFilter}
                   />
@@ -638,14 +657,7 @@ const Shop_mgt = () => {
                                   <span
                                     className="w-1.5 h-1.5 rounded-full mr-1.5"
                                     style={{
-                                      backgroundColor:
-                                        order.status.toLowerCase() === "delivered"
-                                          ? "#008000"
-                                          : order.status.toLowerCase() === "pending"
-                                            ? "#FF8C00"
-                                            : order.status.toLowerCase() === "ordered"
-                                              ? "#5A67D8"
-                                              : "#6B7280",
+                                      backgroundColor: getOrderStatusColor(order.status).borderColor,
                                     }}
                                   ></span>
                                   {order.status}
@@ -747,6 +759,8 @@ const Shop_mgt = () => {
 
         {/* Products Tab Content */}
         {activeTab === "Products" && <Product />}
+
+        {activeTab === "Checkout settings" && <CheckoutShopSettings />}
       </div>
 
       {/* Order Detail Modal */}

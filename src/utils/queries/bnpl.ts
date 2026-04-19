@@ -49,14 +49,22 @@ export const getBNPLSettings = async (token: string): Promise<any> => {
   );
 };
 
-// GET /api/admin/site/banner - home promo banner (url/path)
-export const getSiteBanner = async (token: string): Promise<{ status: string; data?: { url?: string; path?: string }; message: string }> => {
-  return await apiCall(
-    API_ENDPOINTS.ADMIN.SiteBannerGet,
-    "GET",
-    undefined,
-    token
-  );
+export type SiteBannerSlot = { url?: string | null; path?: string | null };
+
+// GET /api/admin/site/banner — home + sidebar slots (legacy url/path = home)
+export const getSiteBanner = async (
+  token: string
+): Promise<{
+  status: string;
+  data?: {
+    home?: SiteBannerSlot;
+    sidebar?: SiteBannerSlot;
+    url?: string | null;
+    path?: string | null;
+  };
+  message: string;
+}> => {
+  return await apiCall(API_ENDPOINTS.ADMIN.SiteBannerGet, "GET", undefined, token);
 };
 
 // GET /api/admin/bnpl/guarantors

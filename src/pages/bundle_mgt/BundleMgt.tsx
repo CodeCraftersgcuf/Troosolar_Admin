@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState } from "react";
 import Header from "../../component/Header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
@@ -322,22 +322,6 @@ const BundleMgt = () => {
   });
 
   const bundleDetails: any = (bundleDetailsData as any)?.data || null;
-
-  /** Sum of bundle installation materials for invoice preview — hide grouped row when 0 (dummy “Included” line). */
-  const invoicePreviewMaterialsTotal = useMemo(() => {
-    if (!bundleDetails?.bundle_materials?.length) return 0;
-    let t = 0;
-    for (const bm of bundleDetails.bundle_materials as any[]) {
-      const mKey = `mat-${bm.material_id}`;
-      const qty = bm.quantity || 1;
-      const rate =
-        parseFloat(
-          editMatRate[mKey] ?? String(bm.rate_override ?? bm.material?.selling_rate ?? bm.material?.rate ?? 0)
-        ) || 0;
-      t += rate * qty;
-    }
-    return t;
-  }, [bundleDetails, editMatRate]);
 
   // Initialize editable state when bundle details load
   React.useEffect(() => {
@@ -2175,17 +2159,6 @@ const BundleMgt = () => {
                         );
                       })}
 
-                      {/* Grouped installation materials cost row — only when total &gt; 0 (no dummy Included row) */}
-                      {invoicePreviewMaterialsTotal > 0 && (
-                        <tr className="border-b border-gray-100 bg-gray-50/50">
-                          <td className="py-2 text-sm text-gray-800">Installation Materials Cost</td>
-                          <td className="py-2 text-sm text-center">1</td>
-                          <td className="py-2 text-sm text-center text-gray-600">Lots</td>
-                          <td className="py-2 text-sm text-right">{formatNaira(invoicePreviewMaterialsTotal)}</td>
-                          <td className="py-2 text-sm text-right font-medium">{formatNaira(invoicePreviewMaterialsTotal)}</td>
-                        </tr>
-                      )}
-
                       {/* Invoice fee rows */}
                       {editSvc.filter(
                         (s) =>
@@ -2210,7 +2183,6 @@ const BundleMgt = () => {
                           i.title.trim() &&
                           rowVisibleForInvoicePreview(i.visibility || "both", invoicePreviewAsInstaller)
                       ).length === 0 &&
-                        invoicePreviewMaterialsTotal <= 0 &&
                         editSvc.filter(
                           (s) =>
                             s.title.trim() &&

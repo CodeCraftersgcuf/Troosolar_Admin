@@ -134,6 +134,7 @@ export const updateBNPLSettings = async (
     legal_fee_percentage?: number;
     insurance_fee_percentage?: number;
     minimum_loan_amount?: number;
+    credit_check_fee?: number;
     loan_durations?: number[];
   },
   token: string
@@ -165,33 +166,34 @@ export const uploadBNPLGuarantorForm = async (
   return res.data;
 };
 
-// POST /api/admin/site/banner - upload home promo banner (FormData: banner)
+// POST /api/admin/site/banner — FormData: banner, placement home|sidebar
 export const uploadSiteBanner = async (
   file: File,
-  token: string
-): Promise<{ status: string; data?: { url?: string; path?: string }; message: string }> => {
+  token: string,
+  placement: "home" | "sidebar" = "home"
+): Promise<{
+  status: string;
+  data?: { url?: string; path?: string; placement?: string };
+  message: string;
+}> => {
   const formData = new FormData();
   formData.append("banner", file);
-  const res = await axios.post(
-    API_ENDPOINTS.ADMIN.SiteBannerUpload,
-    formData,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+  formData.append("placement", placement);
+  const res = await axios.post(API_ENDPOINTS.ADMIN.SiteBannerUpload, formData, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
   return res.data;
 };
 
-// DELETE /api/admin/site/banner - remove home promo banner
-export const deleteSiteBanner = async (token: string): Promise<{ status: string; message: string }> => {
-  return await apiCall(
-    API_ENDPOINTS.ADMIN.SiteBannerDelete,
-    "DELETE",
-    undefined,
-    token
-  );
+// DELETE /api/admin/site/banner?placement=home|sidebar
+export const deleteSiteBanner = async (
+  token: string,
+  placement: "home" | "sidebar" = "home"
+): Promise<{ status: string; message: string }> => {
+  const url = `${API_ENDPOINTS.ADMIN.SiteBannerDelete}?placement=${encodeURIComponent(placement)}`;
+  return await apiCall(url, "DELETE", undefined, token);
 };
 
 // PUT /api/admin/orders/buy-now/{id}/status

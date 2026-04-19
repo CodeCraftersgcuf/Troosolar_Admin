@@ -38,6 +38,27 @@ export const getReferralList = async (
   return await apiCall(url, "GET", undefined, token);
 };
 
+// GET /api/admin/referral/referred-signups
+export const getReferredSignups = async (
+  token: string,
+  params?: {
+    search?: string;
+    per_page?: number;
+    page?: number;
+  }
+): Promise<any> => {
+  let url = API_ENDPOINTS.ADMIN.ReferralReferredSignups;
+  if (params) {
+    const queryParams = new URLSearchParams();
+    if (params.search) queryParams.append("search", params.search);
+    if (params.per_page) queryParams.append("per_page", params.per_page.toString());
+    if (params.page) queryParams.append("page", params.page.toString());
+    const queryString = queryParams.toString();
+    if (queryString) url += `?${queryString}`;
+  }
+  return await apiCall(url, "GET", undefined, token);
+};
+
 // GET /api/admin/referral/user/{userId}
 export const getUserReferralDetails = async (
   userId: number | string,

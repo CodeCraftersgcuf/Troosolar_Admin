@@ -49,7 +49,8 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
   const [featuredImage, setFeaturedImage] = useState<File | null>(null);
   const [existingImages, setExistingImages] = useState<string[]>([]);
   const [existingFeaturedImage, setExistingFeaturedImage] = useState<string | null>(null);
-  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [topDeal, setTopDeal] = useState(false);
+  const [highlyRecommended, setHighlyRecommended] = useState(false);
   const [markAsComplimentary, setMarkAsComplimentary] = useState(false);
   const [isAvailable, setIsAvailable] = useState(true);
   const [productDescription, setProductDescription] = useState('');
@@ -138,6 +139,7 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
         installation_price?: number;
         stock: string;
         top_deal: boolean;
+        is_most_popular?: boolean;
         installation_compulsory: boolean;
         is_available?: boolean;
         description?: string;
@@ -159,7 +161,8 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       );
       setInstallationPrice(product.installation_price?.toString() || "");
       setStockQuantity(product.stock || "");
-      setSaveAsTemplate(product.top_deal || false);
+      setTopDeal(product.top_deal || false);
+      setHighlyRecommended(product.is_most_popular === true);
       setMarkAsComplimentary(product.installation_compulsory || false);
       setIsAvailable(product.is_available !== false);
       setProductDescription(product.description || "");
@@ -260,7 +263,8 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
         if (discountEndDate) updatePayload.append("discount_end_date", discountEndDate);
         updatePayload.append("stock", stockQuantity ?? "0");
         updatePayload.append("installation_price", installationPrice ? installationPrice : "0");
-        updatePayload.append("top_deal", saveAsTemplate ? "1" : "0");
+        updatePayload.append("top_deal", topDeal ? "1" : "0");
+        updatePayload.append("is_most_popular", highlyRecommended ? "1" : "0");
         updatePayload.append("installation_compulsory", markAsComplimentary ? "1" : "0");
         updatePayload.append("is_available", isAvailable ? "1" : "0");
         updatePayload.append("description", productDescription ?? "");
@@ -354,7 +358,8 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
       discount_end_date: discountEndDate || undefined,
       stock: stockQuantity,
       installation_price: installationPrice ? parseFloat(installationPrice) : 0,
-      top_deal: saveAsTemplate,
+      top_deal: topDeal,
+      is_most_popular: highlyRecommended,
       installation_compulsory: markAsComplimentary,
       is_available: isAvailable,
       description: productDescription,
@@ -388,7 +393,8 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
     setFeaturedImage(null);
     setExistingImages([]);
     setExistingFeaturedImage(null);
-    setSaveAsTemplate(false);
+    setTopDeal(false);
+    setHighlyRecommended(false);
     setMarkAsComplimentary(false);
     setIsAvailable(true);
     setProductDescription('');
@@ -824,11 +830,21 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
             <label className="flex items-center">
               <input
                 type="checkbox"
-                checked={saveAsTemplate}
-                onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                checked={topDeal}
+                onChange={(e) => setTopDeal(e.target.checked)}
                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
               />
               <span className="ml-2 text-sm cursor-pointer text-gray-700">Mark as Top deal</span>
+            </label>
+
+            <label className="flex items-center">
+              <input
+                type="checkbox"
+                checked={highlyRecommended}
+                onChange={(e) => setHighlyRecommended(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="ml-2 text-sm cursor-pointer text-gray-700">Highly recommended (show first in lists)</span>
             </label>
 
             <label className="flex items-center">

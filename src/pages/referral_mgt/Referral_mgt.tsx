@@ -4,7 +4,7 @@ import Header from "../../component/Header";
 import images from "../../constants/images";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
-import { getReferralSettings, getReferralList } from "../../utils/queries/referral";
+import { getReferralSettings, getReferralList, getReferredSignups } from "../../utils/queries/referral";
 import { updateReferralSettings } from "../../utils/mutations/referral";
 import LoadingSpinner from "../../components/common/LoadingSpinner";
 
@@ -18,14 +18,31 @@ interface ReferralData {
   date_joined: string;
 }
 
+interface ReferredSignupRow {
+  id: number;
+  name: string;
+  email: string;
+  code_used: string;
+  referrer_name: string | null;
+  referrer_email: string | null;
+  referrer_user_code: string | null;
+  joined_at: string | null;
+}
+
 const Referral_mgt = () => {
   const [selectedReferrals, setSelectedReferrals] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"name" | "referral_count" | "total_earned" | "created_at" | "default">("default");
   const [sortOrder] = useState<"asc" | "desc">("desc");
   const [searchTerm, setSearchTerm] = useState("");
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [commissionPercentage, setCommissionPercentage] = useState("");
   const [minimumWithdrawal, setMinimumWithdrawal] = useState("");
+  const [rewardType, setRewardType] = useState<"fixed" | "percentage">("fixed");
+  const [fixedRewardNgn, setFixedRewardNgn] = useState("");
+  const [percentageReward, setPercentageReward] = useState("");
+  const [outrightDiscount, setOutrightDiscount] = useState("");
+  const [referredSearchTerm, setReferredSearchTerm] = useState("");
+  const [referredPage, setReferredPage] = useState(1);
+  const [referredPerPage] = useState(10);
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(15);
@@ -47,8 +64,29 @@ const Referral_mgt = () => {
   // Load settings from API when available
   useEffect(() => {
     if (settingsResponse?.data) {
-      setCommissionPercentage(settingsResponse.data.commission_percentage?.toString() || "");
-      setMinimumWithdrawal(settingsResponse.data.minimum_withdrawal?.toString() || "");
+      const d = settingsResponse.data;
+      setMinimumWithdrawal(d.minimum_withdrawal?.toString() || "");
+      const rt = d.referral_reward_type === "percentage" ? "percentage" : "fixed";
+      setRewardType(rt);
+      const fixed =
+        d.referral_fixed_ngn != null && d.referral_fixed_ngn !== ""
+          ? String(d.referral_fixed_ngn)
+          : d.referral_reward_value != null && rt === "fixed"
+            ? String(d.referral_reward_value)
+            : "";
+      setFixedRewardNgn(fixed);
+      const pctRaw =
+        d.referral_percentage != null && d.referral_percentage !== ""
+          ? d.referral_percentage
+          : d.commission_percentage;
+      setPercentageReward(
+        pctRaw != null && pctRaw !== "" ? String(pctRaw) : ""
+      );
+      setOutrightDiscount(
+        d.outright_discount_percentage != null && d.outright_discount_percentage !== ""
+          ? String(d.outright_discount_percentage)
+          : "0"
+      );
     }
   }, [settingsResponse]);
 
@@ -94,9 +132,43 @@ const Referral_mgt = () => {
     };
   }, [referralListResponse]);
 
+  const referredQueryParams = useMemo(() => {
+    const params: { per_page: number; page: number; search?: string } = {
+      per_page: referredPerPage,
+      page: referredPage,
+    };
+    if (referredSearchTerm.trim()) {
+      params.search = referredSearchTerm.trim();
+    }
+    return params;
+  }, [referredSearchTerm, referredPage, referredPerPage]);
+
+  const {
+    data: referredResponse,
+    isLoading: referredLoading,
+    isError: referredError,
+  } = useQuery({
+    queryKey: ["referral-referred-signups", referredQueryParams],
+    queryFn: () => getReferredSignups(token, referredQueryParams),
+    enabled: !!token,
+  });
+
+  const referredRows: ReferredSignupRow[] = useMemo(() => {
+    return referredResponse?.data?.data || [];
+  }, [referredResponse]);
+
+  const referredPagination = useMemo(() => {
+    return referredResponse?.data?.pagination || {
+      current_page: 1,
+      last_page: 1,
+      per_page: referredPerPage,
+      total: 0,
+    };
+  }, [referredResponse, referredPerPage]);
+
   // Update settings mutation
   const updateSettingsMutation = useMutation({
-    mutationFn: (payload: { commission_percentage?: number; minimum_withdrawal?: number }) =>
+    mutationFn: (payload: Parameters<typeof updateReferralSettings>[0]) =>
       updateReferralSettings(payload, token),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["referral-settings"] });
@@ -164,31 +236,41 @@ const Referral_mgt = () => {
   };
 
   const handleSaveSettings = () => {
-    // Validate input
-    if (!commissionPercentage.trim() || !minimumWithdrawal.trim()) {
-      alert("Please fill in both fields before saving.");
-      return;
-    }
-
-    // Validate commission percentage is a number
-    const commissionNum = parseFloat(commissionPercentage);
-    if (isNaN(commissionNum) || commissionNum < 0 || commissionNum > 100) {
-      alert("Please enter a valid commission percentage between 0 and 100.");
-      return;
-    }
-
-    // Validate minimum withdrawal is a number
     const withdrawalNum = parseFloat(minimumWithdrawal.replace(/,/g, ""));
-    if (isNaN(withdrawalNum) || withdrawalNum < 0) {
-      alert("Please enter a valid minimum withdrawal amount.");
+    if (minimumWithdrawal.trim() === "" || isNaN(withdrawalNum) || withdrawalNum < 0) {
+      alert("Please enter a valid minimum withdrawal amount (₦).");
       return;
     }
 
-    // Update settings via API
-    updateSettingsMutation.mutate({
-      commission_percentage: commissionNum,
+    const outrightNum = outrightDiscount.trim() === "" ? 0 : parseFloat(outrightDiscount.replace(/,/g, ""));
+    if (isNaN(outrightNum) || outrightNum < 0 || outrightNum > 100) {
+      alert("Outright discount must be between 0 and 100.");
+      return;
+    }
+
+    const payload: Parameters<typeof updateReferralSettings>[0] = {
       minimum_withdrawal: withdrawalNum,
-    });
+      outright_discount_percentage: outrightNum,
+      referral_reward_type: rewardType,
+    };
+
+    if (rewardType === "fixed") {
+      const fixedNum = parseFloat(fixedRewardNgn.replace(/,/g, ""));
+      if (fixedRewardNgn.trim() === "" || isNaN(fixedNum) || fixedNum <= 0) {
+        alert("Enter a fixed referrer reward amount greater than zero (₦).");
+        return;
+      }
+      payload.referral_fixed_ngn = fixedNum;
+    } else {
+      const pctNum = parseFloat(percentageReward.replace(/,/g, ""));
+      if (percentageReward.trim() === "" || isNaN(pctNum) || pctNum <= 0 || pctNum > 100) {
+        alert("Enter a percentage between 0 and 100 of the qualifying purchase.");
+        return;
+      }
+      payload.referral_percentage = pctNum;
+    }
+
+    updateSettingsMutation.mutate(payload);
   };
 
   // Format currency
@@ -206,6 +288,13 @@ const Referral_mgt = () => {
 
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setReferredPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [referredSearchTerm]);
 
   return (
     <div className="min-h-screen bg-[#F5F7FF]">
@@ -442,6 +531,100 @@ const Referral_mgt = () => {
             </>
           )}
         </div>
+
+        {/* Users who signed up with a referral code */}
+        <div className="mt-10">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Signups using a referral code</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                New accounts that entered someone&apos;s code at registration. Referrer is credited when they complete a qualifying purchase (per referral settings).
+              </p>
+            </div>
+            <input
+              type="text"
+              placeholder="Search name, email, or code"
+              value={referredSearchTerm}
+              onChange={(e) => setReferredSearchTerm(e.target.value)}
+              className="pl-4 pr-4 py-2.5 border border-[#00000080] rounded-lg text-sm w-full sm:w-72 focus:outline-none bg-white"
+            />
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            {referredLoading ? (
+              <LoadingSpinner message="Loading referred signups..." />
+            ) : referredError ? (
+              <div className="py-12 text-center text-red-500">Failed to load referred signups.</div>
+            ) : referredRows.length === 0 ? (
+              <div className="py-12 text-center text-gray-500">No signups with a referral code yet.</div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-[#EBEBEB] border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-black">New user</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-black">Email</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-black">Code used</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-black">Referred by</th>
+                        <th className="px-4 py-3 text-left text-sm font-medium text-black">Joined</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {referredRows.map((row, index) => (
+                        <tr
+                          key={row.id}
+                          className={index % 2 === 0 ? "bg-[#F8F8F8]" : "bg-white"}
+                        >
+                          <td className="px-4 py-3 text-sm text-black">{row.name}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{row.email}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-gray-800">{row.code_used}</td>
+                          <td className="px-4 py-3 text-sm text-gray-700">
+                            {row.referrer_name || "—"}
+                            {row.referrer_user_code ? (
+                              <span className="block text-xs text-gray-500">{row.referrer_user_code}</span>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{row.joined_at || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {referredPagination.last_page > 1 && (
+                  <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+                    <span className="text-sm text-gray-600">
+                      Page {referredPagination.current_page} of {referredPagination.last_page} (
+                      {referredPagination.total} total)
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setReferredPage((p) => Math.max(1, p - 1))}
+                        disabled={referredPagination.current_page <= 1}
+                        className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReferredPage((p) =>
+                            Math.min(referredPagination.last_page, p + 1)
+                          )
+                        }
+                        disabled={referredPagination.current_page >= referredPagination.last_page}
+                        className="px-3 py-1.5 text-sm rounded-md border border-gray-300 bg-white disabled:opacity-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Settings Modal */}
@@ -460,30 +643,58 @@ const Referral_mgt = () => {
             </div>
 
             {/* Form Content */}
-            <div className="space-y-6">
-              {/* Commission Percentage */}
+            <div className="space-y-5 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
+              <p className="text-xs text-gray-500 -mt-2 mb-2">
+                Choose how referrers are paid, then enter only that value. Fixed and percentage cannot apply at the same time.
+              </p>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Set Commission Percentage
+                  Referrer payout type
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Enter a number"
-                    value={commissionPercentage}
-                    onChange={(e) => setCommissionPercentage(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm pr-10"
-                  />
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl font-light">
-                    %
-                  </span>
-                </div>
+                <select
+                  value={rewardType}
+                  onChange={(e) =>
+                    setRewardType(e.target.value === "percentage" ? "percentage" : "fixed")
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                >
+                  <option value="fixed">Fixed cash amount (₦) per qualifying purchase</option>
+                  <option value="percentage">Percentage (%) of qualifying purchase</option>
+                </select>
               </div>
 
-              {/* Minimum Withdrawal Amount */}
+              {rewardType === "fixed" ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Amount (₦)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 50000"
+                    value={fixedRewardNgn}
+                    onChange={(e) => setFixedRewardNgn(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Percentage of purchase (%)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 5"
+                    value={percentageReward}
+                    onChange={(e) => setPercentageReward(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Minimum Withdrawal amount
+                  Minimum withdrawal (₦)
                 </label>
                 <input
                   type="text"
@@ -492,6 +703,22 @@ const Referral_mgt = () => {
                   onChange={(e) => setMinimumWithdrawal(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Outright purchase discount when using a referrer code at checkout (%)
+                </label>
+                <input
+                  type="text"
+                  placeholder="0"
+                  value={outrightDiscount}
+                  onChange={(e) => setOutrightDiscount(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Optional shop discount for the buyer; separate from the referrer&apos;s reward.
+                </p>
               </div>
 
               {/* Save Button */}

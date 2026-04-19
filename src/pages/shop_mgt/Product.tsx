@@ -56,6 +56,9 @@ interface ApiProduct {
   images: ApiProductImage[];
   reviews: unknown[];
 }
+interface ApiProductReview {
+  rating?: number;
+}
 
 interface ApiBundleItem {
   id: number;
@@ -171,6 +174,10 @@ const Product = () => {
   const [selectedBundle, setSelectedBundle] = useState<any>(null);
   const [editBundleData, setEditBundleData] = useState<any>(null);
   const [isProductBuilderOpen, setIsProductBuilderOpen] = useState(false);
+  const [productPage, setProductPage] = useState(1);
+  const [bundlePage, setBundlePage] = useState(1);
+  const productsPerPage = 12;
+  const bundlesPerPage = 6;
 
   // Get token from cookies
   const token = Cookies.get('token') || '';
@@ -240,6 +247,46 @@ const Product = () => {
     return Math.round(((originalPrice - discountPrice) / originalPrice) * 100);
   };
 
+  const parseStockQuantity = (value: string | number | null | undefined) => {
+    if (value == null) return 0;
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    const text = String(value).trim().toLowerCase();
+    if (!text) return 0;
+    const numeric = Number(text);
+    if (Number.isFinite(numeric)) return numeric;
+    if (text.includes("out of stock") || text === "unavailable" || text === "false") return 0;
+    if (text.includes("in stock") || text === "available" || text === "true") return 1;
+    const extracted = Number(text.replace(/[^\d.]/g, ""));
+    return Number.isFinite(extracted) ? extracted : 0;
+  };
+
+  const parseOldQuantity = (value: string | number | null | undefined, fallback: number) => {
+    const n = parseStockQuantity(value as string | number);
+    return n > 0 ? n : Math.max(fallback, 1);
+  };
+
+  const getAverageRating = (reviews: unknown[]) => {
+    const list = (Array.isArray(reviews) ? reviews : []) as ApiProductReview[];
+    if (!list.length) return 0;
+    const sum = list.reduce((acc, r) => acc + Number(r?.rating || 0), 0);
+    return sum / list.length;
+  };
+
+  const renderStars = (rating: number) => (
+    <div className="flex flex-row mt-2">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <svg
+          key={star}
+          className={`w-3 h-3 ${star <= Math.round(rating) ? "text-[#273E8E]" : "text-[#D9D9D9]"}`}
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      ))}
+    </div>
+  );
+
   // Helper function to get full image URL
   // Extract base URL from API_DOMAIN (remove /api)
   const getBaseUrl = () => {
@@ -291,6 +338,31 @@ const Product = () => {
 
     return filtered;
   }, [apiProducts, searchQuery, selectedCategory, selectedBrand, selectedAvailability, apiCategories, apiBrands]);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (productPage - 1) * productsPerPage;
+    return filteredProducts.slice(start, start + productsPerPage);
+  }, [filteredProducts, productPage]);
+
+  const validBundles = useMemo(
+    () => apiBundles.filter((b) => !!b.title && Number(b.total_price) > 0),
+    [apiBundles]
+  );
+  const paginatedBundles = useMemo(() => {
+    const start = (bundlePage - 1) * bundlesPerPage;
+    return validBundles.slice(start, start + bundlesPerPage);
+  }, [validBundles, bundlePage]);
+
+  const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / productsPerPage));
+  const bundleTotalPages = Math.max(1, Math.ceil(validBundles.length / bundlesPerPage));
+
+  useEffect(() => {
+    setProductPage(1);
+  }, [searchQuery, selectedCategory, selectedBrand, selectedAvailability, filteredProducts.length]);
+
+  useEffect(() => {
+    setBundlePage(1);
+  }, [validBundles.length]);
 
   // Handle image loading states
   const handleImageLoad = (imageId: string) => {
@@ -679,11 +751,14 @@ const Product = () => {
               </div>
             </div>
           ) : (
+            <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-              {filteredProducts.length > 0 ? filteredProducts.map((product: ApiProduct) => {
+              {filteredProducts.length > 0 ? paginatedProducts.map((product: ApiProduct) => {
                 const discountPercentage = calculateDiscountPercentage(product.price, product.discount_price);
-                const stockPercentage = product.old_quantity ?
-                  Math.round((parseInt(product.stock) / parseInt(product.old_quantity)) * 100) : 0;
+                const stockQty = parseStockQuantity(product.stock);
+                const oldQty = parseOldQuantity(product.old_quantity, stockQty);
+                const stockPercentage = Math.max(0, Math.min(100, Math.round((stockQty / oldQty) * 100)));
+                const avgRating = getAverageRating(product.reviews);
 
                 // Convert API product to ProductData format for compatibility
                 const convertedProduct: ProductData = {
@@ -691,7 +766,7 @@ const Product = () => {
                   name: product.title,
                   category: "Solar Equipment", // Default category
                   price: formatPrice(product.discount_price),
-                  stock: parseInt(product.stock),
+                  stock: stockQty,
                   status: "Active",
                   image: getImageUrl(product.featured_image_url),
                   description: product.details.map(d => d.detail).join(", ") || "No description available"
@@ -767,7 +842,7 @@ const Product = () => {
                         <div className="flex flex-col mt-[-5px]">
                           <div>
                             <span className="text-sm font-medium text-black text-[10px]">
-                              {product.stock}/{product.old_quantity}
+                              {stockQty}/{oldQty}
                             </span>
                             <div className="w-16 bg-[#D9D9D9] rounded-full h-2 mt-1">
                               <div
@@ -776,26 +851,14 @@ const Product = () => {
                               ></div>
                             </div>
                           </div>
-                          <div className="flex flex-row mt-2">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <svg
-                                key={star}
-                                className={`w-3 h-3 ${star <= 4 ? "text-[#273E8E]" : "text-[#D9D9D9]"
-                                  }`}
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                              >
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
-                            ))}
-                          </div>
+                          {renderStars(avgRating)}
                         </div>
                       </div>
 
                       {/* Bottom Section - Orders and Button */}
                       <div className="flex items-center justify-between mt-5">
                         <span className="text-xs font-semibold text-black text-[15px]">
-                          {product.stock} Stocks
+                          {stockQty} Stocks
                         </span>
                         <button
                           onClick={(e) => {
@@ -833,6 +896,34 @@ const Product = () => {
                 </div>
               )}
             </div>
+            {filteredProducts.length > 0 && productTotalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <span className="text-xs text-gray-600">
+                  Showing {(productPage - 1) * productsPerPage + 1}-
+                  {Math.min(productPage * productsPerPage, filteredProducts.length)} of {filteredProducts.length}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setProductPage((p) => Math.max(1, p - 1))}
+                    disabled={productPage === 1}
+                    className="px-3 py-1 text-xs border rounded disabled:opacity-50"
+                  >
+                    Prev
+                  </button>
+                  <span className="px-2 py-1 text-xs">
+                    {productPage}/{productTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setProductPage((p) => Math.min(productTotalPages, p + 1))}
+                    disabled={productPage === productTotalPages}
+                    className="px-3 py-1 text-xs border rounded disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
 
@@ -928,8 +1019,9 @@ const Product = () => {
               </div>
             </div>
           ) : (
+            <>
             <div className="space-y-4">
-              {apiBundles.length > 0 ? apiBundles.map((bundle: ApiBundle) => {
+              {validBundles.length > 0 ? paginatedBundles.map((bundle: ApiBundle) => {
                 // Skip bundles with no title or invalid data
                 if (!bundle.title || bundle.total_price === 0) return null;
 
@@ -1005,17 +1097,7 @@ const Product = () => {
                             </div>
                           </div>
                           <div className="flex flex-row mt-2">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <svg
-                                key={star}
-                                className={`w-3 h-3 ${star <= 4 ? "text-[#273E8E]" : "text-[#D9D9D9]"
-                                  }`}
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                              >
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
-                            ))}
+                            {renderStars(0)}
                           </div>
                         </div>
                       </div>
@@ -1028,6 +1110,34 @@ const Product = () => {
                 </div>
               )}
             </div>
+            {validBundles.length > 0 && bundleTotalPages > 1 && (
+              <div className="flex items-center justify-between mt-4">
+                <span className="text-xs text-gray-600">
+                  {(bundlePage - 1) * bundlesPerPage + 1}-
+                  {Math.min(bundlePage * bundlesPerPage, validBundles.length)} of {validBundles.length}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setBundlePage((p) => Math.max(1, p - 1))}
+                    disabled={bundlePage === 1}
+                    className="px-3 py-1 text-xs border rounded disabled:opacity-50"
+                  >
+                    Prev
+                  </button>
+                  <span className="px-2 py-1 text-xs">
+                    {bundlePage}/{bundleTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setBundlePage((p) => Math.min(bundleTotalPages, p + 1))}
+                    disabled={bundlePage === bundleTotalPages}
+                    className="px-3 py-1 text-xs border rounded disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
       </div>
