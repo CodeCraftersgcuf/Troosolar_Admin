@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { fetchMonoUserStatementPdf } from "../../utils/mutations/bnpl";
 
 const formatNaira = (amount: number | null | undefined) => {
@@ -36,13 +36,14 @@ const MonoDocumentsPanel: React.FC<MonoDocumentsPanelProps> = ({
   userName,
   token,
 }) => {
+  const [pdfLoading, setPdfLoading] = useState(false);
+
   const summary = (payload.summary || {}) as Record<string, unknown>;
   const identity = (payload.identity || {}) as Record<string, unknown>;
   const transactions = (payload.transactions || []) as Array<Record<string, unknown>>;
   const statementMeta = (payload.statement_meta || {}) as Record<string, unknown>;
   const creditSession = (payload.latest_credit_session || null) as Record<string, unknown> | null;
   const partialErrors = (payload.partial_errors || {}) as Record<string, string>;
-  const statementPdf = (payload.statement_pdf || {}) as Record<string, unknown>;
 
   const accountLabel = useMemo(() => {
     const name = dash(summary.account_name);
@@ -86,11 +87,7 @@ const MonoDocumentsPanel: React.FC<MonoDocumentsPanelProps> = ({
   };
 
   const openStatementPdf = async () => {
-    const directUrl = statementPdf.download_url as string | undefined;
-    if (directUrl) {
-      window.open(directUrl, "_blank", "noopener,noreferrer");
-      return;
-    }
+    setPdfLoading(true);
     try {
       const res = await fetchMonoUserStatementPdf(userId, { period: "last6months" }, token);
       if (res?.status === "success" && res?.data?.download_url) {
@@ -100,6 +97,8 @@ const MonoDocumentsPanel: React.FC<MonoDocumentsPanelProps> = ({
       }
     } catch (err: any) {
       alert(err?.message || "Failed to download statement PDF.");
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -120,9 +119,10 @@ const MonoDocumentsPanel: React.FC<MonoDocumentsPanelProps> = ({
         <button
           type="button"
           onClick={openStatementPdf}
-          className="px-4 py-2 rounded-lg bg-[#273E8E] text-white text-sm font-medium hover:bg-[#1e3270]"
+          disabled={pdfLoading}
+          className="px-4 py-2 rounded-lg bg-[#273E8E] text-white text-sm font-medium hover:bg-[#1e3270] disabled:opacity-50"
         >
-          Download bank statement (PDF)
+          {pdfLoading ? "Preparing PDF..." : "Download bank statement (PDF)"}
         </button>
         <button
           type="button"
@@ -137,7 +137,7 @@ const MonoDocumentsPanel: React.FC<MonoDocumentsPanelProps> = ({
           onClick={downloadSummaryJson}
           className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
-          Download full report (JSON)
+          Export data file
         </button>
         <button
           type="button"
