@@ -48,6 +48,7 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
   const [selectedWebhookPayload, setSelectedWebhookPayload] = useState<unknown>(null);
   const [documentsPayload, setDocumentsPayload] = useState<unknown>(null);
   const [documentsTitle, setDocumentsTitle] = useState("");
+  const [documentsUserId, setDocumentsUserId] = useState<number | null>(null);
   const [actionUserId, setActionUserId] = useState<number | null>(null);
   const [actionType, setActionType] = useState<"credit" | "documents" | "pdf" | "bvn" | null>(null);
   const [bvnModalUser, setBvnModalUser] = useState<{
@@ -219,6 +220,7 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
       if (res?.status === "success") {
         setDocumentsTitle(`Mono Documents — ${userName}`);
         setDocumentsPayload(res.data);
+        setDocumentsUserId(userId);
       } else {
         alert(res?.message || "Failed to fetch documents.");
       }
@@ -601,6 +603,7 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
                 onClick={() => {
                   setDocumentsPayload(null);
                   setDocumentsTitle("");
+                  setDocumentsUserId(null);
                 }}
                 className="text-gray-500 hover:text-gray-800 text-2xl leading-none"
               >
@@ -608,8 +611,13 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
               </button>
             </div>
             <div className="p-6 overflow-y-auto">
-              {documentsPayload && typeof documentsPayload === "object" ? (
-                <MonoDocumentsPanel payload={documentsPayload as Record<string, unknown>} />
+              {documentsPayload && typeof documentsPayload === "object" && documentsUserId != null ? (
+                <MonoDocumentsPanel
+                  payload={documentsPayload as Record<string, unknown>}
+                  userId={documentsUserId}
+                  userName={documentsTitle.replace(/^Mono Documents — /, "") || "customer"}
+                  token={token}
+                />
               ) : (
                 <p className="text-sm text-gray-500">No document data.</p>
               )}
