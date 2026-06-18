@@ -7,6 +7,7 @@ import {
   getMonoCreditSession,
   getMonoWebhookEvents,
   getMonoUserDocuments,
+  getMonoStatus,
 } from "../../utils/queries/bnpl";
 import {
   runMonoUserCreditCheck,
@@ -112,6 +113,15 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
     page,
   };
 
+  const { data: monoStatusData } = useQuery({
+    queryKey: ["mono-status", token],
+    queryFn: () => getMonoStatus(token),
+    enabled: !!token,
+  });
+
+  const monoAuthOk = monoStatusData?.data?.api_auth?.ok === true;
+  const monoAuthMessage = monoStatusData?.data?.api_auth?.message as string | undefined;
+
   const { data: linkedData, isLoading: linkedLoading } = useQuery({
     queryKey: ["mono-linked-accounts", token, listParams],
     queryFn: () => getMonoLinkedAccounts(token, listParams),
@@ -183,7 +193,12 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
         alert(res?.message || "Failed to start credit check.");
       }
     } catch (err: any) {
-      alert(err?.message || "Failed to start credit check.");
+      const msg = err?.message || err?.response?.data?.message || "Failed to start credit check.";
+      alert(
+        monoAuthOk === false && monoAuthMessage
+          ? `${msg}\n\nMono config: ${monoAuthMessage}`
+          : msg
+      );
     } finally {
       setActionUserId(null);
       setActionType(null);
@@ -254,6 +269,13 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
         <p className="text-sm text-gray-500 mt-1">
           View linked bank accounts, run Mono credit checks, and pull account documents or statement PDFs — same data used in the BNPL flow.
         </p>
+        {monoStatusData && !monoAuthOk && (
+          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong>Mono API not authorized.</strong>{" "}
+            {monoAuthMessage ||
+              "Set MONO_SECRET_KEY on the server to the live_sk_... key from the same Mono app as your public key, then run /api/optimize-app."}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2 items-center justify-between">

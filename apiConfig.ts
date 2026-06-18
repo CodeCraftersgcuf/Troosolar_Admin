@@ -201,6 +201,7 @@ const API_ENDPOINTS = {
     MonoCreditSessionShow: (id: number | string) =>
       `${API_DOMAIN}/admin/bnpl/mono/credit-sessions/${id}`, // GET
     MonoWebhookEvents: API_DOMAIN + "/admin/bnpl/mono/webhook-events", // GET
+    MonoStatus: API_DOMAIN + "/admin/bnpl/mono/status", // GET
     MonoUserSetBvn: (userId: number | string) =>
       `${API_DOMAIN}/admin/bnpl/mono/users/${userId}/bvn`, // POST
     MonoUserCreditCheck: (userId: number | string) =>

@@ -299,6 +299,10 @@ const appendQuery = (base: string, params?: Record<string, string | number | boo
   return queryString ? `${base}?${queryString}` : base;
 };
 
+export const getMonoStatus = async (token: string): Promise<any> => {
+  return await apiCall(API_ENDPOINTS.ADMIN.MonoStatus, "GET", undefined, token);
+};
+
 export const getMonoLinkedAccounts = async (
   token: string,
   params?: { status?: string; search?: string; per_page?: number; page?: number }
