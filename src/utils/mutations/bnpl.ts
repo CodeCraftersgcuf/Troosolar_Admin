@@ -219,11 +219,14 @@ export const createCustomOrder = async (
     user_id: number;
     order_type: "buy_now" | "bnpl";
     items: Array<{
-      type: "product" | "bundle" | "custom";
-      id?: number;
-      name?: string;
+      type: "product" | "bundle";
+      id: number;
+      quantity?: number;
+    }>;
+    custom_items?: Array<{
+      name: string;
       description?: string;
-      price?: number;
+      price: number;
       quantity?: number;
     }>;
     send_email?: boolean;
@@ -299,6 +302,32 @@ export const updateAuditRequestStatus = async (
   return await apiCall(
     API_ENDPOINTS.ADMIN.AuditRequestUpdateStatus(id),
     "PUT",
+    payload,
+    token
+  );
+};
+
+export const runMonoUserCreditCheck = async (
+  userId: number | string,
+  payload: { bvn?: string; loan_amount?: number; repayment_duration?: number },
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.MonoUserCreditCheck(userId),
+    "POST",
+    payload,
+    token
+  );
+};
+
+export const fetchMonoUserStatementPdf = async (
+  userId: number | string,
+  payload: { period?: string },
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.MonoUserStatementPdf(userId),
+    "POST",
     payload,
     token
   );

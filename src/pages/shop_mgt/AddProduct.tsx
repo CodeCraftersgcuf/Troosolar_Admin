@@ -24,9 +24,19 @@ interface ApiBrand {
   title: string;
   icon: string;
   category_id: number;
+  category_ids?: number[];
   created_at: string;
   updated_at: string;
 }
+
+const brandBelongsToCategory = (brand: ApiBrand, categoryId: number): boolean => {
+  const linkedIds = brand.category_ids?.length
+    ? brand.category_ids
+    : brand.category_id
+      ? [brand.category_id]
+      : [];
+  return linkedIds.includes(categoryId);
+};
 
 interface AddProductProps {
   isOpen: boolean;
@@ -92,8 +102,16 @@ const AddProduct = ({ isOpen, onClose, editingProduct }: AddProductProps) => {
 
   const filteredBrands = useMemo(() => {
     if (!selectedCategoryData) return [];
-    return apiBrands.filter((brand) => brand.category_id === selectedCategoryData.id);
+    return apiBrands.filter((brand) =>
+      brandBelongsToCategory(brand, selectedCategoryData.id)
+    );
   }, [apiBrands, selectedCategoryData]);
+
+  useEffect(() => {
+    if (!productBrand || brandsLoading || !selectedCategoryData) return;
+    const stillValid = filteredBrands.some((b) => b.title === productBrand);
+    if (!stillValid) setProductBrand('');
+  }, [productCategory, filteredBrands, productBrand, brandsLoading, selectedCategoryData]);
 
   // Extract base URL from API_DOMAIN (remove /api)
   const getBaseUrl = () => {

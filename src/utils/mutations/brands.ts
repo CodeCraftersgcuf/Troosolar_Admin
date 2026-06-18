@@ -1,49 +1,50 @@
 import { apiCall } from "../customApiCall";
 import { API_ENDPOINTS } from "../../../apiConfig";
 
-// Helper to create FormData from payload
-const buildCategoryFormData = (payload: {
+const appendCategoryIds = (formData: FormData, categoryIds: Array<string | number>) => {
+  categoryIds.forEach((id) => {
+    formData.append("category_ids[]", String(id));
+  });
+};
+
+const buildBrandFormData = (payload: {
   title: string;
-  category_id: string | number;
+  category_ids: Array<string | number>;
 }) => {
   const formData = new FormData();
   formData.append("title", payload.title);
-  formData.append("category_id", payload.category_id.toString());
+  appendCategoryIds(formData, payload.category_ids);
+  if (payload.category_ids[0] != null) {
+    formData.append("category_id", String(payload.category_ids[0]));
+  }
   return formData;
 };
 
-// POST / New Brand
 export const addBrand = async (
-  payload: { title: string; category_id: string | number },
+  payload: { title: string; category_ids: Array<string | number> },
   token: string
 ): Promise<unknown> => {
-  const formData = buildCategoryFormData(payload);
+  const formData = buildBrandFormData(payload);
   return await apiCall(API_ENDPOINTS.ADMIN.AddBrand, "POST", formData, token);
 };
 
-// POST /update_brand/{id}
 export const updateBrand = async (
   id: number | string,
-  payload: { title: string; category_id: string | number },
+  payload: { title: string; category_ids: Array<string | number> },
   token: string
 ): Promise<unknown> => {
-  console.log("updateBrand called with:", {
-    id,
-    payload,
-    token: token ? "present" : "missing",
-  });
-
-  // No FormData → just send JSON body
   return await apiCall(
     API_ENDPOINTS.ADMIN.UpdateBrand(id),
     "PUT",
-    payload, // plain JSON
+    {
+      title: payload.title,
+      category_ids: payload.category_ids.map(String),
+      category_id: payload.category_ids[0] ?? null,
+    },
     token
   );
 };
 
-
-// DELETE remains unchanged
 export const deleteBrand = async (
   id: number | string,
   token: string

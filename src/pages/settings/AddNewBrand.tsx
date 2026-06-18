@@ -1,14 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import images from '../../constants/images';
-
-//Code Related to the Integration
 import { useMutation, useQuery } from '@tanstack/react-query';
 import Cookies from "js-cookie";
-import { addBrand } from '../../utils/mutations/brands';
-import { updateBrand } from '../../utils/mutations/brands';
+import { addBrand, updateBrand } from '../../utils/mutations/brands';
 import { getAllCategories } from '../../utils/queries/categories';
 
-// API Response Interface
 interface ApiCategory {
   id: number;
   title: string;
@@ -20,67 +16,77 @@ interface ApiCategory {
 interface AddNewBrandProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (categoryName: string, brandName: string, status: string) => void;
+  onSave: (categoryIds: string[], brandName: string, status: string) => void;
   editMode?: boolean;
   editData?: {
     id: string;
     category: string;
+    categoryIds?: string[];
     brandName: string;
     status: string;
   };
 }
 
 const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: AddNewBrandProps) => {
-  const [categoryName, setCategoryName] = useState('');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [brandName, setBrandName] = useState('');
   const [status, setStatus] = useState('');
   const token = Cookies.get("token");
 
-  // Fetch categories from API
   const { data: categoriesResponse, isLoading: categoriesLoading } = useQuery({
     queryKey: ['categories'],
     queryFn: () => getAllCategories(token || ''),
     enabled: !!token && isOpen,
   });
 
-  // Extract categories data from API response
-  const apiCategories: ApiCategory[] = useMemo(() => 
-    (categoriesResponse as { data?: ApiCategory[] })?.data || [], 
+  const apiCategories: ApiCategory[] = useMemo(() =>
+    (categoriesResponse as { data?: ApiCategory[] })?.data || [],
     [categoriesResponse]
   );
 
   useEffect(() => {
     if (editMode && editData) {
-      setCategoryName(editData.category || '');
+      const ids = editData.categoryIds?.length
+        ? editData.categoryIds
+        : editData.category
+          ? [editData.category]
+          : [];
+      setSelectedCategoryIds(ids.map(String));
       setBrandName(editData.brandName || '');
       setStatus(editData.status || '');
     } else {
-      setCategoryName('');
+      setSelectedCategoryIds([]);
       setBrandName('');
       setStatus('');
     }
   }, [editMode, editData, isOpen]);
 
-  // Add brand mutation
+  const toggleCategory = (categoryId: string) => {
+    setSelectedCategoryIds((prev) =>
+      prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
   const addMutation = useMutation({
-    mutationFn: (payload: { title: string; category_id: string }) =>
-      addBrand({ title: payload.title, category_id: payload.category_id }, token || ""),
+    mutationFn: (payload: { title: string; category_ids: string[] }) =>
+      addBrand({ title: payload.title, category_ids: payload.category_ids }, token || ""),
     onSuccess: () => {
-      onSave(categoryName, brandName, status);
-      setCategoryName('');
+      onSave(selectedCategoryIds, brandName, status);
+      setSelectedCategoryIds([]);
       setBrandName('');
       setStatus('');
       onClose();
     },
   });
 
-  // Update brand mutation
   const updateMutation = useMutation({
-    mutationFn: (payload: { id: string; title: string; category_id: string }) =>
-      updateBrand(payload.id, { title: payload.title, category_id: payload.category_id }, token || ""),
+    mutationFn: (payload: { id: string; title: string; category_ids: string[] }) =>
+      updateBrand(payload.id, { title: payload.title, category_ids: payload.category_ids }, token || ""),
     onSuccess: () => {
-      onSave(categoryName, brandName, status);
-      setCategoryName('');
+      onSave(selectedCategoryIds, brandName, status);
+      setSelectedCategoryIds([]);
       setBrandName('');
       setStatus('');
       onClose();
@@ -88,30 +94,24 @@ const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: Ad
   });
 
   const handleSave = () => {
-    if (categoryName.trim() && brandName.trim() && status) {
+    if (selectedCategoryIds.length > 0 && brandName.trim() && status) {
       if (editMode && editData) {
-        const updatePayload = {
+        updateMutation.mutate({
           id: editData.id,
           title: brandName,
-          category_id: categoryName,
-        };
-        console.log('Update Brand Payload:', updatePayload);
-        console.log('Category Name (ID):', categoryName);
-        console.log('Brand Name:', brandName);
-        updateMutation.mutate(updatePayload);
+          category_ids: selectedCategoryIds,
+        });
       } else {
-        const addPayload = {
+        addMutation.mutate({
           title: brandName,
-          category_id: categoryName,
-        };
-        console.log('Add Brand Payload:', addPayload);
-        addMutation.mutate(addPayload);
+          category_ids: selectedCategoryIds,
+        });
       }
     }
   };
 
   const handleClose = () => {
-    setCategoryName('');
+    setSelectedCategoryIds([]);
     setBrandName('');
     setStatus('');
     onClose();
@@ -121,8 +121,7 @@ const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: Ad
 
   return (
     <div className="fixed inset-0 backdrop-brightness-50 bg-opacity-50 flex items-start justify-end z-50">
-      <div className="bg-white rounded-lg w-full max-w-2xl mx-4 relative">
-        {/* Header */}
+      <div className="bg-white rounded-lg w-full max-w-2xl mx-4 relative max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">{editMode ? "Edit Brand" : "Add Brand"}</h2>
           <button
@@ -133,42 +132,40 @@ const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: Ad
           </button>
         </div>
 
-        {/* Content */}
         <div className="px-6 py-6 space-y-6">
-          {/* Category Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Category Name
+              Product categories
             </label>
-            <div className="relative">
-              <select
-                value={categoryName}
-                onChange={(e) => setCategoryName(e.target.value)}
-                disabled={categoriesLoading}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#273E8E] focus:border-[#273E8E] outline-none appearance-none bg-white text-gray-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              >
-                <option value="">
-                  {categoriesLoading ? 'Loading categories...' : 'Select category'}
-                </option>
-                {apiCategories.map((category) => (
-                  <option key={category.id} value={category.id.toString()}>
-                    {category.title}
-                  </option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                {categoriesLoading ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
-                ) : (
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                )}
+            <p className="text-xs text-gray-500 mb-3">
+              Select every category where this brand should appear (e.g. Inverters and Lithium Batteries for Itel).
+            </p>
+            {categoriesLoading ? (
+              <p className="text-sm text-gray-500">Loading categories...</p>
+            ) : (
+              <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {apiCategories.map((category) => {
+                  const id = String(category.id);
+                  const checked = selectedCategoryIds.includes(id);
+                  return (
+                    <label
+                      key={category.id}
+                      className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCategory(id)}
+                        className="h-4 w-4 rounded border-gray-300 text-[#273E8E] focus:ring-[#273E8E]"
+                      />
+                      <span className="text-sm text-gray-700">{category.title}</span>
+                    </label>
+                  );
+                })}
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Brand Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Brand Name
@@ -182,7 +179,6 @@ const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: Ad
             />
           </div>
 
-          {/* Status */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Status
@@ -206,11 +202,10 @@ const AddNewBrand = ({ isOpen, onClose, onSave, editMode = false, editData }: Ad
           </div>
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-4">
           <button
             onClick={handleSave}
-            disabled={!categoryName.trim() || !brandName.trim() || !status}
+            disabled={selectedCategoryIds.length === 0 || !brandName.trim() || !status}
             className="w-full bg-[#273E8E] text-white py-3 rounded-full font-medium hover:bg-[#1f2f7a] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors cursor-pointer"
           >
             {addMutation.isPending || updateMutation.isPending ? "Saving..." : "Save"}

@@ -287,3 +287,83 @@ export const getUsersWithAuditRequests = async (
   return await apiCall(url, "GET", undefined, token);
 };
 
+const appendQuery = (base: string, params?: Record<string, string | number | boolean | undefined>) => {
+  if (!params) return base;
+  const queryParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      queryParams.append(key, String(value));
+    }
+  });
+  const queryString = queryParams.toString();
+  return queryString ? `${base}?${queryString}` : base;
+};
+
+export const getMonoLinkedAccounts = async (
+  token: string,
+  params?: { status?: string; search?: string; per_page?: number; page?: number }
+): Promise<any> => {
+  return await apiCall(
+    appendQuery(API_ENDPOINTS.ADMIN.MonoLinkedAccounts, params),
+    "GET",
+    undefined,
+    token
+  );
+};
+
+export const getMonoCreditSessions = async (
+  token: string,
+  params?: {
+    status?: string;
+    can_afford?: boolean;
+    user_id?: number;
+    search?: string;
+    per_page?: number;
+    page?: number;
+  }
+): Promise<any> => {
+  return await apiCall(
+    appendQuery(API_ENDPOINTS.ADMIN.MonoCreditSessions, params),
+    "GET",
+    undefined,
+    token
+  );
+};
+
+export const getMonoCreditSession = async (
+  id: number | string,
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.MonoCreditSessionShow(id),
+    "GET",
+    undefined,
+    token
+  );
+};
+
+export const getMonoWebhookEvents = async (
+  token: string,
+  params?: { event?: string; mono_account_id?: string; search?: string; per_page?: number; page?: number }
+): Promise<any> => {
+  return await apiCall(
+    appendQuery(API_ENDPOINTS.ADMIN.MonoWebhookEvents, params),
+    "GET",
+    undefined,
+    token
+  );
+};
+
+export const getMonoUserDocuments = async (
+  userId: number | string,
+  token: string,
+  period = "last6months"
+): Promise<any> => {
+  return await apiCall(
+    `${API_ENDPOINTS.ADMIN.MonoUserDocuments(userId)}?period=${encodeURIComponent(period)}`,
+    "GET",
+    undefined,
+    token
+  );
+};
+

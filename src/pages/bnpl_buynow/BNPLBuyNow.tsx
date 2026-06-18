@@ -45,6 +45,7 @@ import {
 import { sendToPartnerDetail } from "../../utils/mutations/loans";
 import { getAllFinance } from "../../utils/queries/finance";
 import { API_DOMAIN } from "../../../apiConfig";
+import MonoLoansSection from "./MonoLoansSection";
 
 // Base URL for document links (backend stores paths like "loan_applications/xxx.pdf")
 const DOCUMENT_BASE_URL = API_DOMAIN.replace(/\/api\/?$/, "") || "https://app.troosolar.io";
@@ -362,9 +363,12 @@ function bnplApplicationOrderSummary(app: Record<string, unknown> | null | undef
   return null;
 }
 
+const getApiData = (response: any) => response?.data ?? response ?? null;
+
 const BNPLBuyNow: React.FC = () => {
   const [activeTab, setActiveTab] = useState("BNPL Applications");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [customOrdersUserFilter, setCustomOrdersUserFilter] = useState("All");
   const [auditTypeFilter, setAuditTypeFilter] = useState("All Types"); // For Audit Requests
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -426,6 +430,7 @@ const BNPLBuyNow: React.FC = () => {
   const [showUserDetailModal, setShowUserDetailModal] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [detailResendOrderType, setDetailResendOrderType] = useState<"buy_now" | "bnpl">("buy_now");
   const [createOrderForm, setCreateOrderForm] = useState({
     user_id: "",
     order_type: "buy_now" as "buy_now" | "bnpl",
@@ -552,11 +557,11 @@ const BNPLBuyNow: React.FC = () => {
     data: auditUsersData,
     isLoading: auditUsersLoading,
   } = useQuery({
-    queryKey: ["audit-users-with-requests", searchQuery, auditTypeFilter, statusFilter, currentPage],
+    queryKey: ["audit-users-with-requests", searchQuery, auditTypeFilter, customOrdersUserFilter, currentPage],
     queryFn: () => getUsersWithAuditRequests(token, {
       search: searchQuery || undefined,
       audit_type: auditTypeFilter !== "All Types" ? auditTypeFilter.toLowerCase().replace(" ", "-") : undefined,
-      has_pending: statusFilter === "Has Pending" ? true : undefined,
+      has_pending: customOrdersUserFilter === "Has Pending" ? true : undefined,
       sort_by: "last_audit_request_date",
       sort_order: "desc",
       per_page: itemsPerPage,
@@ -713,7 +718,13 @@ const BNPLBuyNow: React.FC = () => {
     mutationFn: async (payload: any) => {
       return await createCustomOrder(payload, token);
     },
-    onSuccess: () => {
+    onSuccess: (response: any) => {
+      const result = getApiData(response) ?? {};
+      const emailSent = result.email_sent === true;
+      const cartLink = result.cart_link || "";
+      const userEmail = result.user_email || "";
+      const emailError = result.email_error || "";
+
       queryClient.invalidateQueries({ queryKey: ["user-cart"] });
       setShowCreateOrderModal(false);
       setCreateOrderForm({
@@ -732,11 +743,18 @@ const BNPLBuyNow: React.FC = () => {
         price: "",
         quantity: "1",
       });
-      
-      // Invalidate audit users query to refresh the list
+
       queryClient.invalidateQueries({ queryKey: ["audit-users-with-requests"] });
-      
-      alert("Custom order created successfully!");
+
+      if (result.email_sent === false) {
+        alert(
+          `Custom order was saved to the user's cart, but the email could not be sent${emailError ? `:\n${emailError}` : ""}.\n\nUse "Resend Cart Link" in View Details, or share this link manually:\n${cartLink}`
+        );
+      } else if (emailSent && userEmail) {
+        alert(`Custom order created successfully. Email sent to ${userEmail}.`);
+      } else {
+        alert("Custom order created successfully!");
+      }
     },
     onError: (error: any) => {
       alert(error?.message || "Failed to create custom order");
@@ -773,8 +791,24 @@ const BNPLBuyNow: React.FC = () => {
     mutationFn: async ({ userId, payload }: { userId: number; payload: any }) => {
       return await resendCartEmail(userId, payload, token);
     },
-    onSuccess: () => {
-      alert("Cart link email sent successfully");
+    onSuccess: (response: any) => {
+      const result = getApiData(response) ?? {};
+      if (result.email_sent === false) {
+        alert(
+          `Failed to resend email${result.email_error ? `: ${result.email_error}` : ""}${
+            result.cart_link ? `\n\nShare this link manually:\n${result.cart_link}` : ""
+          }`
+        );
+        return;
+      }
+      alert(
+        `Cart link email sent to ${result.email || "the user"}.${
+          result.cart_link ? `\n\nLink:\n${result.cart_link}` : ""
+        }`
+      );
+    },
+    onError: (error: any) => {
+      alert(error?.message || "Failed to resend cart link email");
     },
   });
 
@@ -1056,6 +1090,8 @@ const BNPLBuyNow: React.FC = () => {
         return null;
       case "Loan Settings":
         return null;
+      case "Mono Loans":
+        return null;
       case "Banner":
         return null;
       default:
@@ -1081,6 +1117,8 @@ const BNPLBuyNow: React.FC = () => {
         return false;
       case "Loan Settings":
         return bnplSettingsLoading;
+      case "Mono Loans":
+        return false;
       case "Banner":
         return siteBannerLoading;
       default:
@@ -1196,7 +1234,7 @@ const BNPLBuyNow: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, auditTypeFilter, searchQuery, activeTab]);
+  }, [statusFilter, auditTypeFilter, customOrdersUserFilter, searchQuery, activeTab]);
 
   return (
     <>
@@ -1216,7 +1254,7 @@ const BNPLBuyNow: React.FC = () => {
         <div className="mb-8">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
-              {["BNPL Applications", "Guarantor Form", "Loan Settings", "Banner", "Buy Now Orders", "BNPL Orders", "Audit Requests", "Custom Orders"].map(
+              {["BNPL Applications", "Guarantor Form", "Loan Settings", "Mono Loans", "Banner", "Buy Now Orders", "BNPL Orders", "Audit Requests", "Custom Orders"].map(
                 (tab) => (
                   <button
                     key={tab}
@@ -1266,10 +1304,11 @@ const BNPLBuyNow: React.FC = () => {
         </div>
 
         {/* Filters and Search - hidden on Guarantor Form, Loan Settings, and Banner tabs */}
-        {activeTab !== "Guarantor Form" && activeTab !== "Loan Settings" && activeTab !== "Banner" && (
+        {activeTab !== "Guarantor Form" && activeTab !== "Loan Settings" && activeTab !== "Mono Loans" && activeTab !== "Banner" && (
         <div className="mb-6 bg-white rounded-lg p-4 shadow-sm">
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
+              {activeTab !== "Custom Orders" && (
               <select
                 className="border border-[#CDCDCD] rounded-lg px-4 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                 value={statusFilter}
@@ -1309,6 +1348,7 @@ const BNPLBuyNow: React.FC = () => {
                   </>
                 )}
               </select>
+              )}
               {(activeTab === "Audit Requests" || activeTab === "Custom Orders") && (
                 <select
                   className="border border-[#CDCDCD] rounded-lg px-4 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
@@ -1323,8 +1363,8 @@ const BNPLBuyNow: React.FC = () => {
               {activeTab === "Custom Orders" && (
                 <select
                   className="border border-[#CDCDCD] rounded-lg px-4 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
+                  value={customOrdersUserFilter}
+                  onChange={(e) => setCustomOrdersUserFilter(e.target.value)}
                 >
                   <option value="All">All Users</option>
                   <option value="Has Pending">Has Pending Requests</option>
@@ -1492,6 +1532,8 @@ const BNPLBuyNow: React.FC = () => {
               </form>
             )}
           </div>
+        ) : activeTab === "Mono Loans" ? (
+          <MonoLoansSection token={token || ""} />
         ) : activeTab === "Guarantor Form" ? (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-8 max-w-2xl">
             <h2 className="text-xl font-bold text-gray-900 mb-2">BNPL Guarantor Form</h2>
@@ -1753,14 +1795,12 @@ const BNPLBuyNow: React.FC = () => {
             <div className="p-6 border-b border-gray-200">
               <div className="flex justify-between items-center">
                 <h2 className="text-xl font-bold text-gray-900">Custom Orders Management</h2>
-                {auditUsersData?.data?.data?.length > 0 && (
-                  <button
-                    onClick={() => setShowCreateOrderModal(true)}
-                    className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-6 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer"
-                  >
-                    Create Custom Order
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowCreateOrderModal(true)}
+                  className="bg-[#273E8E] hover:bg-[#1e3270] text-white px-6 py-3 rounded-full text-sm font-medium transition-colors cursor-pointer"
+                >
+                  Create Custom Order
+                </button>
               </div>
             </div>
 
@@ -1811,6 +1851,9 @@ const BNPLBuyNow: React.FC = () => {
                           Status Summary
                         </th>
                         <th className="px-6 py-4 text-left text-sm font-medium text-black">
+                          Custom Order Cart
+                        </th>
+                        <th className="px-6 py-4 text-left text-sm font-medium text-black">
                           Property Details
                         </th>
                         <th className="px-6 py-4 text-left text-sm font-medium text-black">
@@ -1821,11 +1864,13 @@ const BNPLBuyNow: React.FC = () => {
                     <tbody className="bg-white">
                       {(
                         auditUsersData?.data?.data?.map((user: any, index: number) => {
+                          const needsPropertyDetails = user.audit_requests?.some(
+                            (req: any) =>
+                              req.needs_admin_input ??
+                              (req.audit_type === "commercial" && !req.has_property_details && req.status === "pending")
+                          );
                           const hasPropertyDetails = user.audit_requests?.some(
                             (req: any) => req.has_property_details
-                          );
-                          const needsPropertyDetails = user.audit_requests?.some(
-                            (req: any) => req.audit_type === "commercial" && !req.has_property_details && req.status === "pending"
                           );
                           
                           return (
@@ -1879,6 +1924,22 @@ const BNPLBuyNow: React.FC = () => {
                                     </span>
                                   )}
                                 </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                {user.cart_item_count > 0 ? (
+                                  <div className="flex flex-col gap-1">
+                                    <span className="font-medium text-gray-800">
+                                      {user.cart_item_count} item{user.cart_item_count !== 1 ? "s" : ""} · {formatCurrency(user.total_cart_amount || 0)}
+                                    </span>
+                                    {user.has_cart_access_token && (
+                                      <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded w-fit">
+                                        Link sent
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">No cart items</span>
+                                )}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm">
                                 {needsPropertyDetails ? (
@@ -2640,6 +2701,48 @@ const BNPLBuyNow: React.FC = () => {
                               <p className="text-xs text-gray-500 mb-1">Credit Check Method</p>
                               <p className="text-sm font-medium text-gray-900 capitalize">{selectedItem.loan_application.credit_check_method}</p>
                             </div>
+                          )}
+                          {selectedItem.loan_application.credit_check_method === 'auto' && (
+                            <>
+                              {selectedItem.loan_application.mono_credit_status && (
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-1">Mono Credit Status</p>
+                                  <p className="text-sm font-medium text-gray-900 capitalize">{selectedItem.loan_application.mono_credit_status}</p>
+                                </div>
+                              )}
+                              {selectedItem.loan_application.mono_can_afford !== null && selectedItem.loan_application.mono_can_afford !== undefined && (
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-1">Can Afford Loan</p>
+                                  <p className={`text-sm font-medium ${selectedItem.loan_application.mono_can_afford ? 'text-green-700' : 'text-red-700'}`}>
+                                    {selectedItem.loan_application.mono_can_afford ? 'Yes' : 'No'}
+                                  </p>
+                                </div>
+                              )}
+                              {selectedItem.loan_application.mono_monthly_payment_kobo != null && (
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-1">Mono Estimated Monthly Payment</p>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    ₦{Number(selectedItem.loan_application.mono_monthly_payment_kobo / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </p>
+                                </div>
+                              )}
+                              {selectedItem.loan_application.mono_credit_report?.months_assessed && (
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-1">Assessment Period</p>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {selectedItem.loan_application.mono_credit_report.months_assessed.start} — {selectedItem.loan_application.mono_credit_report.months_assessed.end}
+                                  </p>
+                                </div>
+                              )}
+                              {selectedItem.loan_application.mono_credit_report?.debt?.total_debt != null && (
+                                <div>
+                                  <p className="text-xs text-gray-500 mb-1">Total Outstanding Debt (Mono)</p>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    ₦{Number(selectedItem.loan_application.mono_credit_report.debt.total_debt / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </p>
+                                </div>
+                              )}
+                            </>
                           )}
                           {selectedItem.loan_application.social_media_handle && (
                             <div>
@@ -4088,7 +4191,7 @@ const BNPLBuyNow: React.FC = () => {
                             </a>
                           </div>
                         )}
-                        {(!selectedItem.title_document && !selectedItem.upload_document && !selectedItem.bank_statement_path && !selectedItem.live_photo_path) && (
+                        {(!selectedItem.title_document && !selectedItem.upload_document && !selectedItem.bank_statement_path && !selectedItem.live_photo_path && selectedItem.loan_application?.credit_check_method !== 'auto') && (
                           <p className="text-sm text-gray-500 italic">No documents uploaded</p>
                         )}
                       </div>
@@ -5836,7 +5939,16 @@ const BNPLBuyNow: React.FC = () => {
                     createCustomOrderMutation.mutate({
                       ...createOrderForm,
                       user_id: parseInt(createOrderForm.user_id),
-                      items: selectedProducts, // Only send regular products/bundles, not custom products
+                      items: selectedProducts,
+                      custom_items: customProducts.map((custom) => ({
+                        name: custom.name,
+                        description: custom.description,
+                        price: custom.price,
+                        quantity: custom.quantity,
+                      })),
+                      email_message: (createOrderForm.email_message || "")
+                        .split("--- Custom Product/Service ---")[0]
+                        .trim(),
                     });
                   }}
                   disabled={createCustomOrderMutation.isPending}
@@ -5961,10 +6073,12 @@ const BNPLBuyNow: React.FC = () => {
                                 {request.status}
                               </span>
                             </div>
-                            {request.has_property_details ? (
+                            {request.needs_admin_input ? (
+                              <span className="text-yellow-600 font-medium">⚠️ Needs Details</span>
+                            ) : request.has_property_details ? (
                               <span className="text-green-600 font-medium">✓ Details Shared</span>
                             ) : (
-                              <span className="text-yellow-600 font-medium">⚠️ Needs Details</span>
+                              <span className="text-gray-500 font-medium">No Details</span>
                             )}
                           </div>
                           {request.has_property_details && request.property_address && (
@@ -6011,12 +6125,14 @@ const BNPLBuyNow: React.FC = () => {
                 )}
 
                 {/* Cart/Request Details */}
-                {(userCartResponse as any)?.data ? (
+                {(() => {
+                  const cartPayload = getApiData(userCartResponse);
+                  return cartPayload ? (
                   <div className="space-y-4">
-                    <h3 className="font-semibold text-gray-900 mb-3">Custom Order Request Details</h3>
+                    <h3 className="font-semibold text-gray-900 mb-3">Custom Order Cart</h3>
                     
                     {/* Cart Items */}
-                    {(userCartResponse as any).data.cart_items?.length > 0 ? (
+                    {cartPayload.cart_items?.length > 0 ? (
                       <>
                         <div className="border rounded-lg overflow-hidden">
                           <table className="w-full">
@@ -6043,10 +6159,10 @@ const BNPLBuyNow: React.FC = () => {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                              {(userCartResponse as any).data.cart_items.map((item: any) => (
+                              {cartPayload.cart_items.map((item: any) => (
                                 <tr key={item.id}>
                                   <td className="px-4 py-3 text-sm">
-                                    {item.itemable?.title || `Item ${item.id}`}
+                                    {item.itemable?.title || item.name || `Item ${item.id}`}
                                   </td>
                                   <td className="px-4 py-3 text-sm">
                                     <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
@@ -6089,8 +6205,28 @@ const BNPLBuyNow: React.FC = () => {
                         <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
                           <span className="text-lg font-semibold">Total Amount:</span>
                           <span className="text-lg font-bold text-[#273E8E]">
-                            {formatCurrency((userCartResponse as any).data.total_amount || 0)}
+                            {formatCurrency(cartPayload.total_amount || 0)}
                           </span>
+                        </div>
+
+                        {selectedUser.has_cart_access_token && (
+                          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                            Custom order link has been sent to this user.
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-3 text-sm">
+                          <span className="text-gray-600 font-medium">Resend link as:</span>
+                          <select
+                            value={detailResendOrderType}
+                            onChange={(e) =>
+                              setDetailResendOrderType(e.target.value as "buy_now" | "bnpl")
+                            }
+                            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                          >
+                            <option value="buy_now">Buy Now (cart & checkout)</option>
+                            <option value="bnpl">BNPL (application flow)</option>
+                          </select>
                         </div>
 
                         {/* Actions */}
@@ -6128,16 +6264,10 @@ const BNPLBuyNow: React.FC = () => {
                           </button>
                           <button
                             onClick={() => {
-                              const orderType = prompt(
-                                "Enter order type (buy_now or bnpl):",
-                                "buy_now"
-                              );
-                              if (orderType && (orderType === "buy_now" || orderType === "bnpl")) {
-                                resendCartEmailMutation.mutate({
-                                  userId: selectedUserId!,
-                                  payload: { order_type: orderType as "buy_now" | "bnpl" },
-                                });
-                              }
+                              resendCartEmailMutation.mutate({
+                                userId: selectedUserId!,
+                                payload: { order_type: detailResendOrderType },
+                              });
                             }}
                             className="px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600"
                           >
@@ -6189,7 +6319,8 @@ const BNPLBuyNow: React.FC = () => {
                       Add Items to Cart
                     </button>
                   </div>
-                )}
+                );
+                })()}
               </>
             )}
           </div>
@@ -6297,6 +6428,20 @@ const BNPLBuyNow: React.FC = () => {
                       </span>
                     </div>
 
+                    <div className="flex flex-wrap items-center gap-3 text-sm mb-3">
+                      <span className="text-gray-600 font-medium">Resend link as:</span>
+                      <select
+                        value={detailResendOrderType}
+                        onChange={(e) =>
+                          setDetailResendOrderType(e.target.value as "buy_now" | "bnpl")
+                        }
+                        className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                      >
+                        <option value="buy_now">Buy Now (cart & checkout)</option>
+                        <option value="bnpl">BNPL (application flow)</option>
+                      </select>
+                    </div>
+
                     {/* Actions */}
                     <div className="flex space-x-3">
                       <button
@@ -6315,16 +6460,10 @@ const BNPLBuyNow: React.FC = () => {
                       </button>
                       <button
                         onClick={() => {
-                          const orderType = prompt(
-                            "Enter order type (buy_now or bnpl):",
-                            "buy_now"
-                          );
-                          if (orderType && (orderType === "buy_now" || orderType === "bnpl")) {
-                            resendCartEmailMutation.mutate({
-                              userId: selectedUserId,
-                              payload: { order_type: orderType },
-                            });
-                          }
+                          resendCartEmailMutation.mutate({
+                            userId: selectedUserId,
+                            payload: { order_type: detailResendOrderType },
+                          });
                         }}
                         className="px-4 py-2 bg-[#273E8E] text-white rounded-lg text-sm font-medium hover:bg-[#1e3270]"
                       >

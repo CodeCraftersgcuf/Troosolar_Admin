@@ -301,6 +301,14 @@ const Product = () => {
           id: String(b.id),
           brandName: b.title,
           category: b.category_id ? String(b.category_id) : "",
+          categoryIds: Array.isArray(b.category_ids)
+            ? b.category_ids.map(String)
+            : b.category_id
+              ? [String(b.category_id)]
+              : [],
+          categoryLabels: Array.isArray(b.category_names)
+            ? b.category_names
+            : [],
           dateCreated: b.created_at
             ? new Date(b.created_at).toLocaleString("en-GB", {
               day: "2-digit",
@@ -392,13 +400,13 @@ const Product = () => {
   };
 
   // Save new brand (just closes modal, mutation handled in AddNewBrand)
-  const handleAddNewBrand = async (_categoryName: string, _brandName: string, _status: string) => {
+  const handleAddNewBrand = async (_categoryIds: string[], _brandName: string, _status: string) => {
     setIsAddBrandModalOpen(false);
     refetchBrands();
   };
 
   // Save edited brand (just closes modal, mutation handled in AddNewBrand)
-  const handleEditBrandSave = async (_categoryName: string, _brandName: string, _status: string) => {
+  const handleEditBrandSave = async (_categoryIds: string[], _brandName: string, _status: string) => {
     setEditBrandModalOpen(false);
     setEditBrandData(null);
     refetchBrands();
@@ -432,7 +440,11 @@ const Product = () => {
       );
     }
     if (!selectedCategoryFilter) return brandList;
-    return brandList.filter((brand) => String(brand.category) === selectedCategoryFilter);
+    return brandList.filter((brand) =>
+      (brand.categoryIds?.length ? brand.categoryIds : [brand.category])
+        .map(String)
+        .includes(selectedCategoryFilter)
+    );
   }, [activeTab, categories, brandList, selectedCategoryFilter]);
   const totalPages = Math.ceil(currentData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -864,7 +876,9 @@ const Product = () => {
                     {/* Category */}
                     <td className="px-6 py-4 text-center">
                       <span className="text-sm text-gray-600">
-                        {categoryTitleById[String(brand.category)] || brand.category || "-"}
+                        {brand.categoryLabels?.length
+                          ? brand.categoryLabels.join(", ")
+                          : categoryTitleById[String(brand.category)] || brand.category || "-"}
                       </span>
                     </td>
 

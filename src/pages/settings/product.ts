@@ -11,6 +11,8 @@ export interface Brand {
   id: string;
   brandName: string;
   category: string;
+  categoryIds?: string[];
+  categoryLabels?: string[];
   dateCreated: string;
   status: 'Active' | 'Pending';
   isSelected?: boolean;

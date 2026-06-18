@@ -196,6 +196,17 @@ const API_ENDPOINTS = {
       `${API_DOMAIN}/admin/bnpl/applications/${id}/installation-date/reject`, // PUT
     BNPLSettingsGet: API_DOMAIN + "/admin/bnpl/settings", // GET
     BNPLSettingsUpdate: API_DOMAIN + "/admin/bnpl/settings", // PUT
+    MonoLinkedAccounts: API_DOMAIN + "/admin/bnpl/mono/linked-accounts", // GET
+    MonoCreditSessions: API_DOMAIN + "/admin/bnpl/mono/credit-sessions", // GET
+    MonoCreditSessionShow: (id: number | string) =>
+      `${API_DOMAIN}/admin/bnpl/mono/credit-sessions/${id}`, // GET
+    MonoWebhookEvents: API_DOMAIN + "/admin/bnpl/mono/webhook-events", // GET
+    MonoUserCreditCheck: (userId: number | string) =>
+      `${API_DOMAIN}/admin/bnpl/mono/users/${userId}/credit-check`, // POST
+    MonoUserDocuments: (userId: number | string) =>
+      `${API_DOMAIN}/admin/bnpl/mono/users/${userId}/documents`, // GET
+    MonoUserStatementPdf: (userId: number | string) =>
+      `${API_DOMAIN}/admin/bnpl/mono/users/${userId}/statement-pdf`, // POST
 
     // --- Site Banner (dashboard home promo) ---
     SiteBannerGet: API_DOMAIN + "/admin/site/banner", // GET
