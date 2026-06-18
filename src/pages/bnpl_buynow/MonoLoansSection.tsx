@@ -14,6 +14,7 @@ import {
   fetchMonoUserStatementPdf,
   setMonoUserBvn,
 } from "../../utils/mutations/bnpl";
+import MonoDocumentsPanel from "./MonoDocumentsPanel";
 
 type MonoSubTab = "Linked Accounts" | "Credit Sessions" | "Webhook Events";
 
@@ -113,14 +114,18 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
     page,
   };
 
-  const { data: monoStatusData } = useQuery({
+  const { data: monoStatusData, isError: monoStatusError } = useQuery({
     queryKey: ["mono-status", token],
     queryFn: () => getMonoStatus(token),
     enabled: !!token,
+    retry: false,
   });
 
   const monoAuthOk = monoStatusData?.data?.api_auth?.ok === true;
   const monoAuthMessage = monoStatusData?.data?.api_auth?.message as string | undefined;
+  const monoSecretInfo = monoStatusData?.data?.secret_key as
+    | { configured?: boolean; prefix?: string; matches_public?: boolean }
+    | undefined;
 
   const { data: linkedData, isLoading: linkedLoading } = useQuery({
     queryKey: ["mono-linked-accounts", token, listParams],
@@ -269,6 +274,17 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
         <p className="text-sm text-gray-500 mt-1">
           View linked bank accounts, run Mono credit checks, and pull account documents or statement PDFs — same data used in the BNPL flow.
         </p>
+        {monoStatusError && (
+          <div className="mt-3 rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+            Mono status check unavailable (backend may need <code className="text-xs">git pull</code> on server). Documents and credit check can still work if Mono keys are set.
+          </div>
+        )}
+        {monoStatusData && monoAuthOk && (
+          <div className="mt-3 rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">
+            <strong>Mono API key is valid</strong> ({monoSecretInfo?.prefix || "secret configured"}).
+            If credit check still fails, enable <strong>Credit Worthiness</strong> on your Mono app (see steps below).
+          </div>
+        )}
         {monoStatusData && !monoAuthOk && (
           <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <strong>Mono API not authorized.</strong>{" "}
@@ -276,6 +292,19 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
               "Set MONO_SECRET_KEY on the server to the live_sk_... key from the same Mono app as your public key, then run /api/optimize-app."}
           </div>
         )}
+        <details className="mt-3 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700">
+          <summary className="cursor-pointer font-medium text-[#273E8E]">
+            How to enable Credit Worthiness in Mono
+          </summary>
+          <ol className="mt-3 list-decimal list-inside space-y-2 text-gray-600">
+            <li>Log in to <a href="https://app.withmono.com/apps" target="_blank" rel="noopener noreferrer" className="text-[#273E8E] underline">Mono Dashboard → Apps</a>.</li>
+            <li>Open the app that matches your <code className="text-xs">live_pk_...</code> public key.</li>
+            <li>Ensure product scope includes <strong>Connect</strong> (bank linking) and your business has KYB completed.</li>
+            <li>Under <strong>App settings → Webhooks</strong>, set URL to <code className="text-xs break-all">https://troosolar.hmstech.org/api/webhooks/mono</code>.</li>
+            <li>Contact Mono support or your account manager to enable the <strong>Credit Worthiness</strong> API on your account if credit check returns Unauthorized.</li>
+            <li>Use the same <code className="text-xs">live_sk_...</code> secret from that app in server <code className="text-xs">.env</code> as <code className="text-xs">MONO_SECRET_KEY</code>.</li>
+          </ol>
+        </details>
       </div>
 
       <div className="flex flex-wrap gap-2 items-center justify-between">
@@ -579,12 +608,11 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
               </button>
             </div>
             <div className="p-6 overflow-y-auto">
-              <p className="text-sm text-gray-600 mb-3">
-                Account details, identity, balance, JSON statement, and latest credit session from Mono.
-              </p>
-              <pre className="text-xs bg-gray-900 text-green-100 p-4 rounded-lg overflow-x-auto max-h-[70vh]">
-                {JSON.stringify(documentsPayload, null, 2)}
-              </pre>
+              {documentsPayload && typeof documentsPayload === "object" ? (
+                <MonoDocumentsPanel payload={documentsPayload as Record<string, unknown>} />
+              ) : (
+                <p className="text-sm text-gray-500">No document data.</p>
+              )}
             </div>
           </div>
         </div>
