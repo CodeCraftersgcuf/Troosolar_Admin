@@ -11,6 +11,7 @@ import {
 import {
   runMonoUserCreditCheck,
   fetchMonoUserStatementPdf,
+  setMonoUserBvn,
 } from "../../utils/mutations/bnpl";
 
 type MonoSubTab = "Linked Accounts" | "Credit Sessions" | "Webhook Events";
@@ -46,7 +47,64 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
   const [documentsPayload, setDocumentsPayload] = useState<unknown>(null);
   const [documentsTitle, setDocumentsTitle] = useState("");
   const [actionUserId, setActionUserId] = useState<number | null>(null);
-  const [actionType, setActionType] = useState<"credit" | "documents" | "pdf" | null>(null);
+  const [actionType, setActionType] = useState<"credit" | "documents" | "pdf" | "bvn" | null>(null);
+  const [bvnModalUser, setBvnModalUser] = useState<{
+    userId: number;
+    userName: string;
+    afterSave?: "credit";
+  } | null>(null);
+  const [bvnInput, setBvnInput] = useState("");
+  const [bvnSaving, setBvnSaving] = useState(false);
+
+  const maskBvn = (bvn?: string | null) => {
+    if (!bvn || String(bvn).trim() === "") return null;
+    const clean = String(bvn).replace(/\s+/g, "");
+    if (clean.length <= 4) return clean;
+    return `•••••••${clean.slice(-4)}`;
+  };
+
+  const userHasBvn = (row: { user?: { bvn?: string | null; has_bvn?: boolean } }) =>
+    Boolean(row.user?.has_bvn || (row.user?.bvn && String(row.user.bvn).trim() !== ""));
+
+  const handleSaveBvn = async () => {
+    if (!token || !bvnModalUser) return;
+    const clean = bvnInput.replace(/\s+/g, "").trim();
+    if (clean.length !== 11) {
+      alert("BVN must be exactly 11 characters.");
+      return;
+    }
+    setBvnSaving(true);
+    try {
+      const res = await setMonoUserBvn(bvnModalUser.userId, { bvn: clean }, token);
+      if (res?.status === "success") {
+        alert(res?.message || "BVN saved.");
+        const afterSave = bvnModalUser.afterSave;
+        const userId = bvnModalUser.userId;
+        const userName = bvnModalUser.userName;
+        setBvnModalUser(null);
+        setBvnInput("");
+        queryClient.invalidateQueries({ queryKey: ["mono-linked-accounts"] });
+        if (afterSave === "credit") {
+          await handleCheckCreditScore(userId, userName, clean);
+        }
+      } else {
+        alert(res?.message || "Failed to save BVN.");
+      }
+    } catch (err: any) {
+      alert(err?.message || "Failed to save BVN.");
+    } finally {
+      setBvnSaving(false);
+    }
+  };
+
+  const openSetBvnModal = (
+    userId: number,
+    userName: string,
+    afterSave?: "credit"
+  ) => {
+    setBvnInput("");
+    setBvnModalUser({ userId, userName, afterSave });
+  };
 
   const listParams = {
     search: searchQuery || undefined,
@@ -92,12 +150,29 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
 
   const rows: any[] = pagination?.data ?? [];
 
-  const handleCheckCreditScore = async (userId: number, userName: string) => {
+  const handleCheckCreditScore = async (
+    userId: number,
+    userName: string,
+    bvnOverride?: string
+  ) => {
     if (!token) return;
+
+    if (!bvnOverride) {
+      const row = rows.find((r) => r.user_id === userId);
+      if (row && !userHasBvn(row)) {
+        openSetBvnModal(userId, userName, "credit");
+        return;
+      }
+    }
+
     setActionUserId(userId);
     setActionType("credit");
     try {
-      const res = await runMonoUserCreditCheck(userId, {}, token);
+      const res = await runMonoUserCreditCheck(
+        userId,
+        bvnOverride ? { bvn: bvnOverride } : {},
+        token
+      );
       if (res?.status === "success") {
         alert(
           res?.message ||
@@ -226,6 +301,7 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
                     <th className="text-left px-4 py-3 font-semibold text-gray-700">Bank</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-700">Account</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-700">Mono Account ID</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-700">BVN</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-700">Status</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-700">Linked At</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-700">Actions</th>
@@ -275,6 +351,29 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
                         {row.account_number_last4 ? ` ••••${row.account_number_last4}` : ""}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs break-all">{row.mono_account_id || "—"}</td>
+                      <td className="px-4 py-3">
+                        {userHasBvn(row) ? (
+                          <span className="font-mono text-xs text-gray-700">
+                            {maskBvn(row.user?.bvn) || "On file"}
+                          </span>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-amber-700 text-xs font-medium">Not set</span>
+                            <button
+                              type="button"
+                              disabled={actionUserId === row.user_id}
+                              onClick={() =>
+                                openSetBvnModal(row.user_id, row.user?.full_name || "User")
+                              }
+                              className="text-left text-[#273E8E] hover:underline font-medium text-xs disabled:opacity-50"
+                            >
+                              {actionUserId === row.user_id && actionType === "bvn"
+                                ? "Saving..."
+                                : "Set BVN"}
+                            </button>
+                          </div>
+                        )}
+                      </td>
                       <td className="px-4 py-3">{statusPill(row.status)}</td>
                       <td className="px-4 py-3 text-gray-600">{formatDate(row.linked_at || row.created_at)}</td>
                       <td className="px-4 py-3">
@@ -464,6 +563,67 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
               <pre className="text-xs bg-gray-900 text-green-100 p-4 rounded-lg overflow-x-auto max-h-[70vh]">
                 {JSON.stringify(documentsPayload, null, 2)}
               </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bvnModalUser != null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Set customer BVN
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setBvnModalUser(null);
+                  setBvnInput("");
+                }}
+                className="text-gray-500 hover:text-gray-800 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Enter BVN for <strong>{bvnModalUser.userName}</strong>. This can only be set once if the customer has not provided it themselves.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  BVN (11 characters)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={11}
+                  value={bvnInput}
+                  onChange={(e) => setBvnInput(e.target.value.replace(/\s+/g, ""))}
+                  placeholder="12345678901"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#273E8E]"
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBvnModalUser(null);
+                    setBvnInput("");
+                  }}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={bvnSaving || bvnInput.replace(/\s+/g, "").length !== 11}
+                  onClick={handleSaveBvn}
+                  className="px-4 py-2 rounded-lg bg-[#273E8E] text-white text-sm font-medium hover:bg-[#1e3270] disabled:opacity-50"
+                >
+                  {bvnSaving ? "Saving..." : bvnModalUser.afterSave === "credit" ? "Save & run credit check" : "Save BVN"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

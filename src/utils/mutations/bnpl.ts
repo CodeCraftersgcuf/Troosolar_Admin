@@ -307,6 +307,19 @@ export const updateAuditRequestStatus = async (
   );
 };
 
+export const setMonoUserBvn = async (
+  userId: number | string,
+  payload: { bvn: string },
+  token: string
+): Promise<any> => {
+  return await apiCall(
+    API_ENDPOINTS.ADMIN.MonoUserSetBvn(userId),
+    "POST",
+    payload,
+    token
+  );
+};
+
 export const runMonoUserCreditCheck = async (
   userId: number | string,
   payload: { bvn?: string; loan_amount?: number; repayment_duration?: number },
