@@ -568,24 +568,88 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
                 <LoadingSpinner message="Loading session..." />
               ) : (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    <div><span className="text-gray-500">User:</span> {sessionDetail?.data?.user?.full_name}</div>
-                    <div><span className="text-gray-500">Status:</span> {sessionDetail?.data?.status}</div>
-                    <div><span className="text-gray-500">Can afford:</span> {String(sessionDetail?.data?.can_afford ?? "—")}</div>
-                    <div><span className="text-gray-500">BVN:</span> {sessionDetail?.data?.bvn || "—"}</div>
-                    <div><span className="text-gray-500">Mono account:</span> {sessionDetail?.data?.mono_account_id || "—"}</div>
-                    {sessionDetail?.data?.error_message && (
-                      <div className="md:col-span-2 text-red-600">
-                        <span className="text-gray-500">Error:</span> {sessionDetail.data.error_message}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">Full credit worthiness payload</p>
-                    <pre className="text-xs bg-gray-900 text-green-100 p-4 rounded-lg overflow-x-auto max-h-96">
-                      {JSON.stringify(sessionDetail?.data?.credit_worthiness_payload ?? {}, null, 2)}
-                    </pre>
-                  </div>
+                  {(() => {
+                    const d = sessionDetail?.data ?? {};
+                    const requestPayload = d.api_request_payload ?? {};
+                    const initResponse = d.api_init_response ?? {};
+                    const webhookPayload = d.webhook_payload ?? d.credit_worthiness_payload ?? {};
+                    const monoResult =
+                      d.mono_result_message || d.error_message || webhookPayload?.message || "—";
+                    const principalNaira = d.principal_naira;
+                    const principalKobo = d.principal_kobo;
+
+                    return (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <div>
+                            <span className="text-gray-500">Principal:</span>{" "}
+                            {principalNaira != null ? `₦${Number(principalNaira).toLocaleString()}` : "—"}
+                            {principalKobo != null ? ` (${principalKobo} kobo)` : ""}
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Interest / term:</span>{" "}
+                            {d.interest_rate ?? "—"}% · {d.term_months ?? "—"} months
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Bureau check:</span>{" "}
+                            {d.run_credit_check ? "Yes (run_credit_check: true)" : "No (run_credit_check: false)"}
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Mono account:</span> {d.mono_account_id || "—"}
+                          </div>
+                          <div>
+                            <span className="text-gray-500">User:</span> {d.user?.full_name || "—"}
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Status:</span> {d.status || "—"}
+                          </div>
+                          <div className="md:col-span-2">
+                            <span className="text-gray-500">Mono result:</span>{" "}
+                            <span className={String(monoResult).toLowerCase().includes("no credit") ? "text-red-600 font-medium" : "font-medium"}>
+                              {monoResult}
+                            </span>
+                          </div>
+                          {d.can_afford != null && (
+                            <div>
+                              <span className="text-gray-500">Can afford:</span>{" "}
+                              {d.can_afford ? "Yes" : "No"}
+                            </div>
+                          )}
+                          <div>
+                            <span className="text-gray-500">BVN sent:</span>{" "}
+                            <span className="font-mono">{d.bvn || "—"}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 mb-2">Request we sent to Mono</p>
+                          <pre className="text-xs bg-gray-900 text-green-100 p-4 rounded-lg overflow-x-auto max-h-64">
+                            {JSON.stringify(requestPayload, null, 2)}
+                          </pre>
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 mb-2">Mono immediate API response (on POST)</p>
+                          <pre className="text-xs bg-gray-900 text-green-100 p-4 rounded-lg overflow-x-auto max-h-64">
+                            {JSON.stringify(initResponse, null, 2)}
+                          </pre>
+                        </div>
+
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 mb-2">Mono webhook response (final result)</p>
+                          <pre className="text-xs bg-gray-900 text-green-100 p-4 rounded-lg overflow-x-auto max-h-64">
+                            {JSON.stringify(webhookPayload, null, 2)}
+                          </pre>
+                        </div>
+
+                        <p className="text-xs text-gray-500">
+                          Compare the three blocks above: if the request body looks correct but the webhook says
+                          &quot;No credit history found&quot;, the issue is on Mono/bureau side. Also check{" "}
+                          <strong>Webhook Events</strong> tab for the raw event log.
+                        </p>
+                      </>
+                    );
+                  })()}
                 </>
               )}
             </div>
