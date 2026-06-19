@@ -58,6 +58,16 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
   } | null>(null);
   const [bvnInput, setBvnInput] = useState("");
   const [bvnSaving, setBvnSaving] = useState(false);
+  const [creditModalUser, setCreditModalUser] = useState<{
+    userId: number;
+    userName: string;
+    bvnOverride?: string;
+    suggestedLoanAmount?: number | null;
+    suggestedRepaymentDuration?: number | null;
+  } | null>(null);
+  const [creditPrincipalInput, setCreditPrincipalInput] = useState("");
+  const [creditTermInput, setCreditTermInput] = useState("12");
+  const [creditCheckRunning, setCreditCheckRunning] = useState(false);
 
   const maskBvn = (bvn?: string | null) => {
     if (!bvn || String(bvn).trim() === "") return null;
@@ -88,7 +98,8 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
         setBvnInput("");
         queryClient.invalidateQueries({ queryKey: ["mono-linked-accounts"] });
         if (afterSave === "credit") {
-          await handleCheckCreditScore(userId, userName, clean);
+          const row = rows.find((r) => r.user_id === userId);
+          openCreditCheckModal(userId, userName, clean, row);
         }
       } else {
         alert(res?.message || "Failed to save BVN.");
@@ -166,35 +177,80 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
 
   const rows: any[] = pagination?.data ?? [];
 
-  const handleCheckCreditScore = async (
+  const openCreditCheckModal = (
     userId: number,
     userName: string,
-    bvnOverride?: string
+    bvnOverride?: string,
+    row?: {
+      suggested_loan_amount?: number | null;
+      suggested_repayment_duration?: number | null;
+    }
   ) => {
-    if (!token) return;
+    const suggestedAmount = row?.suggested_loan_amount;
+    const suggestedTerm = row?.suggested_repayment_duration;
+    setCreditPrincipalInput(
+      suggestedAmount != null && !Number.isNaN(Number(suggestedAmount))
+        ? String(suggestedAmount)
+        : ""
+    );
+    setCreditTermInput(
+      suggestedTerm != null && suggestedTerm > 0 ? String(suggestedTerm) : "12"
+    );
+    setCreditModalUser({
+      userId,
+      userName,
+      bvnOverride,
+      suggestedLoanAmount: suggestedAmount ?? null,
+      suggestedRepaymentDuration: suggestedTerm ?? null,
+    });
+  };
 
-    if (!bvnOverride) {
-      const row = rows.find((r) => r.user_id === userId);
-      if (row && !userHasBvn(row)) {
-        openSetBvnModal(userId, userName, "credit");
-        return;
-      }
+  const closeCreditCheckModal = () => {
+    setCreditModalUser(null);
+    setCreditPrincipalInput("");
+    setCreditTermInput("12");
+  };
+
+  const handleRunCreditCheck = async () => {
+    if (!token || !creditModalUser) return;
+
+    const principal = Number(String(creditPrincipalInput).replace(/,/g, "").trim());
+    if (!Number.isFinite(principal) || principal < 1) {
+      alert("Enter a valid loan principal (₦) — at least ₦1.");
+      return;
     }
 
+    const term = parseInt(creditTermInput, 10);
+    if (!Number.isFinite(term) || term < 1) {
+      alert("Enter a valid repayment term in months (at least 1).");
+      return;
+    }
+
+    const { userId, userName, bvnOverride } = creditModalUser;
+    setCreditCheckRunning(true);
     setActionUserId(userId);
     setActionType("credit");
     try {
-      const res = await runMonoUserCreditCheck(
-        userId,
-        bvnOverride ? { bvn: bvnOverride } : {},
-        token
-      );
+      const payload: {
+        loan_amount: number;
+        repayment_duration: number;
+        bvn?: string;
+      } = {
+        loan_amount: principal,
+        repayment_duration: term,
+      };
+      if (bvnOverride) {
+        payload.bvn = bvnOverride;
+      }
+
+      const res = await runMonoUserCreditCheck(userId, payload, token);
       if (res?.status === "success") {
         alert(
           res?.message ||
-            `Credit check started for ${userName}. Check the Credit Sessions tab in a few moments.`
+            `Credit check started for ${userName} (₦${principal.toLocaleString()}, ${term} months). Check Credit Sessions in a few moments.`
         );
         queryClient.invalidateQueries({ queryKey: ["mono-credit-sessions"] });
+        closeCreditCheckModal();
       } else {
         alert(res?.message || "Failed to start credit check.");
       }
@@ -206,9 +262,29 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
           : msg
       );
     } finally {
+      setCreditCheckRunning(false);
       setActionUserId(null);
       setActionType(null);
     }
+  };
+
+  const handleCheckCreditScore = (
+    userId: number,
+    userName: string,
+    row?: {
+      suggested_loan_amount?: number | null;
+      suggested_repayment_duration?: number | null;
+      user?: { bvn?: string | null; has_bvn?: boolean };
+    }
+  ) => {
+    if (!token) return;
+
+    if (row && !userHasBvn(row)) {
+      openSetBvnModal(userId, userName, "credit");
+      return;
+    }
+
+    openCreditCheckModal(userId, userName, undefined, row);
   };
 
   const handleGetDocuments = async (userId: number, userName: string) => {
@@ -434,7 +510,9 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
                           <button
                             type="button"
                             disabled={actionUserId === row.user_id}
-                            onClick={() => handleCheckCreditScore(row.user_id, row.user?.full_name || "User")}
+                            onClick={() =>
+                              handleCheckCreditScore(row.user_id, row.user?.full_name || "User", row)
+                            }
                             className="text-left text-[#273E8E] hover:underline font-medium disabled:opacity-50"
                           >
                             {actionUserId === row.user_id && actionType === "credit"
@@ -690,6 +768,84 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
         </div>
       )}
 
+      {creditModalUser != null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Run Mono credit check</h3>
+              <button
+                type="button"
+                onClick={closeCreditCheckModal}
+                disabled={creditCheckRunning}
+                className="text-gray-500 hover:text-gray-800 text-2xl leading-none disabled:opacity-50"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                Set the loan principal Mono should assess for{" "}
+                <strong>{creditModalUser.userName}</strong>.
+                {creditModalUser.suggestedLoanAmount != null ? (
+                  <>
+                    {" "}
+                    Their latest application amount (₦
+                    {Number(creditModalUser.suggestedLoanAmount).toLocaleString()}) is pre-filled — adjust if needed.
+                  </>
+                ) : (
+                  " Enter the amount in Naira (sent to Mono as kobo)."
+                )}
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Loan principal (₦) <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step="0.01"
+                  value={creditPrincipalInput}
+                  onChange={(e) => setCreditPrincipalInput(e.target.value)}
+                  placeholder="e.g. 500000"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#273E8E]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Repayment term (months)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={120}
+                  value={creditTermInput}
+                  onChange={(e) => setCreditTermInput(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#273E8E]"
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={closeCreditCheckModal}
+                  disabled={creditCheckRunning}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={creditCheckRunning || !creditPrincipalInput.trim()}
+                  onClick={handleRunCreditCheck}
+                  className="px-4 py-2 rounded-lg bg-[#273E8E] text-white text-sm font-medium hover:bg-[#1e3270] disabled:opacity-50"
+                >
+                  {creditCheckRunning ? "Starting..." : "Run credit check"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {bvnModalUser != null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
@@ -743,7 +899,7 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
                   onClick={handleSaveBvn}
                   className="px-4 py-2 rounded-lg bg-[#273E8E] text-white text-sm font-medium hover:bg-[#1e3270] disabled:opacity-50"
                 >
-                  {bvnSaving ? "Saving..." : bvnModalUser.afterSave === "credit" ? "Save & run credit check" : "Save BVN"}
+                  {bvnSaving ? "Saving..." : bvnModalUser.afterSave === "credit" ? "Save & continue" : "Save BVN"}
                 </button>
               </div>
             </div>
