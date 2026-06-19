@@ -46,6 +46,7 @@ import { sendToPartnerDetail } from "../../utils/mutations/loans";
 import { getAllFinance } from "../../utils/queries/finance";
 import { API_DOMAIN } from "../../../apiConfig";
 import MonoLoansSection from "./MonoLoansSection";
+import MonoApplicationTools from "./MonoApplicationTools";
 
 // Base URL for document links (backend stores paths like "loan_applications/xxx.pdf")
 const DOCUMENT_BASE_URL = API_DOMAIN.replace(/\/api\/?$/, "") || "https://app.troosolar.io";
@@ -2824,6 +2825,35 @@ const BNPLBuyNow: React.FC = () => {
                       </div>
                     )}
 
+                    {activeTab === "BNPL Orders" &&
+                      selectedItem.loan_application &&
+                      (selectedItem.user_id ?? selectedItem.user?.id) != null && (
+                        <MonoApplicationTools
+                          token={token || ""}
+                          userId={Number(selectedItem.user_id ?? selectedItem.user?.id)}
+                          userName={
+                            `${selectedItem.user?.first_name || ""} ${selectedItem.user?.sur_name || ""}`.trim() ||
+                            "Customer"
+                          }
+                          application={{
+                            credit_check_method: selectedItem.loan_application.credit_check_method,
+                            mono_credit_status: selectedItem.loan_application.mono_credit_status,
+                            mono_can_afford: selectedItem.loan_application.mono_can_afford,
+                            mono_monthly_payment_kobo:
+                              selectedItem.loan_application.mono_monthly_payment_kobo,
+                            mono_credit_report: selectedItem.loan_application.mono_credit_report,
+                            mono_account_id: selectedItem.loan_application.mono_account_id,
+                            loan_amount: selectedItem.loan_application.loan_amount,
+                            repayment_duration: selectedItem.loan_application.repayment_duration,
+                          }}
+                          onCreditCheckStarted={() => {
+                            if (selectedItem?.id) {
+                              handleViewDetails({ id: selectedItem.id });
+                            }
+                          }}
+                        />
+                      )}
+
                     {/* Order Details */}
                     <div className="bg-white rounded-lg border border-gray-200 p-6">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -3550,6 +3580,31 @@ const BNPLBuyNow: React.FC = () => {
                                 </div>
                               </div>
                             </div>
+
+                            {u.id != null && (
+                              <div className="mt-6 pt-4 border-t border-gray-100">
+                                <MonoApplicationTools
+                                  token={token || ""}
+                                  userId={u.id}
+                                  userName={nameLine || "Customer"}
+                                  application={{
+                                    credit_check_method: selectedItem.credit_check_method,
+                                    mono_credit_status: selectedItem.mono_credit_status,
+                                    mono_can_afford: selectedItem.mono_can_afford,
+                                    mono_monthly_payment_kobo: selectedItem.mono_monthly_payment_kobo,
+                                    mono_credit_report: selectedItem.mono_credit_report,
+                                    mono_account_id: selectedItem.mono_account_id,
+                                    loan_amount: selectedItem.loan_amount,
+                                    repayment_duration: selectedItem.repayment_duration,
+                                  }}
+                                  onCreditCheckStarted={() => {
+                                    if (selectedItem?.id) {
+                                      handleViewDetails({ id: selectedItem.id });
+                                    }
+                                  }}
+                                />
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
