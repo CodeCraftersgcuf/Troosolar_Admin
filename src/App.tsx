@@ -7,7 +7,6 @@ import UserActivity from "./pages/user_mgt/UserActivity";
 import UserLoans from "./pages/user_mgt/UserLoans";
 import UserTransactions from "./pages/user_mgt/UserTransactions";
 import UserOrders from "./pages/user_mgt/UserOrders";
-import Credit_score from "./pages/credit_score/Credit_score";
 import Loans_mgt from "./pages/loans_mgt/Loans_mgt";
 import Loans_disbursement from "./pages/loans_disbursement/Loans_disbursement";
 import Transactions from "./pages/transactions/Transactions";
@@ -53,7 +52,7 @@ function App() {
           {/* All other routes */}
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="user-mgt" element={<User_mgt />} />
-          <Route path="credit-score" element={<Credit_score />} />
+          <Route path="credit-score" element={<Navigate to="/bnpl-buynow?tab=mono" replace />} />
           <Route path="loans-mgt" element={<Loans_mgt />} />
           <Route path="loans-approval" element={<User_approval />} />
           <Route path="loans-disbursement" element={<Loans_disbursement />} />

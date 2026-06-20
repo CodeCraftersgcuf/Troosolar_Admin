@@ -8,6 +8,7 @@ export const getBNPLApplications = async (
     status?: string;
     customer_type?: string;
     search?: string;
+    user_id?: number | string;
     per_page?: number;
     page?: number;
   }
@@ -18,6 +19,9 @@ export const getBNPLApplications = async (
     if (params.status) queryParams.append("status", params.status);
     if (params.customer_type) queryParams.append("customer_type", params.customer_type);
     if (params.search) queryParams.append("search", params.search);
+    if (params.user_id != null && params.user_id !== "") {
+      queryParams.append("user_id", String(params.user_id));
+    }
     if (params.per_page) queryParams.append("per_page", params.per_page.toString());
     if (params.page) queryParams.append("page", params.page.toString());
     const queryString = queryParams.toString();
@@ -130,6 +134,7 @@ export const getBNPLOrders = async (
   params?: {
     status?: string;
     search?: string;
+    user_id?: number | string;
     per_page?: number;
     page?: number;
   }
@@ -139,6 +144,9 @@ export const getBNPLOrders = async (
     const queryParams = new URLSearchParams();
     if (params.status) queryParams.append("status", params.status);
     if (params.search) queryParams.append("search", params.search);
+    if (params.user_id != null && params.user_id !== "") {
+      queryParams.append("user_id", String(params.user_id));
+    }
     if (params.per_page) queryParams.append("per_page", params.per_page.toString());
     if (params.page) queryParams.append("page", params.page.toString());
     const queryString = queryParams.toString();

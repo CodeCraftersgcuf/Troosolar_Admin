@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Header from "../../component/Header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Cookies from "js-cookie";
@@ -366,6 +367,19 @@ function bnplApplicationOrderSummary(app: Record<string, unknown> | null | undef
 
 const getApiData = (response: any) => response?.data ?? response ?? null;
 
+const BNPL_TAB_FROM_PARAM: Record<string, string> = {
+  applications: "BNPL Applications",
+  guarantors: "BNPL Guarantors",
+  "guarantor-form": "Guarantor Form",
+  settings: "Loan Settings",
+  mono: "Mono Loans",
+  banner: "Banner",
+  "buy-now": "Buy Now Orders",
+  orders: "BNPL Orders",
+  audit: "Audit Requests",
+  custom: "Custom Orders",
+};
+
 const BNPLBuyNow: React.FC = () => {
   const [activeTab, setActiveTab] = useState("BNPL Applications");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -481,9 +495,13 @@ const BNPLBuyNow: React.FC = () => {
     newDuration: "",
   });
   const [savingLoanSettings, setSavingLoanSettings] = useState(false);
+  const [filterUserId, setFilterUserId] = useState<number | null>(null);
+  const urlParamsHandled = useRef(false);
 
   const token = Cookies.get("token") || "";
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Build query params
   const buildQueryParams = () => {
@@ -500,6 +518,9 @@ const BNPLBuyNow: React.FC = () => {
     if (searchQuery) {
       params.search = searchQuery;
     }
+    if (filterUserId != null) {
+      params.user_id = filterUserId;
+    }
     return params;
   };
 
@@ -508,10 +529,28 @@ const BNPLBuyNow: React.FC = () => {
     data: bnplApplicationsData,
     isLoading: bnplApplicationsLoading,
   } = useQuery({
-    queryKey: ["bnpl-applications", statusFilter, searchQuery, currentPage],
+    queryKey: ["bnpl-applications", statusFilter, searchQuery, currentPage, filterUserId],
     queryFn: () => getBNPLApplications(token, buildQueryParams()),
     enabled: activeTab === "BNPL Applications" && !!token,
   });
+
+  const detailUserId =
+    activeTab === "BNPL Applications" && selectedItem
+      ? (selectedItem.user?.id ?? selectedItem.user_id ?? null)
+      : null;
+
+  const { data: siblingApplicationsData } = useQuery({
+    queryKey: ["bnpl-applications-for-user", detailUserId],
+    queryFn: () =>
+      getBNPLApplications(token, {
+        user_id: detailUserId as number,
+        per_page: 20,
+        page: 1,
+      }),
+    enabled: !!token && !!detailUserId && showDetailModal && activeTab === "BNPL Applications",
+  });
+
+  const siblingApplications: any[] = siblingApplicationsData?.data?.data ?? [];
 
   // BNPL Guarantors Query
   const {
@@ -538,7 +577,7 @@ const BNPLBuyNow: React.FC = () => {
     data: bnplOrdersData,
     isLoading: bnplOrdersLoading,
   } = useQuery({
-    queryKey: ["bnpl-orders", statusFilter, searchQuery, currentPage],
+    queryKey: ["bnpl-orders", statusFilter, searchQuery, currentPage, filterUserId],
     queryFn: () => getBNPLOrders(token, buildQueryParams()),
     enabled: activeTab === "BNPL Orders" && !!token,
   });
@@ -844,6 +883,124 @@ const BNPLBuyNow: React.FC = () => {
       alert(error?.message || "Failed to update audit request status");
     },
   });
+
+  const openApplicationDetail = useCallback(
+    async (applicationId: number) => {
+      if (!token) return;
+      setActiveTab("BNPL Applications");
+      setDetailModalTab("Details");
+      setOrderSummary(null);
+      setOrderInvoice(null);
+      setInvoiceNotFound(false);
+      try {
+        const detailData = await getBNPLApplication(applicationId, token);
+        const d = detailData.data;
+        setSelectedItem(d);
+        if (d) {
+          setBeneficiaryForm({
+            beneficiary_email: d.beneficiary_email || "",
+            beneficiary_name: d.beneficiary_name || "",
+            beneficiary_phone: d.beneficiary_phone || "",
+            beneficiary_relationship: d.beneficiary_relationship || "",
+          });
+          const mono = d.mono;
+          setOfferForm({
+            loan_amount: mono?.loan_amount ?? d.loan_amount ?? "",
+            down_payment: mono?.down_payment ?? "",
+            repayment_duration: mono?.repayment_duration ?? d.repayment_duration ?? "",
+            interest_rate: mono?.interest_rate ?? "",
+            management_fee_percentage: mono?.management_fee_percentage ?? "",
+            legal_fee_percentage: mono?.legal_fee_percentage ?? "",
+            insurance_fee_percentage: mono?.insurance_fee_percentage ?? "",
+          });
+          setGuarantorForm({
+            full_name: d.guarantor?.full_name || "",
+            phone: d.guarantor?.phone || "",
+            email: d.guarantor?.email || "",
+            relationship: d.guarantor?.relationship || "",
+          });
+        }
+        setShowDetailModal(true);
+      } catch (error) {
+        console.error("Failed to open application:", error);
+        alert("Failed to load BNPL application.");
+      }
+    },
+    [token]
+  );
+
+  const openOrderDetail = useCallback(
+    async (orderId: number) => {
+      if (!token) return;
+      setActiveTab("BNPL Orders");
+      setDetailModalTab("Details");
+      setOrderSummary(null);
+      setOrderInvoice(null);
+      setInvoiceNotFound(false);
+      try {
+        const detailData = await getBNPLOrder(orderId, token);
+        setSelectedItem(detailData.data);
+        if (detailData.data?.id) {
+          try {
+            setLoadingSummary(true);
+            const summary = await getOrderSummary(detailData.data.id, token);
+            setOrderSummary(summary.data);
+          } catch (err) {
+            console.error("Failed to fetch order summary:", err);
+          } finally {
+            setLoadingSummary(false);
+          }
+        }
+        setShowDetailModal(true);
+      } catch (error) {
+        console.error("Failed to open order:", error);
+        alert("Failed to load BNPL order.");
+      }
+    },
+    [token]
+  );
+
+  useEffect(() => {
+    if (urlParamsHandled.current || !token) return;
+
+    const tabParam = searchParams.get("tab");
+    const applicationId = searchParams.get("applicationId");
+    const orderId = searchParams.get("orderId");
+    const userIdParam = searchParams.get("userId");
+
+    if (tabParam && BNPL_TAB_FROM_PARAM[tabParam]) {
+      setActiveTab(BNPL_TAB_FROM_PARAM[tabParam]);
+    }
+
+    if (userIdParam) {
+      const uid = parseInt(userIdParam, 10);
+      if (!Number.isNaN(uid)) {
+        setFilterUserId(uid);
+      }
+    }
+
+    const run = async () => {
+      if (applicationId) {
+        const appId = parseInt(applicationId, 10);
+        if (!Number.isNaN(appId)) {
+          await openApplicationDetail(appId);
+        }
+      } else if (orderId) {
+        const oid = parseInt(orderId, 10);
+        if (!Number.isNaN(oid)) {
+          await openOrderDetail(oid);
+        }
+      }
+      urlParamsHandled.current = true;
+      navigate("/bnpl-buynow", { replace: true });
+    };
+
+    if (applicationId || orderId || tabParam || userIdParam) {
+      run();
+    } else {
+      urlParamsHandled.current = true;
+    }
+  }, [token, searchParams, navigate, openApplicationDetail, openOrderDetail]);
 
   const handleViewDetails = async (item: any) => {
     setSelectedItem(item);
@@ -1255,7 +1412,7 @@ const BNPLBuyNow: React.FC = () => {
         <div className="mb-8">
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
-              {["BNPL Applications", "Guarantor Form", "Loan Settings", "Mono Loans", "Banner", "Buy Now Orders", "BNPL Orders", "Audit Requests", "Custom Orders"].map(
+              {["BNPL Applications", "BNPL Guarantors", "Guarantor Form", "Loan Settings", "Mono Loans", "Banner", "Buy Now Orders", "BNPL Orders", "Audit Requests", "Custom Orders"].map(
                 (tab) => (
                   <button
                     key={tab}
@@ -1304,9 +1461,26 @@ const BNPLBuyNow: React.FC = () => {
           )}
         </div>
 
-        {/* Filters and Search - hidden on Guarantor Form, Loan Settings, and Banner tabs */}
+        {/* Filters and Search - hidden on config-only tabs */}
         {activeTab !== "Guarantor Form" && activeTab !== "Loan Settings" && activeTab !== "Mono Loans" && activeTab !== "Banner" && (
         <div className="mb-6 bg-white rounded-lg p-4 shadow-sm">
+          {filterUserId != null && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm text-indigo-900">
+              <span>
+                Showing records for user{" "}
+                <Link to={`/user-activity/${filterUserId}/loans`} className="font-semibold underline">
+                  #{filterUserId}
+                </Link>
+              </span>
+              <button
+                type="button"
+                onClick={() => setFilterUserId(null)}
+                className="text-indigo-700 hover:text-indigo-900 font-medium"
+              >
+                Clear user filter
+              </button>
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <div className="flex items-center space-x-4">
               {activeTab !== "Custom Orders" && (
@@ -2848,7 +3022,7 @@ const BNPLBuyNow: React.FC = () => {
                           }}
                           onCreditCheckStarted={() => {
                             if (selectedItem?.id) {
-                              handleViewDetails({ id: selectedItem.id });
+                              openOrderDetail(selectedItem.id);
                             }
                           }}
                         />
@@ -3206,7 +3380,46 @@ const BNPLBuyNow: React.FC = () => {
                           </div>
                         );
                       })()}
+                      {selectedItem.user?.id && (
+                        <div className="mt-4 pt-4 border-t border-blue-200">
+                          <Link
+                            to={`/user-activity/${selectedItem.user.id}/loans`}
+                            className="text-sm font-medium text-[#273E8E] hover:underline"
+                          >
+                            View customer profile &amp; all applications →
+                          </Link>
+                        </div>
+                      )}
                     </div>
+
+                    {detailUserId && siblingApplications.length > 1 && (
+                      <div className="bg-white rounded-lg border border-gray-200 p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                          All applications for this customer
+                        </h3>
+                        <div className="space-y-2">
+                          {siblingApplications.map((app: any) => (
+                            <button
+                              key={app.id}
+                              type="button"
+                              onClick={() => openApplicationDetail(app.id)}
+                              className={`w-full text-left flex flex-wrap items-center justify-between gap-2 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                                app.id === selectedItem.id
+                                  ? "border-[#273E8E] bg-indigo-50"
+                                  : "border-gray-200 hover:bg-gray-50"
+                              }`}
+                            >
+                              <span className="font-medium text-gray-900">
+                                Application #{app.id}
+                                {app.id === selectedItem.id ? " (current)" : ""}
+                              </span>
+                              <span className="capitalize text-gray-600">{app.status || "—"}</span>
+                              <span className="text-gray-500">{formatDate(app.created_at)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {selectedItem.loan_plan_snapshot &&
                       typeof selectedItem.loan_plan_snapshot === "object" &&
@@ -3576,7 +3789,16 @@ const BNPLBuyNow: React.FC = () => {
                                 </div>
                                 <div>
                                   <p className="text-xs text-gray-500 mb-1">User ID (account)</p>
-                                  <p className="text-sm font-medium text-gray-900">{u.id != null ? `#${u.id}` : "—"}</p>
+                                  {u.id != null ? (
+                                    <Link
+                                      to={`/user-activity/${u.id}/loans`}
+                                      className="text-sm font-medium text-[#273E8E] hover:underline"
+                                    >
+                                      View profile #{u.id}
+                                    </Link>
+                                  ) : (
+                                    <p className="text-sm font-medium text-gray-900">—</p>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -3599,7 +3821,7 @@ const BNPLBuyNow: React.FC = () => {
                                   }}
                                   onCreditCheckStarted={() => {
                                     if (selectedItem?.id) {
-                                      handleViewDetails({ id: selectedItem.id });
+                                      openApplicationDetail(selectedItem.id);
                                     }
                                   }}
                                 />
@@ -4165,13 +4387,18 @@ const BNPLBuyNow: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Documents */}
+                    {/* Manual credit check documents (Mono auto uses Mono bank tools above) */}
+                    {String(selectedItem.credit_check_method || "").toLowerCase() !== "auto" &&
+                    (selectedItem.title_document ||
+                      selectedItem.upload_document ||
+                      selectedItem.bank_statement_path ||
+                      selectedItem.live_photo_path) && (
                     <div className="bg-white rounded-lg border border-gray-200 p-6">
                       <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                         <svg className="w-5 h-5 mr-2 text-[#273E8E]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        Documents
+                        Uploaded documents
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {selectedItem.title_document && (
@@ -4246,11 +4473,12 @@ const BNPLBuyNow: React.FC = () => {
                             </a>
                           </div>
                         )}
-                        {(!selectedItem.title_document && !selectedItem.upload_document && !selectedItem.bank_statement_path && !selectedItem.live_photo_path && selectedItem.loan_application?.credit_check_method !== 'auto') && (
-                          <p className="text-sm text-gray-500 italic">No documents uploaded</p>
+                        {(!selectedItem.title_document && !selectedItem.upload_document && !selectedItem.bank_statement_path && !selectedItem.live_photo_path) && (
+                          <p className="text-sm text-gray-500 italic md:col-span-2">No manual documents uploaded</p>
                         )}
                       </div>
                     </div>
+                    )}
 
                     {/* Additional Information */}
                     <div className="bg-white rounded-lg border border-gray-200 p-6">

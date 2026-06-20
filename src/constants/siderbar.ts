@@ -13,12 +13,7 @@ export const Sidebar_links = [
     icon: images.usermgt,
     sublinks: [],
   },
-  {
-    name: "Credit Score",
-    link: "/credit-score",
-    icon: images.creditMgt,
-    sublinks: [],
-  },
+  // Credit Score removed — use BNPL & Buy Now → Mono Loans for real credit data
   // Hidden from sidebar – uncomment to show
   // {
   //   name: "Initial Loan Applications",

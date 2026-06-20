@@ -17,6 +17,7 @@ import { getSingleBundle } from "../../utils/queries/bundle";
 import { updateMaterial } from "../../utils/mutations/materials";
 import { getCalculatorSettings } from "../../utils/queries/calculator";
 import { updateCalculatorSettings } from "../../utils/mutations/calculator";
+import { isBillableInvoiceFeeRow } from "../../utils/invoiceFees";
 
 // Types
 interface ApiBrand {
@@ -2162,7 +2163,7 @@ const BundleMgt = () => {
                       {/* Invoice fee rows */}
                       {editSvc.filter(
                         (s) =>
-                          s.title.trim() &&
+                          isBillableInvoiceFeeRow(s.title, parseFloat(s.amount) || 0) &&
                           rowVisibleForInvoicePreview(s.visibility || "both", invoicePreviewAsInstaller)
                       ).map((svc, idx) => {
                         const amt = parseFloat(svc.amount) || 0;
@@ -2185,7 +2186,7 @@ const BundleMgt = () => {
                       ).length === 0 &&
                         editSvc.filter(
                           (s) =>
-                            s.title.trim() &&
+                            isBillableInvoiceFeeRow(s.title, parseFloat(s.amount) || 0) &&
                             rowVisibleForInvoicePreview(s.visibility || "both", invoicePreviewAsInstaller)
                         ).length === 0 && (
                         <tr><td colSpan={5} className="py-6 text-center text-gray-400">No items yet for this preview. Add order list items from the Order List tab and fees above, or switch &quot;Preview as&quot;.</td></tr>
@@ -2197,8 +2198,8 @@ const BundleMgt = () => {
                   {(() => {
                     const bundlePrice = orderListBundle.total_price;
                     const feesTotal = editSvc
-                      .filter((svc: { title: string; visibility?: string }) =>
-                        svc.title.trim() &&
+                      .filter((svc: { title: string; amount: string; visibility?: string }) =>
+                        isBillableInvoiceFeeRow(svc.title, parseFloat(svc.amount) || 0) &&
                         rowVisibleForInvoicePreview(
                           (svc.visibility as "both" | "troosolar" | "own") || "both",
                           invoicePreviewAsInstaller
