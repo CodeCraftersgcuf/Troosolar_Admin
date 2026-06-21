@@ -378,7 +378,7 @@ const MonoLoansSection: React.FC<MonoLoansSectionProps> = ({ token }) => {
             <li>Log in to <a href="https://app.withmono.com/apps" target="_blank" rel="noopener noreferrer" className="text-[#273E8E] underline">Mono Dashboard → Apps</a>.</li>
             <li>Open the app that matches your <code className="text-xs">live_pk_...</code> public key.</li>
             <li>Ensure product scope includes <strong>Connect</strong> (bank linking) and your business has KYB completed.</li>
-            <li>Under <strong>App settings → Webhooks</strong>, set URL to <code className="text-xs break-all">https://troosolar.hmstech.org/api/webhooks/mono</code>.</li>
+            <li>Under <strong>App settings → Webhooks</strong>, set URL to <code className="text-xs break-all">https://api.troosolar.com/api/webhooks/mono</code>.</li>
             <li>Contact Mono support or your account manager to enable the <strong>Credit Worthiness</strong> API on your account if credit check returns Unauthorized.</li>
             <li>Use the same <code className="text-xs">live_sk_...</code> secret from that app in server <code className="text-xs">.env</code> as <code className="text-xs">MONO_SECRET_KEY</code>.</li>
           </ol>

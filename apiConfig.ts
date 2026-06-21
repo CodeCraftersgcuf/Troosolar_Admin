@@ -1,4 +1,5 @@
-const API_DOMAIN = "https://troosolar.hmstech.org/api";
+const API_DOMAIN = "https://api.troosolar.com/api";
+export const API_ORIGIN = API_DOMAIN.replace(/\/api\/?$/, "");
 
 
 // const API_DOMAIN = "http://localhost:8000/api";

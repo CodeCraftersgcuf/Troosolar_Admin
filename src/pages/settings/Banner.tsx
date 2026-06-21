@@ -7,9 +7,9 @@ import { getAllBanners } from "../../utils/queries/banner";
 import { addBanner, deleteBanner, updateBanner } from "../../utils/mutations/banner";
 import Cookies from "js-cookie";
 
-const IMAGE_BASE_URL = "https://troosolar.hmstech.org";
-// In Laravel, uploaded files are commonly exposed under /storage
-const STORAGE_PREFIX = `${IMAGE_BASE_URL}/storage`;
+import { API_ORIGIN } from "../../../apiConfig";
+
+const STORAGE_PREFIX = `${API_ORIGIN}/storage`;
 
 interface BannerItem {
   id: string;

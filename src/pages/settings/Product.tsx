@@ -20,7 +20,7 @@ import { deleteBrand } from "../../utils/mutations/brands";
 
 
 
-const IMAGE_BASE_URL = "https://troosolar.hmstech.org";
+import { API_ORIGIN } from "../../../apiConfig";
 
 interface ApiCategory {
   id: number;
@@ -152,7 +152,7 @@ const Product = () => {
       ...apiCategories.map((category) => ({
         value: String(category.id),
         label: category.title,
-        icon: category.icon ? `${IMAGE_BASE_URL}${category.icon}` : null,
+        icon: category.icon ? `${API_ORIGIN}${category.icon}` : null,
       })),
     ],
     [apiCategories]
@@ -164,7 +164,7 @@ const Product = () => {
       apiCategories.map((cat, index) => ({
         id: String(cat.id),
         categoryName: cat.title,
-        image: cat.icon ? `${IMAGE_BASE_URL}${cat.icon}` : "/assets/images/category.png",
+        image: cat.icon ? `${API_ORIGIN}${cat.icon}` : "/assets/images/category.png",
         dateCreated: cat.created_at
           ? new Date(cat.created_at).toLocaleString("en-GB", {
               day: "2-digit",

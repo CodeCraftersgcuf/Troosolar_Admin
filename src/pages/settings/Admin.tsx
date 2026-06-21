@@ -173,7 +173,7 @@ const Admin = () => {
             <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white mb-6">
               {currentUser?.profile_picture ? (
                 <img
-                  src={`https://troosolar.hmstech.org/users/${currentUser.profile_picture}`}
+                  src={`https://api.troosolar.com/users/${currentUser.profile_picture}`}
                   alt="Admin Profile"
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -478,7 +478,7 @@ const Admin = () => {
           email: currentUser?.email || adminData.email,
           bvn: currentUser?.bvn || adminData.bvn,
           password: "**********", // Don't show actual password
-          image: currentUser?.profile_picture ? `https://troosolar.hmstech.org/users/${currentUser.profile_picture}` : adminData.image,
+          image: currentUser?.profile_picture ? `https://api.troosolar.com/users/${currentUser.profile_picture}` : adminData.image,
         }}
       />
 

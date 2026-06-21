@@ -9,6 +9,7 @@ import Header from "../../component/Header";
 import { getAdminDashboard } from "../../utils/queries/dashboard";
 import { useQuery } from "@tanstack/react-query";
 import Cookies from "js-cookie";
+import { API_ORIGIN } from "../../../apiConfig";
 
 
 import { Bar } from "react-chartjs-2";
@@ -43,7 +44,7 @@ const Dashboard: React.FC = () => {
     enabled: !!token,
   });
 
-  const Image_url = "https://troosolar.hmstech.org";
+  const Image_url = API_ORIGIN;
 
   // Map API response to dashboard stats
   const stats = data?.data?.counts

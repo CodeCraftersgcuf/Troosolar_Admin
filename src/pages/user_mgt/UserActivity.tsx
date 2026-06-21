@@ -253,7 +253,7 @@ const UserActivity: React.FC = () => {
             <div className="w-32 h-32 rounded-full object-cover border-4 border-white mb-4 overflow-hidden flex items-center justify-center bg-gray-200">
               {apiData?.data?.profile_picture ? (
                 <img
-                  src={`https://troosolar.hmstech.org/users/${apiData.data.profile_picture}`}
+                  src={`https://api.troosolar.com/users/${apiData.data.profile_picture}`}
                   alt={user.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -307,7 +307,7 @@ const UserActivity: React.FC = () => {
                           />
                         ) : apiData?.data?.profile_picture ? (
                           <img 
-                            src={`https://troosolar.hmstech.org/users/${apiData.data.profile_picture}`} 
+                            src={`https://api.troosolar.com/users/${apiData.data.profile_picture}`} 
                             alt="Profile" 
                             className="w-full h-full object-cover"
                             onError={(e) => {

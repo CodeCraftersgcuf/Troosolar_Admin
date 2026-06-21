@@ -3,8 +3,7 @@ import images from "../../constants/images";
 import { addCategory } from "../../utils/mutations/categories";
 import Cookies from "js-cookie";
 import axios from "axios";
-
-const API_DOMAIN = "https://troosolar.hmstech.org/api";
+import { API_DOMAIN } from "../../../apiConfig";
 
 interface AddNewCategoryProps {
   isOpen: boolean;
